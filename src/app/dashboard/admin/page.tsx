@@ -56,9 +56,21 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Terminal } from 'lucide-react';
 import { updateItem } from '@/app/actions/update-item';
+import { resetSeason } from '@/app/actions/reset-season';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -867,6 +879,59 @@ function StoreManagement() {
     );
 }
 
+function ConflictManagement() {
+  const { toast } = useToast();
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetSeason = async () => {
+    setIsResetting(true);
+    try {
+      const result = await resetSeason();
+      if (result.error) throw new Error(result.error);
+      toast({
+        title: '成功',
+        description: '賽季已成功重置，並已封存舊賽季資料。',
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '重置失敗',
+        description: error.message,
+      });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  return (
+     <div>
+        <h3 className="text-lg font-semibold">陣營對抗管理</h3>
+        <p className="text-muted-foreground mt-2">
+            重置陣營積分以開啟新賽季，並存檔當前賽季的結果。
+        </p>
+         <AlertDialog>
+            <AlertDialogTrigger asChild>
+                <Button variant="destructive" className="mt-4" disabled={isResetting}>
+                  {isResetting ? '重置中...' : '重置賽季積分'}
+                </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>您確定嗎？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        此操作將會封存當前賽季的所有積分與活躍玩家資料，並開啟一個全新的賽季。此操作無法復原。
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleResetSeason}>確定重置</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    </div>
+  )
+}
+
 
 export default function AdminPage() {
   const { toast } = useToast();
@@ -905,7 +970,7 @@ export default function AdminPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="accounts" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:w-max lg:grid-flow-col">
+            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 md:grid-cols-5 lg:w-max lg:grid-flow-col">
               <TabsTrigger value="accounts">帳號審核</TabsTrigger>
               <TabsTrigger value="missions">任務管理</TabsTrigger>
               <TabsTrigger value="store">商店道具</TabsTrigger>
@@ -935,11 +1000,7 @@ export default function AdminPage() {
                 </p>
               </TabsContent>
               <TabsContent value="conflict">
-                 <h3 className="text-lg font-semibold">陣營對抗管理</h3>
-                <p className="text-muted-foreground mt-2">
-                  重置陣營積分以開啟新賽季，並存檔當前賽季的結果。
-                </p>
-                 <Button variant="destructive" className="mt-4">重置賽季積分</Button>
+                <ConflictManagement />
               </TabsContent>
                <TabsContent value="crafting">
                  <h3 className="text-lg font-semibold">裝備合成管理</h3>
