@@ -93,16 +93,16 @@ const ItemCard = ({ item, userData, onBuy, isBuying }: { item: Item, userData: a
           <CardTitle className="font-headline">{item.name}</CardTitle>
           <CardDescription>{item.description}</CardDescription>
         </CardHeader>
-        <CardContent className="flex-grow space-y-2">
-           <div className="text-sm text-primary-foreground/80 bg-primary/20 p-2 rounded-md space-y-1">
+        <CardContent className="flex-grow space-y-4">
+           <div className="text-sm space-y-1">
             <span className="font-semibold">效果：</span>
             {item.effects && item.effects.length > 0 ? (
-                <ul className="list-disc pl-4">
+                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
                     {item.effects.map((effect, index) => (
                         <li key={index}>{formatEffect(effect)}</li>
                     ))}
                 </ul>
-            ) : <p>無</p>}
+            ) : <p className="text-muted-foreground">無</p>}
            </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2">
                 <Users className="h-4 w-4" />
@@ -182,8 +182,8 @@ export default function StorePage() {
   const renderContent = (filteredItems: Item[]) => {
     if (isLoading) {
       return (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
             <Card key={i}>
               <CardHeader>
                 <Skeleton className="aspect-square w-full mb-4"/>
@@ -211,7 +211,7 @@ export default function StorePage() {
     }
     
     return (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {userData && filteredItems.map((item) => (
                 <ItemCard 
                     key={item.id}
