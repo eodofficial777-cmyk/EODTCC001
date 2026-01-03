@@ -1,3 +1,5 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -18,23 +20,37 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Button } from '@/components/ui/button';
-import { Shield, Gem, Heart, Sword, Brain, Zap } from 'lucide-react';
+import { Shield, Gem, Heart, Sword, Brain, Zap, Dna, User as UserIcon } from 'lucide-react';
+import { useDoc, useFirebase, useUser, useMemoFirebase } from '@/firebase';
+import { doc, getFirestore } from 'firebase/firestore';
+import { FACTIONS, RACES } from '@/lib/game-data';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function DashboardPage() {
-  const characterImage = PlaceHolderImages.find(p => p.id === 'character-portrait-1');
+  const { user, isUserLoading } = useUser();
+  const firestore = useFirestore();
+
+  const userDocRef = useMemoFirebase(
+    () => (user ? doc(firestore, `users/${user.uid}`) : null),
+    [user, firestore]
+  );
+  const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
+
+  const faction = userData?.factionId ? FACTIONS[userData.factionId as keyof typeof FACTIONS] : null;
+  const race = userData?.raceId ? RACES[userData.raceId as keyof typeof RACES] : null;
 
   const stats = [
-    { name: 'HP', value: 120, icon: Heart },
-    { name: '攻擊力', value: 35, icon: Sword },
-    { name: '智力', value: 28, icon: Brain },
-    { name: '敏捷', value: 32, icon: Zap },
+    { name: 'HP', value: userData?.attributes?.hp ?? 0, icon: Heart },
+    { name: '攻擊力', value: userData?.attributes?.atk ?? 0, icon: Sword },
+    { name: '防禦力', value: userData?.attributes?.def ?? 0, icon: UserIcon },
+    { name: '智力', value: userData?.attributes?.intel ?? 0, icon: Brain },
+    { name: '敏捷', value: userData?.attributes?.agi ?? 0, icon: Zap },
   ];
 
   const resources = [
-    { name: '榮譽點', value: '1,250', icon: Shield },
-    { name: '貨幣', value: '8,930', icon: Gem },
+    { name: '榮譽點', value: userData?.honorPoints?.toLocaleString() ?? '0', icon: Shield },
+    { name: '貨幣', value: userData?.currency?.toLocaleString() ?? '0', icon: Gem },
   ];
 
   const recentMissions = [
@@ -51,6 +67,8 @@ export default function DashboardPage() {
     { slot: "飾品", name: "新兵臂章"},
   ];
 
+  const isLoading = isUserLoading || isUserDataLoading;
+
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="lg:col-span-1 space-y-6">
@@ -60,26 +78,46 @@ export default function DashboardPage() {
             <CardDescription>您的角色概覽</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center text-center">
-            {characterImage && (
-              <Image
-                src={characterImage.imageUrl}
-                alt={characterImage.description}
-                data-ai-hint={characterImage.imageHint}
-                width={150}
-                height={150}
-                className="rounded-full border-4 border-primary/50 shadow-lg mb-4"
-              />
+            {isLoading ? (
+                <Skeleton className="h-[150px] w-[150px] rounded-full mb-4" />
+            ) : (
+              userData?.avatarUrl && (
+                <Image
+                  src={userData.avatarUrl}
+                  alt={userData.roleName ?? '角色頭像'}
+                  width={150}
+                  height={150}
+                  className="rounded-full border-4 border-primary/50 shadow-lg mb-4"
+                />
+              )
             )}
-            <h3 className="text-2xl font-bold font-headline">角色名稱</h3>
-            <p className="text-muted-foreground">@plurk_handle</p>
+            {isLoading ? (
+                <Skeleton className="h-8 w-32 mb-1" />
+            ) : (
+                <h3 className="text-2xl font-bold font-headline">{userData?.roleName}</h3>
+            )}
+            {isLoading ? (
+                <Skeleton className="h-5 w-24" />
+            ) : (
+                <p className="text-muted-foreground">{userData?.plurkInfo}</p>
+            )}
             <div className="flex gap-2 mt-2">
-              <Badge variant="secondary">陣營：涅槃</Badge>
-              <Badge variant="secondary">種族：人類</Badge>
+              {isLoading ? (
+                <>
+                  <Skeleton className="h-6 w-20" />
+                  <Skeleton className="h-6 w-20" />
+                </>
+              ) : (
+                <>
+                  {faction && <Badge variant="secondary">陣營：{faction.name}</Badge>}
+                  {race && <Badge variant="secondary">種族：{race.name}</Badge>}
+                </>
+              )}
             </div>
             <Separator className="my-4" />
              <div className="text-left w-full">
               <h4 className="font-semibold mb-2 text-center">當前稱號</h4>
-              <p className="text-center text-primary text-lg font-medium">初出茅廬的新星</p>
+               {isLoading ? <Skeleton className="h-7 w-36 mx-auto" /> : <p className="text-center text-primary text-lg font-medium">{userData?.titles?.[0] ?? '無'}</p>}
               <Button size="sm" variant="outline" className="w-full mt-2">更換稱號</Button>
             </div>
           </CardContent>
@@ -96,7 +134,7 @@ export default function DashboardPage() {
                   <res.icon className="h-6 w-6 text-primary" />
                   <span className="font-medium">{res.name}</span>
                 </div>
-                <span className="text-xl font-bold font-mono">{res.value}</span>
+                {isLoading ? <Skeleton className="h-7 w-20" /> : <span className="text-xl font-bold font-mono">{res.value}</span>}
               </div>
             ))}
           </CardContent>
@@ -115,7 +153,7 @@ export default function DashboardPage() {
                   <stat.icon className="h-6 w-6 text-accent-foreground/70" />
                   <div>
                     <p className="text-sm text-muted-foreground">{stat.name}</p>
-                    <p className="text-2xl font-bold font-mono">{stat.value}</p>
+                     {isLoading ? <Skeleton className="h-8 w-12 mt-1" /> : <p className="text-2xl font-bold font-mono">{stat.value}</p>}
                   </div>
                 </div>
               ))}
@@ -181,3 +219,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

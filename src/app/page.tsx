@@ -44,6 +44,7 @@ import {
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { RACES } from '@/lib/game-data';
 
 const registerSchema = z.object({
   account: z.string().min(1, '登入帳號為必填'),
@@ -104,6 +105,17 @@ export default function AuthPage() {
 
   const onRegisterSubmit = async (values: z.infer<typeof registerSchema>) => {
     const email = `${values.account}@eodtcc.com`;
+    const selectedRace = RACES[values.race as keyof typeof RACES];
+
+    if (!selectedRace) {
+      toast({
+        variant: 'destructive',
+        title: '註冊失敗',
+        description: '選擇的種族無效。',
+      });
+      return;
+    }
+
     try {
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -128,6 +140,13 @@ export default function AuthPage() {
         equipment: [],
         items: [],
         tasks: [],
+        attributes: {
+          hp: selectedRace.hp,
+          atk: selectedRace.atk,
+          def: selectedRace.def,
+          intel: 0,
+          agi: 0,
+        },
       });
 
       toast({
@@ -400,3 +419,5 @@ export default function AuthPage() {
     </div>
   );
 }
+
+    
