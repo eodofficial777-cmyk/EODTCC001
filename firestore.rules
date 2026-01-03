@@ -3,9 +3,90 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Secure by default
     match /{document=**} {
-      allow read, write: if
-          request.time < timestamp.date(2026, 2, 2);
+      allow read, write: if false;
+    }
+
+    // Users can create their own profile, but only read public data or their own.
+    // Admins can update any user profile.
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isOwner(userId);
+      allow update: if isAdmin() || isOwner(userId);
+    }
+    
+    // Activity logs are private to the user
+    match /users/{userId}/activityLogs/{logId} {
+       allow read, create: if isOwner(userId);
+       allow write: if false; // immutable
+    }
+
+    // Public game data is readable by all
+    match /factions/{factionId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /races/{raceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /taskTypes/{taskTypeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /items/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /itemTypes/{itemTypeId} {
+       allow read: if true;
+       allow write: if isAdmin();
+    }
+    match /titles/{titleId} {
+        allow read: if true;
+        allow write: if isAdmin();
+    }
+    match /skills/{skillId} {
+        allow read: if true;
+        allow write: if isAdmin();
+    }
+     match /craftRecipes/{recipeId} {
+        allow read: if true;
+        allow write: if isAdmin();
+    }
+
+    // Tasks can be created by any authenticated user.
+    // Reading is public.
+    // Only admins can update (for approval).
+    match /tasks/{taskId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if isAdmin();
+    }
+    
+    // War season data is public, but only updatable by server/admin
+    match /war-seasons/{seasonId} {
+        allow read: if true;
+        allow write: if isAdmin();
+    }
+     match /war-seasons-archive/{archiveId} {
+        allow read: if true;
+        allow write: if isAdmin();
+    }
+
+    // Admin role collection can only be read/written by other admins.
+    match /roles_admin/{userId} {
+      allow read, write: if isAdmin();
     }
   }
 }

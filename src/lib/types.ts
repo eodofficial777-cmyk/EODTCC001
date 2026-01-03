@@ -24,6 +24,21 @@ export interface User {
   isAdmin?: boolean;
 }
 
+export interface Task {
+  id: string;
+  userId: string;
+  userName: string;
+  userFactionId: string;
+  taskTypeId: string;
+  title: string;
+  submissionUrl: string;
+  honorPointsAwarded: number;
+  currencyAwarded: number;
+  submissionDate: string;
+  status: 'pending' | 'approved' | 'rejected';
+  factionContribution?: string;
+}
+
 export interface TaskType {
   id: string;
   name: string;

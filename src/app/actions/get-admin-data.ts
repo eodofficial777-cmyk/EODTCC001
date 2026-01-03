@@ -1,10 +1,11 @@
+
 'use server';
 
-import { getFirestore, collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, TaskType, CraftRecipe, Skill } from '@/lib/types';
+import type { User, Task, TaskType, CraftRecipe, Skill } from '@/lib/types';
 
 // IMPORTANT: Use a dedicated admin service account credentials in a real production app.
 // For this development environment, we will sign in as a pre-defined admin user.
@@ -46,7 +47,7 @@ async function ensureAdminAuth() {
   }
 }
 
-export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: TaskType[]; items?: any[], titles?: any[], craftRecipes?: CraftRecipe[], skills?: Skill[], error?: string }> {
+export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: TaskType[]; items?: any[], titles?: any[], craftRecipes?: CraftRecipe[], skills?: Skill[], pendingTasks?: Task[], error?: string }> {
   try {
     await ensureAdminAuth();
 
@@ -57,9 +58,10 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
     const titlesPromise = getDocs(collection(db, 'titles'));
     const craftRecipesPromise = getDocs(collection(db, 'craftRecipes'));
     const skillsPromise = getDocs(collection(db, 'skills'));
+    const pendingTasksPromise = getDocs(query(collection(db, 'tasks'), where('status', '==', 'pending'), orderBy('submissionDate', 'asc')));
 
 
-    const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot, craftRecipesSnapshot, skillsSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise, craftRecipesPromise, skillsPromise]);
+    const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot, craftRecipesSnapshot, skillsSnapshot, pendingTasksSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise, craftRecipesPromise, skillsPromise, pendingTasksPromise]);
 
     // Process users
     const users = usersSnapshot.docs.map(doc => {
@@ -101,8 +103,18 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
       id: doc.id,
     } as Skill));
 
+    // Process pending tasks
+    const pendingTasks = pendingTasksSnapshot.docs.map(doc => {
+       const data = doc.data();
+        return {
+            ...data,
+            id: doc.id,
+            submissionDate: data.submissionDate?.toDate().toISOString() || new Date().toISOString(),
+        } as Task;
+    });
 
-    return { users, taskTypes, items, titles, craftRecipes, skills };
+
+    return { users, taskTypes, items, titles, craftRecipes, skills, pendingTasks };
   } catch (error: any) {
     console.error('Error fetching admin data:', error);
     let errorMessage = '無法獲取管理員資料。';
