@@ -6,7 +6,7 @@ import { firebaseConfig } from '@/firebase/config';
 import type { User } from '@/lib/types';
 
 // Use a singleton pattern to initialize Firebase Admin
-let adminApp: App;
+export let adminApp: App;
 if (!getApps().length) {
   adminApp = initializeApp({
     projectId: firebaseConfig.projectId,
@@ -43,6 +43,10 @@ export async function getAllUsers(): Promise<{ users?: User[]; error?: string }>
     if (error.code === 'permission-denied') {
         errorMessage = '權限不足，無法讀取使用者列表。請檢查您的伺服器環境憑證。';
     }
-    return { error: error.message || errorMessage };
+     // Adding the specific error from the screenshot for better debugging
+    if (error.message && error.message.includes('Could not refresh access token')) {
+        errorMessage = `後端認證失敗，無法讀取使用者： ${error.message}`;
+    }
+    return { error: errorMessage };
   }
 }

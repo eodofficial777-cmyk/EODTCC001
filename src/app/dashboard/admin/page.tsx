@@ -57,15 +57,19 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Terminal } from 'lucide-react';
 
 function AccountApproval() {
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState<Record<string, boolean>>({});
 
   const fetchUsers = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const result = await getAllUsers();
       if (result.error) {
@@ -73,12 +77,8 @@ function AccountApproval() {
       }
       setUsers(result.users || []);
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: '錯誤',
-        description: `讀取使用者列表失敗: ${error.message}`,
-      });
-       setUsers([]); // Clear users on error
+      setError(error.message);
+      setUsers([]); // Clear users on error
     } finally {
       setIsLoading(false);
     }
@@ -129,6 +129,19 @@ function AccountApproval() {
     }
   };
   
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <Terminal className="h-4 w-4" />
+        <AlertTitle>讀取失敗</AlertTitle>
+        <AlertDescription>
+          無法從後端讀取使用者列表。請檢查伺服器日誌以獲取更多詳細資訊。
+          <pre className="mt-2 text-xs bg-black/20 p-2 rounded-md font-mono">{error}</pre>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
@@ -334,17 +347,19 @@ function TaskManagement() {
   const { toast } = useToast();
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [editingTask, setEditingTask] = useState<Partial<TaskType> | null>(null);
 
   const fetchTaskTypes = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const result = await getTaskTypes();
       if (result.error) throw new Error(result.error);
       setTaskTypes(result.taskTypes || []);
     } catch (error: any) {
-      toast({ variant: 'destructive', title: '讀取失敗', description: error.message });
+      setError(error.message);
       setTaskTypes([]);
     } finally {
       setIsLoading(false);
@@ -369,6 +384,19 @@ function TaskManagement() {
         setIsSaving(false);
     }
   };
+
+  if (error) {
+    return (
+       <Alert variant="destructive">
+        <Terminal className="h-4 w-4" />
+        <AlertTitle>讀取失敗</AlertTitle>
+        <AlertDescription>
+          無法從後端讀取任務類型。請檢查伺服器日誌以獲取更多詳細資訊。
+          <pre className="mt-2 text-xs bg-black/20 p-2 rounded-md font-mono">{error}</pre>
+        </AlertDescription>
+      </Alert>
+    );
+  }
 
   return (
     <div>
