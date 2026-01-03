@@ -1,14 +1,11 @@
 
 rules_version = '2';
 
-// Force redeploy: 2024-07-27 12:00 UTC
-// This rule allows anyone to read or write to any document in your database.
-// It is useful for getting started, but it is NOT SECURE.
-// Before deploying to production, you must secure your rules.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if
+          request.time < timestamp.date(2026, 2, 2);
     }
   }
 }
