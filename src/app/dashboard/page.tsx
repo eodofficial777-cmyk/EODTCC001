@@ -13,7 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { Shield, Gem, ScrollText, Package } from 'lucide-react';
+import { Shield, Gem, ScrollText, Package, Check } from 'lucide-react';
 import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
 import { FACTIONS, RACES } from '@/lib/game-data';
@@ -33,6 +33,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose
+} from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { useState } from 'react';
+import { updateUser } from '../actions/update-user';
+import { useToast } from '@/hooks/use-toast';
 
 
 function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
@@ -71,6 +84,64 @@ const itemTypeTranslations: { [key in Item['itemTypeId']]: { name: string; color
   special: { name: '特殊道具', color: 'bg-purple-600' },
 };
 
+function ChangeTitleDialog({ user, userData, onTitleChanged }: { user: any, userData: any, onTitleChanged: () => void }) {
+    const { toast } = useToast();
+    const [selectedTitle, setSelectedTitle] = useState<string>(userData.titles?.[0] || '');
+    const [isSaving, setIsSaving] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
+
+    const handleSave = async () => {
+        if (!selectedTitle || selectedTitle === userData.titles?.[0]) {
+            setIsOpen(false);
+            return;
+        }
+
+        setIsSaving(true);
+        const otherTitles = userData.titles.filter((t: string) => t !== selectedTitle);
+        const newTitlesArray = [selectedTitle, ...otherTitles];
+
+        try {
+            const result = await updateUser(user.uid, { titles: newTitlesArray });
+            if (result.error) throw new Error(result.error);
+            toast({ title: '成功', description: '您的稱號已更新！' });
+            onTitleChanged(); // This should trigger a re-fetch in the parent
+            setIsOpen(false);
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: '更新失敗', description: error.message });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="w-full mt-2">更換稱號</Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>更換顯示稱號</DialogTitle>
+                </DialogHeader>
+                <div className="py-4">
+                    <RadioGroup value={selectedTitle} onValueChange={setSelectedTitle}>
+                        {(userData.titles || []).map((title: string) => (
+                            <Label key={title} htmlFor={title} className="flex items-center justify-between rounded-md border p-3 hover:bg-accent has-[[data-state=checked]]:border-primary">
+                                {title}
+                                <RadioGroupItem value={title} id={title} />
+                            </Label>
+                        ))}
+                    </RadioGroup>
+                </div>
+                <DialogClose asChild>
+                  <Button variant="ghost">取消</Button>
+                </DialogClose>
+                <Button onClick={handleSave} disabled={isSaving}>
+                    {isSaving ? "儲存中..." : "設為目前稱號"}
+                </Button>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
@@ -80,7 +151,7 @@ export default function DashboardPage() {
     () => (user ? doc(firestore, `users/${user.uid}`) : null),
     [user, firestore]
   );
-  const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
+  const { data: userData, isLoading: isUserDataLoading, mutate } = useDoc(userDocRef);
 
   const itemsQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'items') : null), [firestore]);
   const { data: allItems, isLoading: areItemsLoading } = useCollection<Item>(itemsQuery);
@@ -166,7 +237,7 @@ export default function DashboardPage() {
              <div className="text-left w-full">
               <h4 className="font-semibold mb-2 text-center">當前稱號</h4>
                {isLoading ? <Skeleton className="h-7 w-36 mx-auto" /> : <p className="text-center text-primary text-lg font-medium">{userData?.titles?.[0] ?? '無'}</p>}
-              <Button size="sm" variant="outline" className="w-full mt-2">更換稱號</Button>
+               {user && userData && <ChangeTitleDialog user={user} userData={userData} onTitleChanged={mutate} />}
             </div>
           </CardContent>
           <CardFooter>

@@ -34,16 +34,22 @@ interface UserUpdatePayload {
     approved?: boolean;
     factionId?: string;
     raceId?: string;
+    titles?: string[];
     // Add other fields that can be updated by an admin here
 }
 
-export async function updateUser(userId: string, payload: UserUpdatePayload) {
+export async function updateUser(userId: string, payload: UserUpdatePayload, asAdmin: boolean = false) {
   if (!userId) {
     return { error: '缺少使用者ID' };
   }
 
   try {
-    await ensureAdminAuth();
+    // If action is administrative, ensure admin auth.
+    // Regular users can update their own data without this check.
+    if (asAdmin) {
+        await ensureAdminAuth();
+    }
+    
     const userRef = doc(db, 'users', userId);
     
     const updateData: { [key: string]: any } = {};
@@ -56,6 +62,10 @@ export async function updateUser(userId: string, payload: UserUpdatePayload) {
     if (payload.raceId) {
       updateData.raceId = payload.raceId;
     }
+    if (payload.titles) {
+        updateData.titles = payload.titles;
+    }
+
 
     if (Object.keys(updateData).length === 0) {
         return { error: '沒有提供任何更新資料' };

@@ -163,7 +163,7 @@ export default function RosterPage() {
         <div>
           <CardTitle className="font-headline">角色名冊</CardTitle>
           <CardDescription>
-            搜尋和篩選所有已批准的角色。資料於每日凌晨 0 點更新。
+            搜尋和篩選所有已批准的角色。資料每 5 分鐘更新一次。
           </CardDescription>
           {cacheTimestamp && !isLoading && <p className="text-xs text-muted-foreground mt-1">當前資料版本：{cacheTimestamp}</p>}
         </div>

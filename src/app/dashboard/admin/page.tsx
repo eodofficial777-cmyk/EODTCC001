@@ -125,7 +125,7 @@ function AccountApproval() {
         approved: userToUpdate.approved,
         factionId: userToUpdate.factionId,
         raceId: userToUpdate.raceId,
-      });
+      }, true);
 
       if (result.error) {
         throw new Error(result.error);
@@ -1475,11 +1475,11 @@ function SkillManagement() {
 }
 
 const titleTriggerTypes: { value: TitleTriggerType, label: string, requiresItem: boolean, requiresDamage: boolean }[] = [
-    { value: 'honor_points', label: '榮譽點達到', requiresItem: false, requiresDamage: false },
-    { value: 'currency', label: '貨幣達到', requiresItem: false, requiresDamage: false },
-    { value: 'tasks_submitted', label: '提交任務達到', requiresItem: false, requiresDamage: false },
-    { value: 'battles_participated', label: '參加共鬥達到', requiresItem: false, requiresDamage: false },
-    { value: 'battles_hp_zero', label: '共鬥血量歸零達到', requiresItem: false, requiresDamage: false },
+    { value: 'honor_points', label: '榮譽點達到 X 點', requiresItem: false, requiresDamage: false },
+    { value: 'currency', label: '貨幣達到 X 點', requiresItem: false, requiresDamage: false },
+    { value: 'tasks_submitted', label: '提交任務達到 X 篇', requiresItem: false, requiresDamage: false },
+    { value: 'battles_participated', label: '參加共鬥 X 次', requiresItem: false, requiresDamage: false },
+    { value: 'battles_hp_zero', label: '共鬥血量歸零 X 次', requiresItem: false, requiresDamage: false },
     { value: 'item_used', label: '使用道具 O X 次', requiresItem: true, requiresDamage: false },
     { value: 'item_damage', label: '使用道具 O 造成 A 傷害共 X 次', requiresItem: true, requiresDamage: true },
 ];
@@ -1616,16 +1616,19 @@ function TitleManagement() {
         if (!triggerInfo) return '未知條件';
         
         let desc = triggerInfo.label;
-        if(triggerInfo.requiresItem) {
+        if (triggerInfo.requiresItem) {
             const itemName = items.find(i => i.id === title.trigger?.itemId)?.name || '未知道具';
             desc = desc.replace('O', `「${itemName}」`);
         }
-        if(triggerInfo.requiresDamage) {
-            desc = desc.replace('A', `${title.trigger.value}`);
-            desc = desc.replace('X', 'Y'); // Placeholder for now
-        } else {
-            desc = desc.replace('X', `${title.trigger.value}`);
+        
+        // Always replace 'X' with the value
+        desc = desc.replace('X', title.trigger.value.toString());
+
+        if (triggerInfo.requiresDamage) {
+            // Placeholder for second value if needed, for now it's part of the label
+            desc = desc.replace('A', title.trigger.value.toString());
         }
+
         return desc;
     };
 

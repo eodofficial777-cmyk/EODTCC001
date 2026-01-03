@@ -9,13 +9,9 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
 import type { User } from '@/lib/types';
 import { FACTIONS } from '@/lib/game-data';
-
-const ADMIN_EMAIL = 'admin@eodtcc.com';
-const ADMIN_PASSWORD = 'password';
 
 let app: App;
 if (!getApps().length) {
@@ -24,7 +20,6 @@ if (!getApps().length) {
   app = getApps()[0];
 }
 const db = getFirestore(app);
-const auth = getAuth(app);
 
 // In-memory cache for development purposes. In production, this could be a file or a cache service.
 let rosterCache: {
@@ -34,18 +29,7 @@ let rosterCache: {
   };
   timestamp: number;
 } | null = null;
-const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
-
-async function ensureAdminAuth() {
-  if (auth.currentUser?.email !== ADMIN_EMAIL) {
-    try {
-      await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
-    } catch (error) {
-      console.error('Admin sign-in failed during roster fetch:', error);
-      throw new Error('管理員登入失敗，無法獲取名冊資料。');
-    }
-  }
-}
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export async function getRosterData(): Promise<{
   allUsers?: User[];
@@ -64,10 +48,6 @@ export async function getRosterData(): Promise<{
   }
 
   try {
-    // This call is not strictly necessary if the rules allow public reads,
-    // which is often the case for a public roster.
-    // await ensureAdminAuth();
-
     const usersQuery = query(
       collection(db, 'users'),
       where('approved', '==', true),
