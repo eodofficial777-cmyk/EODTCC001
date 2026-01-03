@@ -147,17 +147,17 @@ export default function ConflictPage() {
 
 
             <div>
-                <h4 className="font-headline text-xl mb-4 text-center">過往賽季紀錄</h4>
+                <h4 className="font-headline text-xl mb-4 text-center">過往月度紀錄</h4>
                 <div className="border rounded-md">
                 {isLoading ? <Skeleton className="h-48 w-full"/> : 
                  archivedSeasons && archivedSeasons.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>賽季結束日期</TableHead>
+                        <TableHead>紀錄結束日期</TableHead>
                         <TableHead>夜鷺分數</TableHead>
                         <TableHead>協會分數</TableHead>
-                        <TableHead className="text-center">當季贏家</TableHead>
+                        <TableHead className="text-center">當期贏家</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -174,7 +174,7 @@ export default function ConflictPage() {
                 ) : (
                   <div className="text-center text-muted-foreground py-12">
                     <Trophy className="mx-auto h-8 w-8 mb-2" />
-                    沒有過往賽季紀錄
+                    沒有過往月度紀錄
                   </div>
                 )}
                 </div>

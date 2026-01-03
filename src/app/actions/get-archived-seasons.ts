@@ -68,6 +68,6 @@ export async function getArchivedSeasons(): Promise<{ seasons?: ArchivedSeason[]
 
   } catch (error: any) {
     console.error('Error fetching archived seasons:', error);
-    return { error: error.message || '無法獲取過往賽季紀錄。' };
+    return { error: error.message || '無法獲取過往月度紀錄。' };
   }
 }
