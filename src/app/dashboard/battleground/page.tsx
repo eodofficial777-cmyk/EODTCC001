@@ -12,15 +12,17 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Heart, Shield, Sword, Zap, Target, Timer, Info } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Heart, Shield, Sword, Zap, Target, Timer, Info, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
-import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
+import { doc, collection, query, orderBy, limit, where } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FACTIONS } from '@/lib/game-data';
+import { FACTIONS, RACES } from '@/lib/game-data';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { CombatEncounter, User } from '@/lib/types';
+import type { CombatEncounter, User, Item, Skill, AttributeEffect } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+
 
 const PreparationCountdown = ({ preparationEndTime, battleName }: { preparationEndTime: Date, battleName: string }) => {
   const [timeLeft, setTimeLeft] = useState('');
@@ -33,7 +35,6 @@ const PreparationCountdown = ({ preparationEndTime, battleName }: { preparationE
       if (difference <= 0) {
         setTimeLeft('00:00');
         clearInterval(interval);
-        // In a real app, you might want to trigger a state refresh here
         return;
       }
 
@@ -104,6 +105,7 @@ export default function BattlegroundPage() {
   const { user } = useUser();
   const firestore = useFirestore();
   
+  // --- Data Fetching ---
   const userDocRef = useMemoFirebase(() => (user ? doc(firestore, `users/${user.uid}`) : null), [user, firestore]);
   const { data: userData } = useDoc<User>(userDocRef);
 
@@ -114,31 +116,90 @@ export default function BattlegroundPage() {
   const { data: battleData, isLoading: isBattleLoading } = useCollection<CombatEncounter>(latestBattleQuery);
   const currentBattle = battleData?.[0];
 
+  const allItemsQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'items') : null), [firestore]);
+  const { data: allItems } = useCollection<Item>(allItemsQuery);
+
+  const skillsQuery = useMemoFirebase(() => {
+    if (!firestore || !userData) return null;
+    return query(collection(firestore, 'skills'), where('factionId', '==', userData.factionId), where('raceId', '==', userData.raceId));
+  }, [firestore, userData]);
+  const { data: availableSkills } = useCollection<Skill>(skillsQuery);
+
+  // --- State Management ---
   const [supportedFaction, setSupportedFaction] = useState<'yelu' | 'association' | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
-  const [battleHP, setBattleHP] = useState(userData?.attributes.hp || 0);
-
+  const [battleHP, setBattleHP] = useState(0);
+  const [equippedItems, setEquippedItems] = useState<string[]>([]);
+  
+  // --- Computed Values & Memos ---
   const isWanderer = userData?.factionId === 'wanderer';
   const playerFaction = isWanderer ? supportedFaction : userData?.factionId;
-  
   const combatStatus = currentBattle?.status;
   const preparationEndTime = currentBattle?.preparationEndTime?.toDate();
   const hasFallen = battleHP <= 0;
 
-  // Reset HP when a new battle starts
+  const { inventoryEquipment, inventoryConsumables } = useMemo(() => {
+    if (!userData?.items || !allItems) return { inventoryEquipment: [], inventoryConsumables: [] };
+    const userItems = new Set(userData.items);
+    return {
+        inventoryEquipment: allItems.filter(item => userItems.has(item.id) && item.itemTypeId === 'equipment'),
+        inventoryConsumables: allItems.filter(item => userItems.has(item.id) && item.itemTypeId === 'consumable')
+    };
+  }, [userData?.items, allItems]);
+  
+  const { finalAtk, finalDef } = useMemo(() => {
+    let atk = userData?.attributes.atk || 0;
+    let def = userData?.attributes.def || 0;
+
+    equippedItems.forEach(itemId => {
+        const item = allItems?.find(i => i.id === itemId);
+        if (item) {
+            item.effects?.forEach(effect => {
+                if ('attribute' in effect) {
+                    if (effect.attribute === 'atk' && effect.operator === '+') atk += effect.value;
+                    if (effect.attribute === 'def' && effect.operator === '+') def += effect.value;
+                }
+            });
+        }
+    });
+    return { finalAtk: atk, finalDef: def };
+  }, [userData, equippedItems, allItems]);
+
+
+  // --- Effects ---
+  useEffect(() => {
+    if (userData?.attributes.hp) {
+      setBattleHP(userData.attributes.hp);
+    }
+  }, [userData?.attributes.hp]);
+
   useEffect(() => {
     if (combatStatus === 'active' && userData?.attributes.hp) {
       setBattleHP(userData.attributes.hp);
     }
   }, [combatStatus, userData?.attributes.hp]);
 
+  // --- Handlers ---
   const handleSupportFaction = (factionId: 'yelu' | 'association') => {
     if (isWanderer && combatStatus !== 'ended') {
       setSupportedFaction(factionId);
       setSelectedTarget(null); // Reset target when switching factions
     }
   }
+  
+  const handleToggleEquip = (itemId: string) => {
+    setEquippedItems(prev => {
+        if (prev.includes(itemId)) {
+            return prev.filter(id => id !== itemId);
+        }
+        if (prev.length < 2) {
+            return [...prev, itemId];
+        }
+        return prev; // Do nothing if already 2 items are equipped
+    });
+  }
 
+  // --- Render Functions ---
   const renderMonsters = (factionId: 'yelu' | 'association') => {
       const monsters = currentBattle?.monsters.filter(m => m.factionId === factionId) || [];
        return (
@@ -189,7 +250,6 @@ export default function BattlegroundPage() {
       )
     }
 
-    // This checks if the current tab is the one the player should be looking at
     if (combatStatus === 'active' && playerFaction && playerFaction !== factionId) {
         return (
           <Card className="flex flex-col items-center justify-center min-h-[300px]">
@@ -202,43 +262,41 @@ export default function BattlegroundPage() {
     }
         
     return (
-        <div className="space-y-6">
-            {/* Monster Display Area */}
-            {renderMonsters(factionId)}
+      <div className="space-y-6">
+        {/* Monster Display Area */}
+        {renderMonsters(factionId)}
 
-            {/* Log / Preparation Area */}
-            {combatStatus === 'preparing' && preparationEndTime && (
-                 <div>
-                    <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle.name} />
-                    {isWanderer && !supportedFaction && (
-                         <Alert className="mt-4">
-                            <Info className="h-4 w-4" />
-                            <AlertTitle>流浪者請注意</AlertTitle>
-                            <AlertDescription>
-                            共鬥開始前，請在上方選擇您想支援的陣營。
-                            </AlertDescription>
-                        </Alert>
-                    )}
+        {/* Log / Preparation Area */}
+        {combatStatus === 'preparing' && preparationEndTime && (
+          <div>
+            <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle.name} />
+            {isWanderer && !supportedFaction && (
+              <Alert className="mt-4">
+                <Info className="h-4 w-4" />
+                <AlertTitle>流浪者請注意</AlertTitle>
+                <AlertDescription>共鬥開始前，請在上方選擇您想支援的陣營。</AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
+
+        {combatStatus === 'active' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>共鬥紀錄</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-64">
+                <div className="space-y-3 text-sm font-mono">
+                  <p><span className="text-primary">[回合 1]</span> 戰鬥開始！</p>
+                  {hasFallen && <p className="text-red-500">[系統] 您的HP已歸零，無法繼續行動。</p>}
                 </div>
-            )}
-            
-            {combatStatus === 'active' && (
-                <Card>
-                    <CardHeader>
-                    <CardTitle>共鬥紀錄</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                    <ScrollArea className="h-64">
-                        <div className="space-y-3 text-sm font-mono">
-                        <p><span className="text-primary">[回合 1]</span> 戰鬥開始！</p>
-                         {hasFallen && <p className="text-red-500">[系統] 您的HP已歸零，無法繼續行動。</p>}
-                        </div>
-                    </ScrollArea>
-                    </CardContent>
-                </Card>
-            )}
-        </div>
-      )
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -285,8 +343,8 @@ export default function BattlegroundPage() {
                         <Progress value={(battleHP / (userData?.attributes.hp || 1)) * 100} className="h-3 bg-green-500/20 [&>div]:bg-green-500" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="flex items-center gap-2"><Sword className="h-4 w-4 text-muted-foreground"/> 攻擊力: {userData?.attributes.atk || 0}</div>
-                        <div className="flex items-center gap-2"><Shield className="h-4 w-4 text-muted-foreground"/> 防禦力: {userData?.attributes.def || 0}</div>
+                        <div className="flex items-center gap-2"><Sword className="h-4 w-4 text-muted-foreground"/> 攻擊力: {finalAtk}</div>
+                        <div className="flex items-center gap-2"><Shield className="h-4 w-4 text-muted-foreground"/> 防禦力: {finalDef}</div>
                     </div>
                 </CardContent>
                 </Card>
@@ -310,17 +368,63 @@ export default function BattlegroundPage() {
                         <TabsTrigger value="skills">技能</TabsTrigger>
                         <TabsTrigger value="items">道具</TabsTrigger>
                     </TabsList>
-                    <div className="mt-4">
-                        <TabsContent value="equipment">
-                            <Card><CardContent className="p-4"><p className="text-muted-foreground text-sm text-center py-4">此處顯示已裝備的物品。戰鬥準備期間可更換。</p></CardContent></Card>
-                        </TabsContent>
-                        <TabsContent value="skills">
-                            <Card><CardContent className="p-4"><p className="text-muted-foreground text-sm text-center py-4">此處顯示可使用的技能。</p></CardContent></Card>
-                        </TabsContent>
-                        <TabsContent value="items">
-                           <Card><CardContent className="p-4"><p className="text-muted-foreground text-sm text-center py-4">此處顯示可使用的道具。</p></CardContent></Card>
-                        </TabsContent>
-                    </div>
+                     <TooltipProvider>
+                        <div className="mt-4">
+                            <TabsContent value="equipment">
+                                <Card><CardContent className="p-4 space-y-2">
+                                    {inventoryEquipment.length > 0 ? inventoryEquipment.map(item => (
+                                        <Tooltip key={item.id}>
+                                            <TooltipTrigger asChild>
+                                                <div 
+                                                    className={`flex items-center justify-between p-2 border rounded-md cursor-pointer transition-colors ${equippedItems.includes(item.id) ? 'bg-primary/20 border-primary' : 'hover:bg-muted'}`}
+                                                    onClick={() => handleToggleEquip(item.id)}
+                                                >
+                                                    <span>{item.name}</span>
+                                                    {equippedItems.includes(item.id) && <CheckCircle2 className="h-5 w-5 text-primary" />}
+                                                </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p className="font-bold">{item.name}</p>
+                                                <p className="text-xs text-muted-foreground">{item.description}</p>
+                                                <div className="mt-2 text-xs">
+                                                     {item.effects.map((effect, i) => (
+                                                        <p key={i}>{(effect as AttributeEffect).attribute.toUpperCase()} +{(effect as AttributeEffect).value}</p>
+                                                     ))}
+                                                </div>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    )) : <p className="text-muted-foreground text-sm text-center py-4">沒有可裝備的物品。</p>}
+                                </CardContent></Card>
+                            </TabsContent>
+                            <TabsContent value="skills">
+                                <Card><CardContent className="p-4 space-y-2">
+                                     {availableSkills && availableSkills.length > 0 ? availableSkills.map(skill => (
+                                         <Tooltip key={skill.id}>
+                                             <TooltipTrigger asChild>
+                                                <div className="flex items-center justify-between p-2 border rounded-md">
+                                                    <span>{skill.name}</span>
+                                                    <span className="text-xs text-muted-foreground">CD: {skill.cooldown}</span>
+                                                </div>
+                                             </TooltipTrigger>
+                                              <TooltipContent>
+                                                  <p className="font-bold">{skill.name}</p>
+                                                  <p className="text-xs text-muted-foreground">{skill.description}</p>
+                                              </TooltipContent>
+                                         </Tooltip>
+                                     )) : <p className="text-muted-foreground text-sm text-center py-4">沒有可用的技能。</p>}
+                                </CardContent></Card>
+                            </TabsContent>
+                            <TabsContent value="items">
+                            <Card><CardContent className="p-4 space-y-2">
+                                     {inventoryConsumables.length > 0 ? inventoryConsumables.map(item => (
+                                         <div key={item.id} className="flex items-center justify-between p-2 border rounded-md">
+                                            <span>{item.name}</span>
+                                         </div>
+                                     )) : <p className="text-muted-foreground text-sm text-center py-4">沒有可用的戰鬥道具。</p>}
+                                </CardContent></Card>
+                            </TabsContent>
+                        </div>
+                     </TooltipProvider>
                 </Tabs>
             </div>
         </div>
