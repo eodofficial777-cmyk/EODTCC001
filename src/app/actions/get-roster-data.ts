@@ -1,3 +1,4 @@
+
 'use server';
 
 import {
@@ -29,7 +30,7 @@ let rosterCache: {
   };
   timestamp: number;
 } | null = null;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 
 export async function getRosterData(): Promise<{
   allUsers?: User[];
