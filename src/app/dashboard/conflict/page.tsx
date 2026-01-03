@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -7,101 +8,141 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  CartesianGrid,
-} from 'recharts';
-import { useIsClient } from '@/hooks/use-is-client';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { RefreshCw } from 'lucide-react';
+import { getConflictData, ConflictData } from '@/app/actions/get-conflict-data';
 import { FACTIONS } from '@/lib/game-data';
 
-const factionData = [
-  { id: 'yelu', name: FACTIONS.yelu.name, score: 45000, players: 45, color: FACTIONS.yelu.color },
-  { id: 'association', name: FACTIONS.association.name, score: 42500, players: 42, color: FACTIONS.association.color },
-  // Assuming wanderers don't participate in conflict score
-];
+function FactionDisplay({ factionData, totalScore }: { factionData: any; totalScore: number }) {
+    if (!factionData) return null;
+    const factionInfo = FACTIONS[factionData.id as keyof typeof FACTIONS];
 
-const processedData = factionData.map((faction) => ({
-  name: faction.name,
-  總分: faction.score,
-  人均貢獻: Math.round(faction.score / faction.players),
-  fill: faction.color,
-}));
+    return (
+        <div className="flex flex-col items-center gap-2">
+            <h3 className="text-2xl font-bold font-headline" style={{ color: factionInfo.color }}>
+                {factionInfo.name}
+            </h3>
+            <p>活躍人數：{factionData.activePlayers}</p>
+            <p>陣營加權：x{factionData.weight.toFixed(2)}</p>
+            <div 
+                className="w-full text-center text-2xl font-bold py-2 rounded"
+                style={{ backgroundColor: `${factionInfo.color}33`}}
+            >
+                {Math.round(factionData.weightedScore).toLocaleString()}
+            </div>
+        </div>
+    )
+}
 
 export default function ConflictPage() {
-  const isClient = useIsClient();
+  const [data, setData] = useState<ConflictData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!isClient) {
-    return null;
-  }
-  
+  const fetchData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getConflictData();
+      if (result.error) throw new Error(result.error);
+      setData(result.data || null);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const yelu = data?.yelu;
+  const association = data?.association;
+  const totalWeightedScore = (yelu?.weightedScore ?? 0) + (association?.weightedScore ?? 0);
+  const yeluPercentage = totalWeightedScore > 0 ? (yelu?.weightedScore ?? 0) / totalWeightedScore * 100 : 50;
+
+  const pastSeasons = [
+    { id: 13, yelu: 1250, association: 1100, winner: 'yelu' },
+    { id: 12, yelu: 980, association: 1400, winner: 'association' },
+  ];
+
   return (
-    <div className="grid gap-6 md:grid-cols-2">
-      {factionData.map((faction) => (
-        <Card key={faction.name} style={{ borderTop: `4px solid ${faction.color}` }}>
-          <CardHeader>
-            <CardTitle className="font-headline" style={{ color: faction.color }}>{faction.name}</CardTitle>
-            <CardDescription>當前賽季表現</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground">總積分</p>
-              <p className="text-5xl font-bold font-mono">
-                {faction.score.toLocaleString()}
-              </p>
+    <div className="max-w-4xl mx-auto w-full">
+      <Card className="bg-card/50">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle className="font-headline text-3xl">戰區態勢 (War Room)</CardTitle>
+            <div className="flex items-center gap-4">
+                <Badge variant="secondary" className="bg-green-500/20 text-green-300 border-green-500">
+                    <span className="relative flex h-2 w-2 mr-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
+                    積分加權機制運作中
+                </Badge>
+                <Button onClick={fetchData} variant="ghost" size="icon" disabled={isLoading}>
+                    <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                </Button>
             </div>
-            <div className="flex justify-around text-center">
-              <div>
-                <p className="text-sm text-muted-foreground">活躍玩家</p>
-                <p className="text-2xl font-semibold font-mono">{faction.players}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">人均貢獻</p>
-                <p className="text-2xl font-semibold font-mono">
-                  {Math.round(faction.score / faction.players).toLocaleString()}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-8">
+            {isLoading ? (
+                <div className="space-y-4">
+                    <Skeleton className="h-24 w-full"/>
+                    <Skeleton className="h-10 w-full"/>
+                    <Skeleton className="h-8 w-3/4 mx-auto"/>
+                </div>
+            ) : error ? (
+                <div className="text-center text-destructive">{error}</div>
+            ) : data && yelu && association ? (
+            <>
+                <div className="grid grid-cols-2 gap-8">
+                    <FactionDisplay factionData={yelu} totalScore={totalWeightedScore}/>
+                    <FactionDisplay factionData={association} totalScore={totalWeightedScore}/>
+                </div>
 
-      <div className="md:col-span-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">陣營對抗分析</CardTitle>
-            <CardDescription>
-              比較各陣營的總分和人均貢獻。
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={processedData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
-                  <XAxis dataKey="name" stroke="hsl(var(--foreground))" />
-                  <YAxis yAxisId="left" stroke="hsl(var(--foreground))" />
-                  <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--primary))" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      borderColor: 'hsl(var(--border))',
-                    }}
-                  />
-                  <Legend />
-                  <Bar yAxisId="left" dataKey="總分" />
-                  <Bar yAxisId="right" dataKey="人均貢獻" fill="hsl(var(--primary))" />
-                </BarChart>
-              </ResponsiveContainer>
+                <div className="w-full bg-muted rounded-full h-8 flex overflow-hidden border border-border">
+                    <div 
+                        className="h-full flex items-center justify-start pl-4" 
+                        style={{ width: `${yeluPercentage}%`, backgroundColor: FACTIONS.yelu.color, transition: 'width 0.5s ease-in-out' }}
+                    >
+                    </div>
+                     <div 
+                        className="h-full flex items-center justify-end pr-4" 
+                        style={{ width: `${100 - yeluPercentage}%`, backgroundColor: FACTIONS.association.color, transition: 'width 0.5s ease-in-out' }}
+                    >
+                    </div>
+                </div>
+
+                 <div className="text-center bg-black/30 p-4 rounded-md text-sm text-muted-foreground">
+                    <p className="font-mono font-bold text-foreground">加權分數 = 該陣營累計榮譽點 × (總活躍人數) ÷ 該陣營活躍人數</p>
+                    <p className="mt-1">說明：人數較少的陣營將獲得較高的積分加權，以平衡戰局。活躍人數指當期繳交過任務的玩家。</p>
+                </div>
+            </>
+            ) : (
+                 <div className="text-center text-muted-foreground py-10">暫無資料</div>
+            )}
+
+
+            <div>
+                <h4 className="font-headline text-xl mb-4 text-center">過往賽季紀錄</h4>
+                <div className="flex justify-center gap-4">
+                    {pastSeasons.map(season => (
+                        <div key={season.id} className={`p-4 rounded-lg border-2 w-32 text-center ${season.winner === 'yelu' ? 'border-destructive' : 'border-blue-500'}`} style={{backgroundColor: season.winner === 'yelu' ? `${FACTIONS.yelu.color}20` : `${FACTIONS.association.color}20` }}>
+                            <p className="font-bold">賽季 {season.id}</p>
+                            <p className="font-mono text-sm">
+                                <span className="text-destructive">{season.yelu}</span> vs <span className="text-blue-400">{season.association}</span>
+                            </p>
+                        </div>
+                    ))}
+                </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

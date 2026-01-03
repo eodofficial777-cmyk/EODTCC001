@@ -33,7 +33,7 @@ interface SubmitTaskPayload {
   taskTypeId: string;
   submissionUrl: string;
   title: string;
-  factionContribution?: string;
+  factionContribution?: 'yelu' | 'association' | 'none';
 }
 
 export async function submitTask(payload: SubmitTaskPayload) {
@@ -65,6 +65,7 @@ export async function submitTask(payload: SubmitTaskPayload) {
       if (!userDoc.exists()) {
         throw new Error('找不到使用者資料');
       }
+      // For single submission tasks, check if the taskTypeId is already in the user's submitted list
       if (taskType.singleSubmission && (userDoc.data().tasks || []).includes(taskTypeId)) {
         throw new Error('您已經提交過此類型的任務。');
       }
@@ -86,7 +87,7 @@ export async function submitTask(payload: SubmitTaskPayload) {
       honorPointsAwarded: taskType.honorPoints,
       currencyAwarded: taskType.currency,
       submissionDate: serverTimestamp(),
-      status: taskType.requiresApproval ? 'pending' : 'approved', // Set status based on task type
+      status: taskType.requiresApproval ? 'pending' : 'approved',
       factionContribution: factionContribution || null,
     });
     
@@ -94,12 +95,10 @@ export async function submitTask(payload: SubmitTaskPayload) {
     let currencyToAward = taskType.currency;
 
     // If the task requires approval, don't award points immediately.
-    // This logic can be expanded in the admin panel when approving tasks.
     if (taskType.requiresApproval) {
         honorToAward = 0;
         currencyToAward = 0;
     }
-
 
     // 2. Update user's points and currency
     const userTasks = userDocSnap.data()?.tasks || [];
@@ -110,14 +109,15 @@ export async function submitTask(payload: SubmitTaskPayload) {
     }
 
     const userUpdateData: any = {
-        tasks: userTasks
+        tasks: userTasks,
+        currency: increment(currencyToAward),
     };
 
-    if (honorToAward > 0) {
+    // Only increment honor points for the user if they are not a wanderer contributing to a faction,
+    // or if they are a wanderer contributing to 'none'.
+    const isWandererContributing = userFactionId === 'wanderer' && factionContribution && factionContribution !== 'none';
+    if (!isWandererContributing) {
         userUpdateData.honorPoints = increment(honorToAward);
-    }
-    if (currencyToAward > 0) {
-        userUpdateData.currency = increment(currencyToAward);
     }
     
     if (taskType.titleAwarded) {
@@ -129,14 +129,15 @@ export async function submitTask(payload: SubmitTaskPayload) {
 
     batch.update(userRef, userUpdateData);
 
-    // 3. Update faction score (only if not requiring approval)
+    // 3. Update faction score (only if not requiring approval and honor is awarded)
     if (honorToAward > 0) {
-        let factionToUpdateId = factionContribution; // For wanderers
-        if (userFactionId !== 'wanderer') {
-            factionToUpdateId = userFactionId; // For yelu or association
+        let factionToUpdateId = userFactionId;
+        // If the user is a wanderer, the score goes to their chosen faction
+        if (userFactionId === 'wanderer') {
+            factionToUpdateId = factionContribution || 'none';
         }
 
-        if (factionToUpdateId && factionToUpdateId !== 'none') {
+        if (factionToUpdateId !== 'wanderer' && factionToUpdateId !== 'none') {
           const factionRef = doc(db, 'factions', factionToUpdateId);
           batch.update(factionRef, {
             score: increment(honorToAward),
