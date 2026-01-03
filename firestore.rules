@@ -1,15 +1,12 @@
 
 rules_version = '2';
 
-// Force redeploy: 2024-07-26 12:00 UTC
-
+// Force redeploy: 2024-07-27 12:00 UTC
+// This rule allows anyone to read or write to any document in your database.
+// It is useful for getting started, but it is NOT SECURE.
+// Before deploying to production, you must secure your rules.
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // WARNING: These rules are completely open and are not secure.
-    // They are intended for early development and testing only.
-    // Before deploying your app to production, you MUST replace these
-    // with secure rules.
     match /{document=**} {
       allow read, write: if true;
     }

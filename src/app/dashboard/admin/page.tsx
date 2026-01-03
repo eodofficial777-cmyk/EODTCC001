@@ -1,3 +1,5 @@
+'use client';
+
 import {
   Card,
   CardContent,
@@ -12,8 +14,36 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { seedDatabase } from '@/app/actions/seed-database';
+import { useState } from 'react';
 
 export default function AdminPage() {
+  const { toast } = useToast();
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  const handleSeedDatabase = async () => {
+    setIsSeeding(true);
+    try {
+      const result = await seedDatabase();
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      toast({
+        title: '成功',
+        description: '資料庫已成功植入初始資料。',
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '錯誤',
+        description: `植入資料時發生錯誤：${error.message}`,
+      });
+    } finally {
+      setIsSeeding(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -34,6 +64,7 @@ export default function AdminPage() {
             <TabsTrigger value="skills">技能管理</TabsTrigger>
             <TabsTrigger value="titles">稱號管理</TabsTrigger>
             <TabsTrigger value="rewards">獎勵發放</TabsTrigger>
+            <TabsTrigger value="database">資料庫</TabsTrigger>
           </TabsList>
 
           <div className="mt-4 p-4 border rounded-md min-h-[300px]">
@@ -91,6 +122,18 @@ export default function AdminPage() {
                <h3 className="text-lg font-semibold">特殊獎勵發放</h3>
               <p className="text-muted-foreground mt-2">
                 使用複合篩選條件向特定玩家群體發放獎勵。
+              </p>
+            </TabsContent>
+            <TabsContent value="database">
+               <h3 className="text-lg font-semibold">資料庫管理</h3>
+              <p className="text-muted-foreground mt-2">
+                執行資料庫維護操作。請謹慎使用。
+              </p>
+              <Button onClick={handleSeedDatabase} disabled={isSeeding} className="mt-4">
+                {isSeeding ? '植入資料中...' : '植入初始遊戲資料'}
+              </Button>
+               <p className="text-xs text-muted-foreground mt-2">
+                點擊此按鈕將會在您的資料庫中建立或覆蓋基礎遊戲資料，例如陣營、種族、任務類型和物品等。
               </p>
             </TabsContent>
           </div>
