@@ -20,6 +20,8 @@ import { RACES } from '@/lib/game-data';
 import { useToast } from '@/hooks/use-toast';
 import { buyItem } from '@/app/actions/buy-item';
 import { useState } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 
 function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
     if ('attribute' in effect) { // AttributeEffect
@@ -55,6 +57,69 @@ const itemTypeTranslations: { [key in Item['itemTypeId']]: string } = {
   equipment: '裝備',
   consumable: '戰鬥道具',
   special: '特殊道具',
+};
+
+const ItemCard = ({ item, userData, onBuy, isBuying }: { item: Item, userData: any, onBuy: (item: Item) => void, isBuying: boolean }) => {
+    const raceName = item.raceId === 'all' ? '通用' : RACES[item.raceId as keyof typeof RACES]?.name || '未知';
+    const itemTypeName = itemTypeTranslations[item.itemTypeId] || '道具';
+    const canAfford = userData.currency >= item.price;
+    const meetsRaceRequirement = item.raceId === 'all' || userData.raceId === item.raceId;
+    const isEquipmentAndOwned = item.itemTypeId === 'equipment' && userData.items?.includes(item.id);
+    const canBuy = canAfford && meetsRaceRequirement && !isEquipmentAndOwned && !isBuying;
+    
+    let disabledTooltip = '';
+    if (isEquipmentAndOwned) disabledTooltip = '已擁有';
+    else if (!canAfford) disabledTooltip = '貨幣不足';
+    else if (!meetsRaceRequirement) disabledTooltip = '種族不符';
+
+    return (
+      <Card key={item.id} className="flex flex-col">
+        <CardHeader>
+          <div className="relative aspect-square w-full mb-4">
+            {item.imageUrl ? (
+              <Image
+                src={item.imageUrl}
+                alt={item.name}
+                fill
+                className="object-cover rounded-md"
+              />
+            ) : (
+                <div className="w-full h-full bg-muted rounded-md flex items-center justify-center">
+                    <span className="text-muted-foreground text-sm">沒有圖片</span>
+                </div>
+            )}
+             <Badge className="absolute top-2 right-2">{itemTypeName}</Badge>
+          </div>
+          <CardTitle className="font-headline">{item.name}</CardTitle>
+          <CardDescription>{item.description}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex-grow space-y-2">
+           <div className="text-sm text-primary-foreground/80 bg-primary/20 p-2 rounded-md space-y-1">
+            <span className="font-semibold">效果：</span>
+            {item.effects && item.effects.length > 0 ? (
+                <ul className="list-disc pl-4">
+                    {item.effects.map((effect, index) => (
+                        <li key={index}>{formatEffect(effect)}</li>
+                    ))}
+                </ul>
+            ) : <p>無</p>}
+           </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2">
+                <Users className="h-4 w-4" />
+                <span>種族限制：{raceName}</span>
+            </div>
+        </CardContent>
+        <CardFooter className="flex justify-between items-center">
+          <div className="flex items-center gap-1 font-mono text-lg font-bold text-primary">
+            <Gem className="h-4 w-4" />
+            {item.price.toLocaleString()}
+          </div>
+          <Button onClick={() => onBuy(item)} disabled={!canBuy} title={disabledTooltip}>
+            {isBuying ? '處理中...' : isEquipmentAndOwned ? '已擁有' : '購買'}
+          </Button>
+        </CardFooter>
+      </Card>
+    );
 };
 
 
@@ -105,7 +170,6 @@ export default function StorePage() {
         throw new Error(result.error);
       }
       toast({ title: '購買成功！', description: `「${item.name}」已加入您的背包。`});
-      // The useDoc hook will automatically update userData, no manual refetch is needed.
     } catch(error: any) {
       toast({ variant: 'destructive', title: '購買失敗', description: error.message });
     } finally {
@@ -115,92 +179,72 @@ export default function StorePage() {
 
   const isLoading = isUserLoading || isUserDataLoading || areItemsLoading;
 
-  return (
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {isLoading && Array.from({ length: 4 }).map((_, i) => (
-        <Card key={i}>
-            <CardHeader>
+  const renderContent = (filteredItems: Item[]) => {
+    if (isLoading) {
+      return (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
                 <Skeleton className="aspect-square w-full mb-4"/>
                 <Skeleton className="h-6 w-3/4" />
                 <Skeleton className="h-4 w-1/2" />
-            </CardHeader>
-            <CardContent className="flex-grow"></CardContent>
-            <CardFooter className="flex justify-between items-center">
+              </CardHeader>
+              <CardContent className="flex-grow"></CardContent>
+              <CardFooter className="flex justify-between items-center">
                 <Skeleton className="h-8 w-20" />
                 <Skeleton className="h-10 w-24" />
-            </CardFooter>
-        </Card>
-      ))}
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      );
+    }
 
-      {!isLoading && (!items || items.length === 0) && (
-          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4 text-center text-muted-foreground py-16">
-              <h3 className="text-xl font-semibold">商店目前沒有商品</h3>
-              <p>您所屬的陣營目前沒有任何上架的商品。</p>
-          </div>
-      )}
+    if (!filteredItems || filteredItems.length === 0) {
+      return (
+        <div className="text-center text-muted-foreground py-16">
+          <h3 className="text-xl font-semibold">這個分類沒有商品</h3>
+          <p>您所屬的陣營目前沒有任何上架的商品。</p>
+        </div>
+      );
+    }
+    
+    return (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {userData && filteredItems.map((item) => (
+                <ItemCard 
+                    key={item.id}
+                    item={item} 
+                    userData={userData} 
+                    onBuy={handleBuy} 
+                    isBuying={isBuying[item.id] || false}
+                />
+            ))}
+        </div>
+    );
+  };
+  
+  const equipmentItems = items?.filter(item => item.itemTypeId === 'equipment') || [];
+  const consumableItems = items?.filter(item => item.itemTypeId === 'consumable') || [];
+  const specialItems = items?.filter(item => item.itemTypeId === 'special') || [];
 
-      {!isLoading && items && userData && items.map((item) => {
-        const raceName = item.raceId === 'all' ? '通用' : RACES[item.raceId as keyof typeof RACES]?.name || '未知';
-        const itemTypeName = itemTypeTranslations[item.itemTypeId] || '道具';
-        const canAfford = userData.currency >= item.price;
-        const meetsRaceRequirement = item.raceId === 'all' || userData.raceId === item.raceId;
-        const isEquipmentAndOwned = item.itemTypeId === 'equipment' && userData.items?.includes(item.id);
-        const canBuy = canAfford && meetsRaceRequirement && !isEquipmentAndOwned && !isBuying[item.id];
-        
-        let disabledTooltip = '';
-        if (isEquipmentAndOwned) disabledTooltip = '已擁有';
-        else if (!canAfford) disabledTooltip = '貨幣不足';
-        else if (!meetsRaceRequirement) disabledTooltip = '種族不符';
-
-        return (
-          <Card key={item.id} className="flex flex-col">
-            <CardHeader>
-              <div className="relative aspect-square w-full mb-4">
-                {item.imageUrl ? (
-                  <Image
-                    src={item.imageUrl}
-                    alt={item.name}
-                    fill
-                    className="object-cover rounded-md"
-                  />
-                ) : (
-                    <div className="w-full h-full bg-muted rounded-md flex items-center justify-center">
-                        <span className="text-muted-foreground text-sm">沒有圖片</span>
-                    </div>
-                )}
-                 <Badge className="absolute top-2 right-2">{itemTypeName}</Badge>
-              </div>
-              <CardTitle className="font-headline">{item.name}</CardTitle>
-              <CardDescription>{item.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex-grow space-y-2">
-               <div className="text-sm text-primary-foreground/80 bg-primary/20 p-2 rounded-md space-y-1">
-                <span className="font-semibold">效果：</span>
-                {item.effects && item.effects.length > 0 ? (
-                    <ul className="list-disc pl-4">
-                        {item.effects.map((effect, index) => (
-                            <li key={index}>{formatEffect(effect)}</li>
-                        ))}
-                    </ul>
-                ) : <p>無</p>}
-               </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2">
-                    <Users className="h-4 w-4" />
-                    <span>種族限制：{raceName}</span>
-                </div>
-            </CardContent>
-            <CardFooter className="flex justify-between items-center">
-              <div className="flex items-center gap-1 font-mono text-lg font-bold text-primary">
-                <Gem className="h-4 w-4" />
-                {item.price.toLocaleString()}
-              </div>
-              <Button onClick={() => handleBuy(item)} disabled={!canBuy} title={disabledTooltip}>
-                {isBuying[item.id] ? '處理中...' : isEquipmentAndOwned ? '已擁有' : '購買'}
-              </Button>
-            </CardFooter>
-          </Card>
-        )
-      })}
-    </div>
+  return (
+    <Tabs defaultValue="equipment" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="equipment">{itemTypeTranslations.equipment}</TabsTrigger>
+            <TabsTrigger value="consumable">{itemTypeTranslations.consumable}</TabsTrigger>
+            <TabsTrigger value="special">{itemTypeTranslations.special}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="equipment" className="mt-6">
+            {renderContent(equipmentItems)}
+        </TabsContent>
+        <TabsContent value="consumable" className="mt-6">
+            {renderContent(consumableItems)}
+        </TabsContent>
+        <TabsContent value="special" className="mt-6">
+            {renderContent(specialItems)}
+        </TabsContent>
+    </Tabs>
   );
 }
