@@ -25,8 +25,150 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import Logo from '@/components/logo';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { useAuth, useFirestore } from '@/firebase';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+} from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
+
+const registerSchema = z.object({
+  account: z.string().min(1, '登入帳號為必填'),
+  characterName: z.string().min(1, '角色名稱為必填'),
+  password: z.string().min(6, '密碼至少需要 6 個字元'),
+  faction: z.string({ required_error: '請選擇一個陣營' }),
+  race: z.string({ required_error: '請選擇一個種族' }),
+  plurkAccount: z
+    .string()
+    .url('請輸入有效的網址')
+    .startsWith('https://www.plurk.com/', '噗浪帳號必須以 https://www.plurk.com/ 開頭'),
+  characterSheet: z
+    .string()
+    .url('請輸入有效的網址')
+    .startsWith(
+      'https://images.plurk.com/',
+      '角色卡必須以 https://images.plurk.com/ 開頭'
+    ),
+  avatar: z
+    .string()
+    // .url('請輸入有效的網址')
+    .startsWith(
+      'https://images.plurk.com/',
+      '大頭貼必須以 https://images.plurk.com/ 開頭'
+    ),
+});
+
+const loginSchema = z.object({
+  email: z.string().email('請輸入有效的電子郵件'),
+  password: z.string().min(1, '密碼為必填'),
+});
 
 export default function AuthPage() {
+  const auth = useAuth();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+  const router = useRouter();
+
+  const registerForm = useForm<z.infer<typeof registerSchema>>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      account: '',
+      characterName: '',
+      password: '',
+      plurkAccount: 'https://www.plurk.com/',
+      characterSheet: 'https://images.plurk.com/',
+      avatar: 'https://images.plurk.com/',
+    },
+  });
+
+  const loginForm = useForm<z.infer<typeof loginSchema>>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
+
+  const onRegisterSubmit = async (values: z.infer<typeof registerSchema>) => {
+    const email = `${values.account}@eodtcc.com`;
+    try {
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        values.password
+      );
+      const user = userCredential.user;
+
+      await setDoc(doc(firestore, 'users', user.uid), {
+        id: user.uid,
+        roleName: values.characterName,
+        plurkInfo: values.plurkAccount,
+        characterSheetUrl: values.characterSheet,
+        avatarUrl: values.avatar,
+        factionId: values.faction,
+        raceId: values.race,
+        registrationDate: serverTimestamp(),
+        approved: false,
+      });
+
+      toast({
+        title: '註冊成功',
+        description: '您的帳戶已建立，正在等待管理員審核。',
+      });
+      registerForm.reset();
+    } catch (error: any) {
+      console.error('註冊失敗:', error);
+      let description = '發生未知錯誤，請稍後再試。';
+      if (error.code === 'auth/email-already-in-use') {
+        description = '此登入帳號已被使用。';
+      } else if (error.code === 'auth/weak-password') {
+        description = '密碼強度不足，請設定更長的密碼。';
+      }
+      toast({
+        variant: 'destructive',
+        title: '註冊失敗',
+        description,
+      });
+    }
+  };
+
+  const onLoginSubmit = async (values: z.infer<typeof loginSchema>) => {
+    try {
+      await signInWithEmailAndPassword(auth, values.email, values.password);
+      toast({
+        title: '登入成功',
+        description: '正在將您導向儀表板...',
+      });
+      router.push('/dashboard');
+    } catch (error: any) {
+      console.error('登入失敗:', error);
+      let description = '請檢查您的帳號或密碼。';
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+         description = '帳號或密碼錯誤。';
+      } else if (error.code === 'auth/user-disabled') {
+         description = '此帳戶已被停用或尚未審核通過。';
+      }
+      toast({
+        variant: 'destructive',
+        title: '登入失敗',
+        description,
+      });
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="mx-auto w-full max-w-md">
@@ -48,108 +190,208 @@ export default function AuthPage() {
                   輸入您的憑證以存取您的帳戶
                 </CardDescription>
               </CardHeader>
-              <div className="grid gap-4 p-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="email">電子郵件</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="m@example.com"
-                    required
+              <Form {...loginForm}>
+                <form
+                  onSubmit={loginForm.handleSubmit(onLoginSubmit)}
+                  className="grid gap-4 p-2"
+                >
+                  <FormField
+                    control={loginForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem className="grid gap-2">
+                        <FormLabel>電子郵件</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="email"
+                            placeholder="m@example.com"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
-                <div className="grid gap-2">
-                  <div className="flex items-center">
-                    <Label htmlFor="password">密碼</Label>
-                    <Link
-                      href="#"
-                      className="ml-auto inline-block text-sm underline"
-                    >
-                      忘記密碼？
-                    </Link>
+                  <FormField
+                    control={loginForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem className="grid gap-2">
+                         <div className="flex items-center">
+                            <FormLabel>密碼</FormLabel>
+                            <Link
+                              href="#"
+                              className="ml-auto inline-block text-sm underline"
+                            >
+                              忘記密碼？
+                            </Link>
+                          </div>
+                        <FormControl>
+                          <Input type="password" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" className="w-full">
+                    登入
+                  </Button>
+                  <div className="mt-2 text-center text-xs text-muted-foreground">
+                    帳戶需要經過管理員批准後才能啟用登入。
                   </div>
-                  <Input id="password" type="password" required />
-                </div>
-                <Button type="submit" className="w-full" asChild>
-                  <Link href="/dashboard">登入</Link>
-                </Button>
-                <div className="mt-2 text-center text-xs text-muted-foreground">
-                  帳戶需要經過管理員批准後才能啟用登入。
-                </div>
-              </div>
+                </form>
+              </Form>
             </TabsContent>
             <TabsContent value="register">
-               <CardHeader className="p-2 pt-4 text-center">
+              <CardHeader className="p-2 pt-4 text-center">
                 <CardTitle className="text-2xl font-headline">註冊</CardTitle>
-                <CardDescription>
-                  建立您的新角色帳戶
-                </CardDescription>
+                <CardDescription>建立您的新角色帳戶</CardDescription>
               </CardHeader>
-              <div className="grid gap-4 p-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="register-account">登入帳號</Label>
-                  <div className="flex items-center">
-                    <Input id="register-account" placeholder="帳號" required className="rounded-r-none" />
-                    <span className="flex h-10 items-center rounded-r-md border border-l-0 border-input bg-background px-3 text-sm text-muted-foreground">
-                      @eodtcc.com
-                    </span>
+              <Form {...registerForm}>
+                <form
+                  onSubmit={registerForm.handleSubmit(onRegisterSubmit)}
+                  className="grid gap-4 p-2"
+                >
+                  <FormField
+                    control={registerForm.control}
+                    name="account"
+                    render={({ field }) => (
+                      <FormItem className="grid gap-2">
+                        <FormLabel>登入帳號</FormLabel>
+                        <FormControl>
+                           <div className="flex items-center">
+                            <Input placeholder="帳號" {...field} className="rounded-r-none border-r-0" />
+                            <span className="flex h-10 items-center rounded-r-md border border-l-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+                              @eodtcc.com
+                            </span>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={registerForm.control}
+                    name="characterName"
+                    render={({ field }) => (
+                      <FormItem className="grid gap-2">
+                        <FormLabel>角色名稱</FormLabel>
+                        <FormControl>
+                          <Input placeholder="您的角色名稱" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={registerForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem className="grid gap-2">
+                        <FormLabel>自定義密碼</FormLabel>
+                        <FormControl>
+                          <Input type="password" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={registerForm.control}
+                      name="faction"
+                      render={({ field }) => (
+                        <FormItem className="grid gap-2">
+                          <FormLabel>陣營</FormLabel>
+                           <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="選擇陣營" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="yelu">夜鷺</SelectItem>
+                              <SelectItem value="association">協會</SelectItem>
+                              <SelectItem value="wanderer">流浪者</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
+                      name="race"
+                      render={({ field }) => (
+                        <FormItem className="grid gap-2">
+                          <FormLabel>種族</FormLabel>
+                           <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="選擇種族" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="corruptor">侵蝕者</SelectItem>
+                              <SelectItem value="esper">超能者</SelectItem>
+                              <SelectItem value="human">純人類</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="character-name">角色名稱</Label>
-                  <Input id="character-name" placeholder="您的角色名稱" required />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="register-password">自定義密碼</Label>
-                  <Input id="register-password" type="password" required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="faction">陣營</Label>
-                    <Select>
-                      <SelectTrigger id="faction">
-                        <SelectValue placeholder="選擇陣營" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="yelu">夜鷺</SelectItem>
-                        <SelectItem value="association">協會</SelectItem>
-                        <SelectItem value="wanderer">流浪者</SelectItem>
-                      </SelectContent>
-                    </Select>
+
+                  <FormField
+                    control={registerForm.control}
+                    name="plurkAccount"
+                    render={({ field }) => (
+                      <FormItem className="grid gap-2">
+                        <FormLabel>噗浪帳號</FormLabel>
+                        <FormControl>
+                          <Input placeholder="https://www.plurk.com/您的ID" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={registerForm.control}
+                    name="characterSheet"
+                    render={({ field }) => (
+                      <FormItem className="grid gap-2">
+                        <FormLabel>角色卡</FormLabel>
+                        <FormControl>
+                          <Input placeholder="https://images.plurk.com/..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={registerForm.control}
+                    name="avatar"
+                    render={({ field }) => (
+                      <FormItem className="grid gap-2">
+                        <FormLabel>大頭貼</FormLabel>
+                        <FormControl>
+                          <Input placeholder="https://images.plurk.com/..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button type="submit" className="w-full" disabled={registerForm.formState.isSubmitting}>
+                    {registerForm.formState.isSubmitting ? '建立中...' : '建立帳戶'}
+                  </Button>
+                  <div className="mt-2 text-center text-xs text-muted-foreground">
+                    帳戶需要經過管理員批准後才能啟用登入。
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="race">種族</Label>
-                    <Select>
-                      <SelectTrigger id="race">
-                        <SelectValue placeholder="選擇種族" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="corruptor">侵蝕者</SelectItem>
-                        <SelectItem value="esper">超能者</SelectItem>
-                        <SelectItem value="human">純人類</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="plurk-account">噗浪帳號</Label>
-                  <Input id="plurk-account" placeholder="https://www.plurk.com/您的ID" required />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="character-sheet">角色卡</Label>
-                  <Input id="character-sheet" placeholder="https://images.plurk.com/..." required />
-                </div>
-                 <div className="grid gap-2">
-                  <Label htmlFor="avatar">大頭貼</Label>
-                  <Input id="avatar" placeholder="https://images.plurk.com/..." required />
-                </div>
-                <Button type="submit" className="w-full">
-                  建立帳戶
-                </Button>
-                <div className="mt-2 text-center text-xs text-muted-foreground">
-                  帳戶需要經過管理員批准後才能啟用登入。
-                </div>
-              </div>
+                </form>
+              </Form>
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -157,3 +399,5 @@ export default function AuthPage() {
     </div>
   );
 }
+
+    
