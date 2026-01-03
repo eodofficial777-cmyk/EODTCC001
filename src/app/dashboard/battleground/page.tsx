@@ -35,7 +35,7 @@ const mockMonsters = {
 
 type CombatStatus = 'closed' | 'preparing' | 'active' | 'ended';
 
-const PreparationCountdown = ({-
+const PreparationCountdown = ({
   preparationEndTime
 }: {
   preparationEndTime: Date
@@ -228,66 +228,74 @@ export default function BattlegroundPage() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
-      {/* Center Column: Monster Info, Battle Log, or Status */}
-      <Tabs defaultValue={userData?.factionId !== 'wanderer' ? userData?.factionId : 'yelu'} className="lg:col-span-2">
-        <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="yelu" disabled={!isWanderer}>夜鷺災獸</TabsTrigger>
-            <TabsTrigger value="association" disabled={!isWanderer}>協會災獸</TabsTrigger>
-        </TabsList>
-        <div className="mt-4">
-            {isWanderer && (
-                <div className="mb-4 p-4 border rounded-lg">
-                    <h4 className="font-bold mb-2">流浪者支援選擇</h4>
-                    <p className="text-sm text-muted-foreground mb-3">選擇一個陣營進行支援。一旦選定，本次戰鬥中將無法更改。</p>
-                    <div className="flex gap-4">
-                        <Button onClick={() => handleSupportFaction('yelu')} variant={supportedFaction === 'yelu' ? 'default' : 'outline'} className="w-full">支援夜鷺</Button>
-                        <Button onClick={() => handleSupportFaction('association')} variant={supportedFaction === 'association' ? 'default' : 'outline'} className="w-full">支援協會</Button>
+    <div className="w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Center Column: Monster Info, Battle Log, or Status */}
+            <div className="lg:col-span-2">
+                <Tabs defaultValue={userData?.factionId !== 'wanderer' ? userData?.factionId : 'yelu'} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="yelu" disabled={!isWanderer && playerFaction !== 'yelu'}>夜鷺災獸</TabsTrigger>
+                        <TabsTrigger value="association" disabled={!isWanderer && playerFaction !== 'association'}>協會災獸</TabsTrigger>
+                    </TabsList>
+                    <div className="mt-4">
+                        {isWanderer && (
+                            <div className="mb-4 p-4 border rounded-lg">
+                                <h4 className="font-bold mb-2">流浪者支援選擇</h4>
+                                <p className="text-sm text-muted-foreground mb-3">選擇一個陣營進行支援。一旦選定，本次戰鬥中將無法更改。</p>
+                                <div className="flex gap-4">
+                                    <Button onClick={() => handleSupportFaction('yelu')} variant={supportedFaction === 'yelu' ? 'default' : 'outline'} className="w-full">支援夜鷺</Button>
+                                    <Button onClick={() => handleSupportFaction('association')} variant={supportedFaction === 'association' ? 'default' : 'outline'} className="w-full">支援協會</Button>
+                                </div>
+                            </div>
+                        )}
+                        <TabsContent value="yelu">
+                            {playerFaction === 'yelu' ? renderContent() : <p className="text-muted-foreground text-center py-8">您未支援此陣營。</p>}
+                        </TabsContent>
+                        <TabsContent value="association">
+                             {playerFaction === 'association' ? renderContent() : <p className="text-muted-foreground text-center py-8">您未支援此陣營。</p>}
+                        </TabsContent>
                     </div>
-                </div>
-            )}
-             {renderContent()}
-        </div>
-      </Tabs>
-
-
-      {/* Right Column: Player Stats and Actions */}
-      <div className="lg:col-span-1 space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>玩家狀態</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-             <div className="space-y-1">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-medium text-green-400">HP</span>
-                  <span className="font-mono">95 / 120</span>
-                </div>
-                <Progress value={(95/120) * 100} className="h-3 bg-green-500/20 [&>div]:bg-green-500" />
-              </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-2"><Sword className="h-4 w-4 text-muted-foreground"/> 攻擊力: 35</div>
-                <div className="flex items-center gap-2"><Shield className="h-4 w-4 text-muted-foreground"/> 防禦力: 18</div>
+                </Tabs>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>行動</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2">
-            <Button disabled={combatStatus !== 'active' || !selectedTarget}>攻擊</Button>
-            <Button variant="outline" disabled={combatStatus !== 'active'}>技能</Button>
-            <Button variant="outline" disabled={combatStatus !== 'active'}>道具</Button>
-            <Button variant="ghost" disabled={combatStatus !== 'active'}>防禦</Button>
-          </CardContent>
-        </Card>
-         <Card>
-          <CardHeader><CardTitle>裝備</CardTitle></CardHeader>
-          <CardContent><p className="text-muted-foreground text-sm">此處顯示已裝備的物品。</p></CardContent>
-        </Card>
-      </div>
+            {/* Right Column: Player Stats and Actions */}
+            <div className="lg:col-span-1 space-y-6">
+                <Card>
+                <CardHeader>
+                    <CardTitle>玩家狀態</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-1">
+                        <div className="flex justify-between items-center text-sm">
+                        <span className="font-medium text-green-400">HP</span>
+                        <span className="font-mono">95 / 120</span>
+                        </div>
+                        <Progress value={(95/120) * 100} className="h-3 bg-green-500/20 [&>div]:bg-green-500" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center gap-2"><Sword className="h-4 w-4 text-muted-foreground"/> 攻擊力: 35</div>
+                        <div className="flex items-center gap-2"><Shield className="h-4 w-4 text-muted-foreground"/> 防禦力: 18</div>
+                    </div>
+                </CardContent>
+                </Card>
+
+                <Card>
+                <CardHeader>
+                    <CardTitle>行動</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-2">
+                    <Button disabled={combatStatus !== 'active' || !selectedTarget}>攻擊</Button>
+                    <Button variant="outline" disabled={combatStatus !== 'active'}>技能</Button>
+                    <Button variant="outline" disabled={combatStatus !== 'active'}>道具</Button>
+                    <Button variant="ghost" disabled={combatStatus !== 'active'}>防禦</Button>
+                </CardContent>
+                </Card>
+                <Card>
+                <CardHeader><CardTitle>裝備</CardTitle></CardHeader>
+                <CardContent><p className="text-muted-foreground text-sm">此處顯示已裝備的物品。</p></CardContent>
+                </Card>
+            </div>
+        </div>
     </div>
   );
 }
