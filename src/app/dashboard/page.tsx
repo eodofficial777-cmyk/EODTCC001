@@ -109,7 +109,7 @@ function ChangeTitleDialog({ user, userData, onTitleChanged }: { user: any, user
         const newTitlesArray = [selectedTitle, ...otherTitles];
 
         try {
-            const result = await updateUser(user.uid, { titles: newTitlesArray });
+            const result = await updateUser(user.uid, { titles: newTitlesArray }, false);
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: '您的稱號已更新！' });
             onTitleChanged(); // This should trigger a re-fetch in the parent
@@ -132,12 +132,16 @@ function ChangeTitleDialog({ user, userData, onTitleChanged }: { user: any, user
                 </DialogHeader>
                 <div className="py-4">
                     <RadioGroup value={selectedTitle} onValueChange={setSelectedTitle}>
-                        {(userData.titles || []).map((title: string) => (
-                            <Label key={title} htmlFor={title} className="flex items-center justify-between rounded-md border p-3 hover:bg-accent has-[[data-state=checked]]:border-primary">
-                                {title}
-                                <RadioGroupItem value={title} id={title} />
-                            </Label>
-                        ))}
+                        {(userData.titles || []).map((titleId: string, index: number) => {
+                             const titleData = userData.allTitles?.find((t: any) => t.id === titleId);
+                             const titleName = titleData?.name || titleId;
+                            return (
+                                <Label key={index} htmlFor={titleId} className="flex items-center justify-between rounded-md border p-3 hover:bg-accent has-[[data-state=checked]]:border-primary">
+                                    {titleName}
+                                    <RadioGroupItem value={titleId} id={titleId} />
+                                </Label>
+                            )
+                        })}
                     </RadioGroup>
                 </div>
                  <DialogFooter>
@@ -176,7 +180,7 @@ function ChangeAvatarDialog({ user, userData, onAvatarChanged }: { user: any, us
 
   const onSubmit = async (values: z.infer<typeof avatarSchema>) => {
     try {
-      const result = await updateUser(user.uid, { avatarUrl: values.avatarUrl });
+      const result = await updateUser(user.uid, { avatarUrl: values.avatarUrl }, false);
       if (result.error) throw new Error(result.error);
       toast({ title: '成功', description: '您的大頭貼已更新！' });
       onAvatarChanged();
@@ -241,15 +245,27 @@ export default function DashboardPage() {
 
   const itemsQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'items') : null), [firestore]);
   const { data: allItems, isLoading: areItemsLoading } = useCollection<Item>(itemsQuery);
+  
+  const titlesQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'titles') : null), [firestore]);
+  const { data: allTitles, isLoading: areTitlesLoading } = useCollection(titlesQuery);
+
 
   const activityLogQuery = useMemoFirebase(
     () => (user ? query(collection(firestore, `users/${user.uid}/activityLogs`), orderBy('timestamp', 'desc'), limit(5)) : null),
     [user, firestore]
   );
   const { data: recentLogs, isLoading: isLogsLoading } = useCollection(activityLogQuery);
+  
+  const userDataWithTitles = useMemoFirebase(() => {
+    if (!userData || !allTitles) return userData;
+    return { ...userData, allTitles };
+  }, [userData, allTitles]);
 
   const faction = userData?.factionId ? FACTIONS[userData.factionId as keyof typeof FACTIONS] : null;
   const race = userData?.raceId ? RACES[userData.raceId as keyof typeof RACES] : null;
+  
+  const currentTitleId = userData?.titles?.[0];
+  const currentTitle = allTitles?.find(t => t.id === currentTitleId);
   
   const processedInventory = useMemoFirebase(() => {
     if (!userData?.items || !allItems) return [];
@@ -270,7 +286,7 @@ export default function DashboardPage() {
   }, [userData?.items, allItems]);
 
 
-  const isLoading = isUserLoading || isUserDataLoading || areItemsLoading;
+  const isLoading = isUserLoading || isUserDataLoading || areItemsLoading || areTitlesLoading;
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -324,8 +340,8 @@ export default function DashboardPage() {
             <Separator className="my-4" />
              <div className="text-left w-full">
               <h4 className="font-semibold mb-2 text-center">當前稱號</h4>
-               {isLoading ? <Skeleton className="h-7 w-36 mx-auto" /> : <p className="text-center text-primary text-lg font-medium">{userData?.titles?.[0] ?? '無'}</p>}
-               {user && userData && userData.titles && userData.titles.length > 0 && <ChangeTitleDialog user={user} userData={userData} onTitleChanged={mutate} />}
+               {isLoading ? <Skeleton className="h-7 w-36 mx-auto" /> : <p className="text-center text-primary text-lg font-medium">{currentTitle?.name ?? '無'}</p>}
+               {user && userDataWithTitles && userDataWithTitles.titles && userDataWithTitles.titles.length > 0 && <ChangeTitleDialog user={user} userData={userDataWithTitles} onTitleChanged={mutate} />}
             </div>
           </CardContent>
           <CardFooter>
@@ -456,7 +472,7 @@ export default function DashboardPage() {
           </CardContent>
            <CardFooter>
             <Button asChild className="w-full">
-              <Link href="/dashboard/missions">
+              <Link href="/dashboard/activity-log">
                 <ScrollText className="mr-2"/>
                 查看所有紀錄
               </Link>

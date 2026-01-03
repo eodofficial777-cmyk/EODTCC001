@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   PanelLeft,
   Hammer,
+  ScrollText,
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -36,6 +37,7 @@ import { doc } from 'firebase/firestore';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: '角色資訊' },
+  { href: '/dashboard/activity-log', icon: ScrollText, label: '活動紀錄' },
   { href: '/dashboard/roster', icon: Users, label: '角色名冊' },
   { href: '/dashboard/missions', icon: ClipboardList, label: '任務提交' },
   { href: '/dashboard/conflict', icon: Swords, label: '陣營對抗' },
