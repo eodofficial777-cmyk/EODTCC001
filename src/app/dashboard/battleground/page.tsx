@@ -19,9 +19,11 @@ import { doc, collection, query, orderBy, limit, where } from 'firebase/firestor
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { CombatEncounter, User, Item, Skill, AttributeEffect, Monster } from '@/lib/types';
+import type { CombatEncounter, User, Item, Skill, AttributeEffect, Monster, CombatLog } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { performAttack } from '@/app/actions/perform-attack';
+import { useToast } from '@/hooks/use-toast';
 
 
 const PreparationCountdown = ({ preparationEndTime, battleName, onFinished }: { preparationEndTime: Date, battleName: string, onFinished: () => void }) => {
@@ -66,6 +68,8 @@ const PreparationCountdown = ({ preparationEndTime, battleName, onFinished }: { 
 
 
 const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { monster: Monster, isTargeted: boolean, onSelectTarget: (id: string) => void, isSelectable: boolean }) => {
+  const monsterMaxHp = monster.hp; // This needs to be the original HP
+  const currentHp = monster.hp; // This is the current, changing HP
   return (
     <Card className={`overflow-hidden transition-all duration-300 ${isTargeted && isSelectable ? 'border-primary ring-2 ring-primary' : ''}`}>
        <div className="relative aspect-square w-full">
@@ -85,9 +89,9 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { mo
         <div className="space-y-1">
           <div className="flex justify-between items-center text-xs font-mono">
             <span className='flex items-center gap-1'><Heart className="h-3 w-3 text-red-400" /> HP</span>
-            <span>{monster.hp.toLocaleString()} / {monster.hp.toLocaleString()}</span>
+            <span>{currentHp.toLocaleString()} / {monsterMaxHp.toLocaleString()}</span>
           </div>
-          <Progress value={(monster.hp / monster.hp) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
+          <Progress value={(currentHp / monsterMaxHp) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
         </div>
         <div className="text-xs font-mono flex items-center justify-between text-muted-foreground">
            <span className='flex items-center gap-1'><Sword className="h-3 w-3" /> ATK</span>
@@ -96,9 +100,8 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { mo
       </CardContent>
       {isSelectable &&
         <CardFooter className="p-3 pt-0">
-          <Button className="w-full" size="sm" onClick={() => onSelectTarget(monster.name)} disabled={isTargeted}>
-            <Target className="mr-2 h-4 w-4" />
-            {isTargeted ? '已鎖定' : '鎖定目標'}
+          <Button className="w-full" size="sm" onClick={() => onSelectTarget(monster.name)} disabled={isTargeted || monster.hp <= 0}>
+            {monster.hp <= 0 ? '已擊敗' : isTargeted ? '已鎖定' : <><Target className="mr-2 h-4 w-4" />鎖定目標</>}
           </Button>
         </CardFooter>
       }
@@ -147,17 +150,25 @@ const ActionCooldown = ({ cooldown, onCooldownEnd }: { cooldown: number, onCoold
 export default function BattlegroundPage() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
   
   // --- Data Fetching ---
   const userDocRef = useMemoFirebase(() => (user ? doc(firestore, `users/${user.uid}`) : null), [user, firestore]);
-  const { data: userData } = useDoc<User>(userDocRef);
+  const { data: userData, mutate: mutateUser } = useDoc<User>(userDocRef);
 
   const latestBattleQuery = useMemoFirebase(
     () => (firestore ? query(collection(firestore, 'combatEncounters'), orderBy('startTime', 'desc'), limit(1)) : null),
     [firestore]
   );
-  const { data: battleData, isLoading: isBattleLoading, mutate } = useCollection<CombatEncounter>(latestBattleQuery);
+  const { data: battleData, isLoading: isBattleLoading, mutate: mutateBattle } = useCollection<CombatEncounter>(latestBattleQuery);
   const currentBattle = battleData?.[0];
+
+  const battleLogsQuery = useMemoFirebase(
+    () => (firestore && currentBattle ? query(collection(firestore, `combatEncounters/${currentBattle.id}/combatLogs`), orderBy('timestamp', 'asc')) : null),
+    [firestore, currentBattle]
+  );
+  const { data: battleLogs } = useCollection<CombatLog>(battleLogsQuery);
+
 
   const allItemsQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'items') : null), [firestore]);
   const { data: allItems } = useCollection<Item>(allItemsQuery);
@@ -174,6 +185,7 @@ export default function BattlegroundPage() {
   const [battleHP, setBattleHP] = useState(0);
   const [equippedItems, setEquippedItems] = useState<string[]>([]);
   const [actionCooldown, setActionCooldown] = useState<number>(0);
+  const [isAttacking, setIsAttacking] = useState(false);
   
   // --- Computed Values & Memos ---
   const isWanderer = userData?.factionId === 'wanderer';
@@ -223,13 +235,7 @@ export default function BattlegroundPage() {
 
   // --- Effects ---
   useEffect(() => {
-    if (userData?.attributes.hp && battleHP === 0) {
-      setBattleHP(userData.attributes.hp);
-    }
-  }, [userData?.attributes.hp, battleHP]);
-
-  useEffect(() => {
-    if (combatStatus === 'active' && userData?.attributes.hp) {
+    if (userData?.attributes.hp && combatStatus === 'active') {
       setBattleHP(userData.attributes.hp);
     }
   }, [combatStatus, userData?.attributes.hp]);
@@ -254,13 +260,35 @@ export default function BattlegroundPage() {
     });
   }
   
-  const handleAction = () => {
-    setActionCooldown(Date.now());
+  const handleAttack = async () => {
+    if (!user || !currentBattle || !selectedTarget || isAttacking || isOnCooldown) return;
+
+    setIsAttacking(true);
+    try {
+        const result = await performAttack({
+            userId: user.uid,
+            battleId: currentBattle.id,
+            targetMonsterName: selectedTarget,
+            equippedItemIds: equippedItems
+        });
+
+        if (result.error) throw new Error(result.error);
+        
+        toast({ title: "攻擊成功", description: "你對災獸造成了傷害，但也受到了反擊！" });
+        setActionCooldown(Date.now());
+        mutateBattle(); // Re-fetch battle data to update monster HP
+        mutateUser();   // Re-fetch user data to update player HP (when implemented)
+
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: '攻擊失敗', description: error.message });
+    } finally {
+        setIsAttacking(false);
+    }
   }
 
   const handleCountdownFinished = useCallback(() => {
-    mutate(); // Re-fetch the battle data
-  }, [mutate]);
+    mutateBattle(); // Re-fetch the battle data
+  }, [mutateBattle]);
 
   // --- Render Functions ---
   const renderMonsters = (factionId: 'yelu' | 'association') => {
@@ -281,7 +309,7 @@ export default function BattlegroundPage() {
          <Card>
             <CardHeader>
               <CardTitle>{FACTIONS[factionId]?.name} 災獸</CardTitle>
-              {combatStatus === 'active' && <CardDescription>當前回合：1</CardDescription>}
+              {combatStatus === 'active' && <CardDescription>當前回合：{currentBattle?.turn || 1}</CardDescription>}
             </CardHeader>
             <CardContent>
               {monsters.length > 0 ? (
@@ -329,16 +357,7 @@ export default function BattlegroundPage() {
       <div className="space-y-6">
         <div>{renderMonsters(factionId)}</div>
         {combatStatus === 'preparing' && preparationEndTime ? (
-          <div>
             <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle.name} onFinished={handleCountdownFinished} />
-             {isWanderer && !supportedFaction && (
-              <Alert className="mt-4">
-                <Info className="h-4 w-4" />
-                <AlertTitle>流浪者請注意</AlertTitle>
-                <AlertDescription>共鬥開始前，請在上方選擇您想支援的陣營。</AlertDescription>
-              </Alert>
-            )}
-          </div>
         ) : (
           <Card>
             <CardHeader>
@@ -347,12 +366,26 @@ export default function BattlegroundPage() {
             <CardContent>
               <ScrollArea className="h-40">
                 <div className="space-y-3 text-sm font-mono">
-                  <p><span className="text-primary">[回合 1]</span> 戰鬥開始！</p>
+                  {battleLogs && battleLogs.length > 0 ? battleLogs.map(log => (
+                    <p key={log.id}>
+                      <span className="text-primary mr-2">[回合 {log.turn}]</span>
+                      {log.logData}
+                    </p>
+                  )) : (
+                     <p><span className="text-primary">[回合 {currentBattle.turn}]</span> 戰鬥開始！</p>
+                  )}
                   {hasFallen && <p className="text-red-500">[系統] 您的HP已歸零，無法繼續行動。</p>}
                 </div>
               </ScrollArea>
             </CardContent>
           </Card>
+        )}
+         {combatStatus === 'preparing' && isWanderer && !supportedFaction && (
+          <Alert className="mt-4">
+            <Info className="h-4 w-4" />
+            <AlertTitle>流浪者請注意</AlertTitle>
+            <AlertDescription>共鬥開始前，請在上方選擇您想支援的陣營。</AlertDescription>
+          </Alert>
         )}
       </div>
     );
@@ -421,10 +454,12 @@ export default function BattlegroundPage() {
                             {isOnCooldown ? '冷卻中...' : '選擇一個行動'}
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-3 gap-2">
-                        <Button onClick={handleAction} disabled={combatStatus !== 'active' || !selectedTarget || hasFallen || isOnCooldown}>攻擊</Button>
-                        <Button onClick={handleAction} variant="outline" disabled={combatStatus !== 'active' || hasFallen || isOnCooldown}>技能</Button>
-                        <Button onClick={handleAction} variant="outline" disabled={combatStatus !== 'active' || hasFallen || isOnCooldown}>道具</Button>
+                    <CardContent className="grid grid-cols-2 gap-2">
+                        <Button onClick={handleAttack} disabled={combatStatus !== 'active' || !selectedTarget || hasFallen || isOnCooldown || isAttacking}>
+                          {isAttacking ? '攻擊中...' : '攻擊'}
+                        </Button>
+                        <Button variant="outline" disabled={combatStatus !== 'active' || hasFallen || isOnCooldown}>技能</Button>
+                        <Button variant="outline" disabled={combatStatus !== 'active' || hasFallen || isOnCooldown}>道具</Button>
                     </CardContent>
                     {isOnCooldown && <CardFooter className="p-0"><ActionCooldown cooldown={actionCooldown} onCooldownEnd={() => setActionCooldown(0)} /></CardFooter>}
                 </Card>

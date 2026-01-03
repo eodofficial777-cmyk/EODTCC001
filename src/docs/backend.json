@@ -515,28 +515,33 @@
       "description": "Represents log data for a combat encounter.",
       "properties": {
         "id": {
-          "type": "string",
-          "description": "Unique identifier for the combat log."
+          "type": "string"
         },
-        "combatEncounterId": {
-          "type": "string",
-          "description": "Reference to the CombatEncounter. (Relationship: CombatEncounter 1:N CombatLog)"
+        "encounterId": {
+          "type": "string"
         },
         "logData": {
-          "type": "string",
-          "description": "A string containing log data about the combat encounter."
+          "type": "string"
         },
         "timestamp": {
           "type": "string",
-          "description": "The time the log entry was recorded.",
           "format": "date-time"
+        },
+        "turn": {
+          "type": "number"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["player_attack", "monster_attack", "skill_used", "item_used", "system"]
         }
       },
       "required": [
         "id",
-        "combatEncounterId",
+        "encounterId",
         "logData",
-        "timestamp"
+        "timestamp",
+        "turn",
+        "type"
       ]
     },
     "CombatEncounter": {
@@ -986,7 +991,7 @@
         "definition": {
           "entityName": "CombatLog",
           "schema": {
-            "$ref": "#/backend/entities/CombatLog"
+            "$ref": "#/entities/CombatLog"
           },
           "description": "Stores combat log data for a specific combat encounter.",
           "params": [

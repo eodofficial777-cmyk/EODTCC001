@@ -154,3 +154,12 @@ export interface CombatEncounter {
     monsters: Monster[];
     turn: number;
 }
+
+export interface CombatLog {
+  id: string;
+  encounterId: string;
+  logData: string;
+  timestamp: any;
+  turn: number;
+  type: 'player_attack' | 'monster_attack' | 'skill_used' | 'item_used' | 'system';
+}
