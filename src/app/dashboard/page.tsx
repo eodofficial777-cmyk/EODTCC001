@@ -22,8 +22,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Shield, Gem, Heart, Sword, Brain, Zap, Dna, User as UserIcon } from 'lucide-react';
-import { useDoc, useFirebase, useUser, useMemoFirebase } from '@/firebase';
-import { doc, getFirestore } from 'firebase/firestore';
+import { useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -177,7 +177,7 @@ export default function DashboardPage() {
         </div>
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline">近期任務</CardTitle>
+            <CardTitle className="font*headline">近期任務</CardTitle>
             <CardDescription>您最近提交的任務及其狀態</CardDescription>
           </CardHeader>
           <CardContent>
@@ -219,5 +219,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
