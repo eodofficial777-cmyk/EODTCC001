@@ -37,7 +37,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -944,6 +944,17 @@ function ConflictManagement() {
   )
 }
 
+function CraftingManagement() {
+    return (
+        <div>
+            <h3 className="text-lg font-semibold">裝備合成管理</h3>
+            <p className="text-muted-foreground mt-2">
+              定義裝備合成配方。例如：某裝備 + 某物品 = 新裝備。
+            </p>
+        </div>
+    )
+}
+
 
 export default function AdminPage() {
   const { toast } = useToast();
@@ -1015,10 +1026,7 @@ export default function AdminPage() {
                 <ConflictManagement />
               </TabsContent>
                <TabsContent value="crafting">
-                 <h3 className="text-lg font-semibold">裝備合成管理</h3>
-                <p className="text-muted-foreground mt-2">
-                  定義裝備合成配方。例如：某裝備 + 某物品 = 新裝備。
-                </p>
+                 <CraftingManagement />
               </TabsContent>
                <TabsContent value="skills">
                  <h3 className="text-lg font-semibold">技能管理</h3>

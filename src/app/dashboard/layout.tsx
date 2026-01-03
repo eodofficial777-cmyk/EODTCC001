@@ -12,6 +12,7 @@ import {
   Shield,
   ShieldCheck,
   PanelLeft,
+  Hammer,
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -39,6 +40,7 @@ const navItems = [
   { href: '/dashboard/missions', icon: ClipboardList, label: '任務提交' },
   { href: '/dashboard/conflict', icon: Swords, label: '陣營對抗' },
   { href: '/dashboard/store', icon: Store, label: '陣營商店' },
+  { href: '/dashboard/crafting', icon: Hammer, label: '裝備合成' },
   { href: '/dashboard/battleground', icon: Shield, label: '共鬥戰場' },
   { href: '/dashboard/admin', icon: ShieldCheck, label: '管理後台', admin: true },
 ];

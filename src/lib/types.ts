@@ -64,3 +64,18 @@ export interface Item {
     raceId: string;
     isPublished: boolean;
 }
+
+export interface CraftRecipe {
+    id: string;
+    baseItemId: string;
+    materialItemId: string;
+    resultItemId: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  timestamp: any; // Usually Firestore.Timestamp
+  description: string;
+  change: string;
+}
