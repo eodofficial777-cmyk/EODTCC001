@@ -123,6 +123,21 @@ service cloud.firestore {
       allow delete: if isOwnerOfExistingDoc(userId);
     }
 
+    /**
+     * @description Manages activity logs for a specific user.
+     * @path /users/{userId}/activityLogs/{logId}
+     * @allow (list) The owning user listing all their activity.
+     * @deny (create) A user trying to create a log entry on behalf of another user.
+     * @principle Restricts read access to the user's own data tree. Write access is admin-only.
+     */
+    match /users/{userId}/activityLogs/{logId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     // ----------------------------------------------------------------------
     // Global Game Data Collections (Public Read, Admin Write)
     // ----------------------------------------------------------------------
@@ -304,7 +319,7 @@ service cloud.firestore {
      * @principle Implements Database-as-Access-Control (DBAC) for managing roles.
      */
     match /roles_admin/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
+      allow get: if isSignedIn();
       allow list: if isAdmin();
       allow create: if isAdmin();
       allow update: if isAdmin();
@@ -312,3 +327,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
