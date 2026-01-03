@@ -1251,7 +1251,14 @@ function SkillEditor({
 
     const handleEffectChange = (index: number, field: keyof SkillEffect, value: any) => {
         const newEffects = [...(editedSkill.effects || [])];
-        const effect = { ...newEffects[index], [field]: value };
+        const effect = { ...newEffects[index] };
+        
+        if (field === 'value' || field === 'probability' || field === 'duration') {
+             (effect as any)[field] = parseFloat(value) || 0;
+        } else {
+            (effect as any)[field] = value;
+        }
+
 
         // Reset irrelevant fields when effectType changes
         if (field === 'effectType') {
@@ -1328,12 +1335,12 @@ function SkillEditor({
                                     </SelectContent>
                                 </Select>
                                 {effect.effectType === 'probabilistic_damage' && (
-                                    <Input type="number" placeholder="機率 (0-100)%" value={effect.probability || ''} onChange={e => handleEffectChange(index, 'probability', parseInt(e.target.value))} />
+                                    <Input type="number" placeholder="機率 (0-100)%" value={effect.probability || ''} onChange={e => handleEffectChange(index, 'probability', e.target.value)} />
                                 )}
                             </div>
-                            <Input type="number" placeholder="數值" value={effect.value || ''} onChange={e => handleEffectChange(index, 'value', parseInt(e.target.value))} />
+                            <Input type="number" placeholder="數值" value={effect.value || ''} onChange={e => handleEffectChange(index, 'value', e.target.value)} />
                             {(effect.effectType === 'atk_buff' || effect.effectType === 'def_buff') && (
-                                <Input type="number" placeholder="持續回合數 (選填)" value={effect.duration || ''} onChange={e => handleEffectChange(index, 'duration', parseInt(e.target.value))} />
+                                <Input type="number" placeholder="持續回合數 (選填)" value={effect.duration || ''} onChange={e => handleEffectChange(index, 'duration', e.target.value)} />
                             )}
                         </div>
                     ))}
@@ -1839,7 +1846,7 @@ function RewardDistribution() {
                              <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">任務數</Label>
                                 <Select onValueChange={v => setFilters(f => ({ ...f, taskCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
-                                <Input type="number" placeholder="數量" onChange={e => setFilters(f => ({...f, taskCount_val: parseInt(e.target.value)}))}/>
+                                <Input type="number" placeholder="数量" onChange={e => setFilters(f => ({...f, taskCount_val: parseInt(e.target.value)}))}/>
                             </div>
                         </div>
                     )}
