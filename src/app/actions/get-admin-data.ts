@@ -4,7 +4,7 @@ import { getFirestore, collection, getDocs, orderBy, query } from 'firebase/fire
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, TaskType } from '@/lib/types';
+import type { User, TaskType, CraftRecipe } from '@/lib/types';
 
 // IMPORTANT: Use a dedicated admin service account credentials in a real production app.
 // For this development environment, we will sign in as a pre-defined admin user.
@@ -46,7 +46,7 @@ async function ensureAdminAuth() {
   }
 }
 
-export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: TaskType[]; items?: any[], titles?: any[], error?: string }> {
+export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: TaskType[]; items?: any[], titles?: any[], craftRecipes?: CraftRecipe[], error?: string }> {
   try {
     await ensureAdminAuth();
 
@@ -55,8 +55,9 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
     const taskTypesPromise = getDocs(collection(db, 'taskTypes'));
     const itemsPromise = getDocs(collection(db, 'items'));
     const titlesPromise = getDocs(collection(db, 'titles'));
+    const craftRecipesPromise = getDocs(collection(db, 'craftRecipes'));
 
-    const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise]);
+    const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot, craftRecipesSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise, craftRecipesPromise]);
 
     // Process users
     const users = usersSnapshot.docs.map(doc => {
@@ -85,8 +86,15 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
         ...doc.data(),
         id: doc.id,
     }));
+    
+    // Process craft recipes
+    const craftRecipes = craftRecipesSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id,
+    } as CraftRecipe));
 
-    return { users, taskTypes, items, titles };
+
+    return { users, taskTypes, items, titles, craftRecipes };
   } catch (error: any) {
     console.error('Error fetching admin data:', error);
     let errorMessage = '無法獲取管理員資料。';

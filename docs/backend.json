@@ -393,7 +393,8 @@
         },
         "itemTypeId": {
           "type": "string",
-          "description": "Reference to the ItemType of the item."
+          "description": "Reference to the ItemType of the item.",
+          "enum": ["equipment", "consumable", "special"]
         },
         "price": {
           "type": "number",
@@ -408,8 +409,32 @@
             "description": "Race restriction for the item. Can be 'all' for no restriction."
         },
         "effects": {
-            "type": "string",
-            "description": "Text description of the item's effects (e.g., 'ATK +5', 'Heals 50 HP')."
+            "type": "array",
+            "description": "Structured description of the item's effects.",
+            "items": {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "attribute": { "type": "string", "enum": ["hp", "atk", "def"] },
+                            "operator": { "type": "string", "enum": ["+", "*", "d"] },
+                            "value": { "type": "number" }
+                        },
+                        "required": ["attribute", "operator", "value"]
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "trigger": { "type": "string", "enum": ["on_use"] },
+                            "probability": { "type": "number", "minimum": 0, "maximum": 100 },
+                            "effectType": { "type": "string", "enum": ["hp_recovery", "damage_enemy", "atk_buff", "def_buff", "hp_cost"] },
+                            "value": { "type": "number" },
+                            "duration": { "type": "number" }
+                        },
+                        "required": ["trigger", "probability", "effectType", "value"]
+                    }
+                ]
+            }
         },
         "isPublished": {
             "type": "boolean",
@@ -424,7 +449,8 @@
         "price",
         "factionId",
         "raceId",
-        "isPublished"
+        "isPublished",
+        "effects"
       ]
     },
     "ItemType": {
@@ -668,6 +694,41 @@
         "description",
         "change"
       ]
+    },
+    "CraftRecipe": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "CraftRecipe",
+        "type": "object",
+        "description": "Defines a crafting recipe for combining items.",
+        "properties": {
+            "id": {
+                "type": "string",
+                "description": "Unique identifier for the recipe."
+            },
+            "baseItemId": {
+                "type": "string",
+                "description": "The ID of the base item (usually equipment)."
+            },
+            "materialItemId": {
+                "type": "string",
+                "description": "The ID of the material item (usually a special item)."
+            },
+            "resultItemId": {
+                "type": "string",
+                "description": "The ID of the resulting crafted item."
+            },
+             "isPublished": {
+                "type": "boolean",
+                "description": "If true, the recipe will appear in the crafting reference list."
+            }
+        },
+        "required": [
+            "id",
+            "baseItemId",
+            "materialItemId",
+            "resultItemId",
+            "isPublished"
+        ]
     }
   },
   "auth": {
@@ -842,6 +903,22 @@
             {
               "name": "equipmentId",
               "description": "The unique identifier of the equipment."
+            }
+          ]
+        }
+      },
+       {
+        "path": "/craftRecipes/{recipeId}",
+        "definition": {
+          "entityName": "CraftRecipe",
+          "schema": {
+            "$ref": "#/backend/entities/CraftRecipe"
+          },
+          "description": "Stores crafting recipe information.",
+          "params": [
+            {
+              "name": "recipeId",
+              "description": "The unique identifier of the crafting recipe."
             }
           ]
         }

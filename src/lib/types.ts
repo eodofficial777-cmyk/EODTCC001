@@ -1,5 +1,6 @@
 
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -70,6 +71,7 @@ export interface CraftRecipe {
     baseItemId: string;
     materialItemId: string;
     resultItemId: string;
+    isPublished: boolean;
 }
 
 export interface ActivityLog {

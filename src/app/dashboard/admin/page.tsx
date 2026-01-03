@@ -17,7 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/app/actions/seed-database';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { getAdminData } from '@/app/actions/get-admin-data';
 import { updateUser } from '@/app/actions/update-user';
 import {
@@ -37,11 +37,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X, Hammer } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, TaskType, Item, AttributeEffect, TriggeredEffect } from '@/lib/types';
+import type { User, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -71,6 +71,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Terminal } from 'lucide-react';
 import { updateItem } from '@/app/actions/update-item';
 import { resetSeason } from '@/app/actions/reset-season';
+import { updateCraftRecipe } from '@/app/actions/update-craft-recipe';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -944,15 +945,232 @@ function ConflictManagement() {
   )
 }
 
-function CraftingManagement() {
-    return (
-        <div>
-            <h3 className="text-lg font-semibold">裝備合成管理</h3>
-            <p className="text-muted-foreground mt-2">
-              定義裝備合成配方。例如：某裝備 + 某物品 = 新裝備。
-            </p>
+function RecipeEditor({
+  recipe,
+  items,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  recipe: Partial<CraftRecipe>;
+  items: Item[];
+  onSave: (recipe: Partial<CraftRecipe>) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [editedRecipe, setEditedRecipe] = useState(recipe);
+
+  const { equipment, specialItems, targettableItems } = useMemo(() => {
+    return {
+      equipment: items.filter(i => i.itemTypeId === 'equipment' && i.isPublished),
+      specialItems: items.filter(i => i.itemTypeId === 'special'),
+      targettableItems: items.filter(i => i.itemTypeId === 'equipment' && !i.isPublished),
+    };
+  }, [items]);
+
+  const handleSave = () => {
+    if (!editedRecipe.id || !editedRecipe.baseItemId || !editedRecipe.materialItemId || !editedRecipe.resultItemId) {
+      alert('所有欄位皆為必填');
+      return;
+    }
+    onSave(editedRecipe);
+  };
+
+  return (
+    <Card className="mt-4 bg-muted/30">
+      <CardHeader>
+        <CardTitle>{recipe.id ? '編輯合成配方' : '新增合成配方'}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label>ID (英文，不可重複)</Label>
+          <Input 
+            value={editedRecipe.id || ''} 
+            onChange={e => setEditedRecipe({ ...editedRecipe, id: e.target.value })} 
+            disabled={!!recipe.id} 
+            placeholder="recipe-001"
+          />
         </div>
-    )
+        <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-4">
+            <div className="space-y-2">
+                <Label>基底裝備</Label>
+                <Select value={editedRecipe.baseItemId} onValueChange={v => setEditedRecipe({...editedRecipe, baseItemId: v})}>
+                    <SelectTrigger><SelectValue placeholder="選擇基底裝備"/></SelectTrigger>
+                    <SelectContent>{equipment.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}</SelectContent>
+                </Select>
+            </div>
+            <div className="flex justify-center"><Plus className="h-5 w-5"/></div>
+            <div className="space-y-2">
+                <Label>合成材料</Label>
+                 <Select value={editedRecipe.materialItemId} onValueChange={v => setEditedRecipe({...editedRecipe, materialItemId: v})}>
+                    <SelectTrigger><SelectValue placeholder="選擇材料"/></SelectTrigger>
+                    <SelectContent>{specialItems.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}</SelectContent>
+                </Select>
+            </div>
+        </div>
+        <div className="flex justify-center items-center"><ArrowRight className="h-6 w-6"/></div>
+        <div className="space-y-2">
+             <Label>目標裝備 (僅顯示未上架的裝備)</Label>
+             <Select value={editedRecipe.resultItemId} onValueChange={v => setEditedRecipe({...editedRecipe, resultItemId: v})}>
+                <SelectTrigger><SelectValue placeholder="選擇目標裝備"/></SelectTrigger>
+                <SelectContent>{targettableItems.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}</SelectContent>
+            </Select>
+        </div>
+        <div className="flex items-center space-x-2 pt-4">
+            <Checkbox 
+                id="recipe-published" 
+                checked={editedRecipe.isPublished} 
+                onCheckedChange={checked => setEditedRecipe({...editedRecipe, isPublished: !!checked})}
+            />
+            <Label htmlFor="recipe-published">在合成參考表中顯示此配方</Label>
+        </div>
+      </CardContent>
+      <CardFooter className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onCancel}>取消</Button>
+        <Button onClick={handleSave} disabled={isSaving}>{isSaving ? "儲存中..." : "儲存"}</Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
+
+function CraftingManagement() {
+  const { toast } = useToast();
+  const [items, setItems] = useState<Item[]>([]);
+  const [recipes, setRecipes] = useState<CraftRecipe[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingRecipe, setEditingRecipe] = useState<Partial<CraftRecipe> | null>(null);
+
+  const itemsById = useMemo(() => new Map(items.map(item => [item.id, item])), [items]);
+
+  const fetchAdminData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getAdminData();
+      if (result.error) throw new Error(result.error);
+      setItems(result.items || []);
+      setRecipes(result.craftRecipes || []);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdminData();
+  }, []);
+  
+  const handleSave = async (recipeData: Partial<CraftRecipe>) => {
+    setIsSaving(true);
+    try {
+        const result = await updateCraftRecipe(recipeData as CraftRecipe);
+        if (result.error) throw new Error(result.error);
+        toast({ title: '成功', description: '合成配方已儲存。' });
+        setEditingRecipe(null);
+        fetchAdminData();
+    } catch (e: any) {
+        toast({ variant: 'destructive', title: '儲存失敗', description: e.message });
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
+  if (error) {
+    return (
+       <Alert variant="destructive">
+        <Terminal className="h-4 w-4" />
+        <AlertTitle>讀取失敗</AlertTitle>
+        <AlertDescription>
+          無法讀取資料，請檢查後端日誌。
+          <pre className="mt-2 text-xs bg-black/20 p-2 rounded-md font-mono">{error}</pre>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h3 className="text-lg font-semibold">裝備合成管理</h3>
+          <p className="text-muted-foreground mt-2">
+            定義裝備合成配方。例如：某裝備 + 某物品 = 新裝備。
+          </p>
+        </div>
+        <Button onClick={() => setEditingRecipe({ isPublished: true })} disabled={!!editingRecipe}>新增配方</Button>
+      </div>
+
+       {editingRecipe && (
+        <RecipeEditor 
+            recipe={editingRecipe}
+            items={items}
+            onSave={handleSave}
+            onCancel={() => setEditingRecipe(null)}
+            isSaving={isSaving}
+        />
+       )}
+      
+      <div className="border rounded-md mt-4">
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>產物</TableHead>
+                    <TableHead>合成公式</TableHead>
+                    <TableHead>狀態</TableHead>
+                    <TableHead>操作</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 2 }).map((_, i) => <TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-8 w-full"/></TableCell></TableRow>)
+                ) : recipes.length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="h-24 text-center">尚未建立任何配方</TableCell></TableRow>
+                ) : (
+                  recipes.map(recipe => (
+                    <TableRow key={recipe.id}>
+                        <TableCell className="font-medium">{itemsById.get(recipe.resultItemId)?.name || 'N/A'}</TableCell>
+                        <TableCell>
+                            <div className="flex items-center gap-2">
+                                <span>{itemsById.get(recipe.baseItemId)?.name || '?'}</span>
+                                <Plus className="h-4 w-4"/>
+                                <span>{itemsById.get(recipe.materialItemId)?.name || '?'}</span>
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                           <span className={recipe.isPublished ? 'text-green-500' : 'text-red-500'}>
+                                {recipe.isPublished ? '已發布' : '未發布'}
+                            </span>
+                        </TableCell>
+                         <TableCell className="space-x-2">
+                            <Button variant="ghost" size="icon" onClick={() => setEditingRecipe(recipe)}><Edit className="h-4 w-4"/></Button>
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>確認刪除</DialogTitle>
+                                        <DialogDescription>您確定要刪除此合成配方嗎？</DialogDescription>
+                                    </DialogHeader>
+                                    <DialogFooter>
+                                        <DialogClose asChild><Button variant="outline">取消</Button></DialogClose>
+                                        <Button variant="destructive" onClick={() => handleSave({...recipe, _delete: true})}>刪除</Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </TableCell>
+                    </TableRow>
+                  ))
+                )}
+            </TableBody>
+        </Table>
+      </div>
+    </div>
+  )
 }
 
 
@@ -997,9 +1215,9 @@ export default function AdminPage() {
               <TabsTrigger value="accounts">帳號審核</TabsTrigger>
               <TabsTrigger value="missions">任務管理</TabsTrigger>
               <TabsTrigger value="store">商店道具</TabsTrigger>
+              <TabsTrigger value="crafting">裝備合成</TabsTrigger>
               <TabsTrigger value="battle">共鬥管理</TabsTrigger>
               <TabsTrigger value="conflict">陣營對抗</TabsTrigger>
-              <TabsTrigger value="crafting">裝備合成</TabsTrigger>
               <TabsTrigger value="skills">技能管理</TabsTrigger>
               <TabsTrigger value="titles">稱號管理</TabsTrigger>
               <TabsTrigger value="rewards">獎勵發放</TabsTrigger>
@@ -1016,6 +1234,9 @@ export default function AdminPage() {
               <TabsContent value="store">
                  <StoreManagement />
               </TabsContent>
+               <TabsContent value="crafting">
+                 <CraftingManagement />
+              </TabsContent>
               <TabsContent value="battle">
                  <h3 className="text-lg font-semibold">共鬥管理</h3>
                 <p className="text-muted-foreground mt-2">
@@ -1024,9 +1245,6 @@ export default function AdminPage() {
               </TabsContent>
               <TabsContent value="conflict">
                 <ConflictManagement />
-              </TabsContent>
-               <TabsContent value="crafting">
-                 <CraftingManagement />
               </TabsContent>
                <TabsContent value="skills">
                  <h3 className="text-lg font-semibold">技能管理</h3>
