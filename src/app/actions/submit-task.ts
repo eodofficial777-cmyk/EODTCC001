@@ -128,20 +128,27 @@ export async function submitTask(payload: SubmitTaskPayload) {
 
     // 3. Update war season score (only if not requiring approval and honor is awarded)
     if (honorToAward > 0) {
-        let factionToUpdateId = userFactionId;
-        const isWandererContributing = userFactionId === 'wanderer' && factionContribution && factionContribution !== 'none';
+        let factionToContributeTo = 'none';
 
-        // If the user is a wanderer and chose a faction, the score goes to their chosen faction
-        if (isWandererContributing) {
-            factionToUpdateId = factionContribution!;
+        if (userFactionId === 'wanderer') {
+            if (factionContribution && factionContribution !== 'none') {
+                factionToContributeTo = factionContribution;
+            }
+        } else {
+            factionToContributeTo = userFactionId;
         }
 
-        if (factionToUpdateId === 'yelu' || factionToUpdateId === 'association') {
+        if (factionToContributeTo === 'yelu' || factionToContributeTo === 'association') {
             const seasonUpdate: { [key: string]: FieldValue } = {
-                [`${factionToUpdateId}.rawScore`]: increment(honorToAward)
+                [`${factionToContributeTo}.rawScore`]: increment(honorToAward)
             };
-            // Active players are now defined as anyone contributing to the faction's score
-            seasonUpdate[`${factionToUpdateId}.activePlayers`] = arrayUnion(userId);
+            
+            // Per new rule: Wanderers do NOT count as active players for factions.
+            // Only add user to activePlayers if they are a member of that faction.
+            if (userFactionId !== 'wanderer') {
+                 seasonUpdate[`${factionToContributeTo}.activePlayers`] = arrayUnion(userId);
+            }
+
             batch.update(seasonRef, seasonUpdate);
         }
     }

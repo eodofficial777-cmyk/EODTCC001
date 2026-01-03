@@ -49,8 +49,7 @@ export async function getConflictData(): Promise<{ data?: ConflictData, error?: 
     const yeluRawScore = seasonData.yelu.rawScore || 0;
     const associationRawScore = seasonData.association.rawScore || 0;
 
-    // Calculate weights and weighted scores
-    // Avoid division by zero
+    // Calculate weights and weighted scores based on the new formula
     const yeluWeight = totalActivePlayers > 0 && yeluPlayerCount > 0 ? totalActivePlayers / yeluPlayerCount : 1;
     const associationWeight = totalActivePlayers > 0 && associationPlayerCount > 0 ? totalActivePlayers / associationPlayerCount : 1;
 
