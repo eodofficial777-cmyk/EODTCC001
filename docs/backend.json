@@ -1,0 +1,721 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user account in the EOD 終端機 application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user account."
+        },
+        "roleName": {
+          "type": "string",
+          "description": "The unique role name chosen by the user."
+        },
+        "plurkInfo": {
+          "type": "string",
+          "description": "User's Plurk information (e.g., username, profile URL)."
+        },
+        "registrationDate": {
+          "type": "string",
+          "description": "Date and time the user registered.",
+          "format": "date-time"
+        },
+        "approved": {
+          "type": "boolean",
+          "description": "Indicates whether the user's account has been approved by an administrator."
+        }
+      },
+      "required": [
+        "id",
+        "roleName",
+        "plurkInfo",
+        "registrationDate",
+        "approved"
+      ]
+    },
+    "Character": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Character",
+      "type": "object",
+      "description": "Represents a character within the EOD 終端機 application, associated with a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the character."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who owns this character. (Relationship: User 1:N Character)"
+        },
+        "name": {
+          "type": "string",
+          "description": "The character's name."
+        },
+        "factionId": {
+          "type": "string",
+          "description": "Reference to the Faction the character belongs to. (Relationship: Faction 1:N Character)"
+        },
+        "raceId": {
+          "type": "string",
+          "description": "Reference to the Race of the character. (Relationship: Race 1:N Character)"
+        },
+        "honorPoints": {
+          "type": "number",
+          "description": "The character's honor points."
+        },
+        "attributes": {
+          "type": "string",
+          "description": "The character's attributes."
+        },
+        "resources": {
+          "type": "string",
+          "description": "The character's resources."
+        },
+        "equipmentIds": {
+          "type": "array",
+          "description": "References to the Equipment the character has. (Relationship: Character N:N Equipment)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "name",
+        "factionId",
+        "raceId",
+        "honorPoints"
+      ]
+    },
+    "Faction": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Faction",
+      "type": "object",
+      "description": "Represents a faction within the EOD 終端機 application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the faction."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the faction."
+        },
+        "score": {
+          "type": "number",
+          "description": "The current score of the faction."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "score"
+      ]
+    },
+    "Race": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Race",
+      "type": "object",
+      "description": "Represents a race within the EOD 終端機 application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the race."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the race."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the race."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ]
+    },
+    "Task": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Task",
+      "type": "object",
+      "description": "Represents a task submitted by a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the task."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who submitted the task. (Relationship: User 1:N Task)"
+        },
+        "taskTypeId": {
+          "type": "string",
+          "description": "Reference to the TaskType of the task. (Relationship: TaskType 1:N Task)"
+        },
+        "submissionUrl": {
+          "type": "string",
+          "description": "URL where the task submission can be found.",
+          "format": "uri"
+        },
+        "honorPointsAwarded": {
+          "type": "number",
+          "description": "Honor points awarded for the task."
+        },
+        "submissionDate": {
+          "type": "string",
+          "description": "Date and time the task was submitted.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "taskTypeId",
+        "submissionUrl",
+        "honorPointsAwarded",
+        "submissionDate"
+      ]
+    },
+    "TaskType": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "TaskType",
+      "type": "object",
+      "description": "Represents a type of task that can be submitted.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the task type."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the task type."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the task type."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ]
+    },
+    "Item": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Item",
+      "type": "object",
+      "description": "Represents an item in the game.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the item."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the item."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the item."
+        },
+        "itemTypeId": {
+          "type": "string",
+          "description": "Reference to the ItemType of the item. (Relationship: ItemType 1:N Item)"
+        },
+        "price": {
+          "type": "number",
+          "description": "The price of the item."
+        },
+        "factionId": {
+          "type": "string",
+          "description": "Reference to the Faction that this item belongs to. (Relationship: Faction 1:N Item)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "itemTypeId",
+        "price",
+        "factionId"
+      ]
+    },
+    "ItemType": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ItemType",
+      "type": "object",
+      "description": "Represents a type of item.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the item type."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the item type."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the item type."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ]
+    },
+    "Equipment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Equipment",
+      "type": "object",
+      "description": "Represents a piece of equipment a character can equip.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the equipment."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the equipment."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the equipment."
+        },
+        "attributes": {
+          "type": "string",
+          "description": "The attributes that the equipment provides to the character."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "attributes"
+      ]
+    },
+    "CombatLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CombatLog",
+      "type": "object",
+      "description": "Represents log data for a combat encounter.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the combat log."
+        },
+        "combatEncounterId": {
+          "type": "string",
+          "description": "Reference to the CombatEncounter. (Relationship: CombatEncounter 1:N CombatLog)"
+        },
+        "logData": {
+          "type": "string",
+          "description": "A string containing log data about the combat encounter."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The time the log entry was recorded.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "combatEncounterId",
+        "logData",
+        "timestamp"
+      ]
+    },
+    "CombatEncounter": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CombatEncounter",
+      "type": "object",
+      "description": "Represents an instance of a combat encounter.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the combat encounter."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the combat encounter"
+        },
+        "startTime": {
+          "type": "string",
+          "description": "The time the combat encounter started.",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "The time the combat encounter ended.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "startTime",
+        "endTime"
+      ]
+    },
+    "Title": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Title",
+      "type": "object",
+      "description": "Represents a title or achievement a user can earn.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the title."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the title."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of how to earn the title."
+        },
+        "isHidden": {
+          "type": "boolean",
+          "description": "Indicates whether the title is hidden until earned."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "isHidden"
+      ]
+    },
+    "CharacterTitle": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CharacterTitle",
+      "type": "object",
+      "description": "Links characters to their earned titles.",
+      "properties": {
+        "characterId": {
+          "type": "string",
+          "description": "Reference to the Character. (Relationship: Character N:N Title)"
+        },
+        "titleId": {
+          "type": "string",
+          "description": "Reference to the Title. (Relationship: Character N:N Title)"
+        },
+        "obtainedDate": {
+          "type": "string",
+          "description": "The date the title was obtained.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "characterId",
+        "titleId",
+        "obtainedDate"
+      ]
+    },
+    "Skill": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Skill",
+      "type": "object",
+      "description": "Represents a skill a character can use.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the skill."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the skill."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the skill's effects."
+        },
+        "factionId": {
+          "type": "string",
+          "description": "Reference to the Faction that can use the skill, can be null for all faction skills.(Relationship: Faction 1:N Skill)"
+        },
+        "raceId": {
+          "type": "string",
+          "description": "Reference to the Race that can use the skill, can be null for all race skills.(Relationship: Race 1:N Skill)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user account information. User ID is used for path-based ownership.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/characters/{characterId}",
+        "definition": {
+          "entityName": "Character",
+          "schema": {
+            "$ref": "#/backend/entities/Character"
+          },
+          "description": "Stores character information for a user.  User ID is used for path-based ownership.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "characterId",
+              "description": "The unique identifier of the character."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/factions/{factionId}",
+        "definition": {
+          "entityName": "Faction",
+          "schema": {
+            "$ref": "#/backend/entities/Faction"
+          },
+          "description": "Stores faction information.",
+          "params": [
+            {
+              "name": "factionId",
+              "description": "The unique identifier of the faction."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/races/{raceId}",
+        "definition": {
+          "entityName": "Race",
+          "schema": {
+            "$ref": "#/backend/entities/Race"
+          },
+          "description": "Stores race information.",
+          "params": [
+            {
+              "name": "raceId",
+              "description": "The unique identifier of the race."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/tasks/{taskId}",
+        "definition": {
+          "entityName": "Task",
+          "schema": {
+            "$ref": "#/backend/entities/Task"
+          },
+          "description": "Stores tasks submitted by a user. User ID is used for path-based ownership.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "taskId",
+              "description": "The unique identifier of the task."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/taskTypes/{taskTypeId}",
+        "definition": {
+          "entityName": "TaskType",
+          "schema": {
+            "$ref": "#/backend/entities/TaskType"
+          },
+          "description": "Stores task type information.",
+          "params": [
+            {
+              "name": "taskTypeId",
+              "description": "The unique identifier of the task type."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/items/{itemId}",
+        "definition": {
+          "entityName": "Item",
+          "schema": {
+            "$ref": "#/backend/entities/Item"
+          },
+          "description": "Stores item information.",
+          "params": [
+            {
+              "name": "itemId",
+              "description": "The unique identifier of the item."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/itemTypes/{itemTypeId}",
+        "definition": {
+          "entityName": "ItemType",
+          "schema": {
+            "$ref": "#/backend/entities/ItemType"
+          },
+          "description": "Stores item type information.",
+          "params": [
+            {
+              "name": "itemTypeId",
+              "description": "The unique identifier of the item type."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/equipment/{equipmentId}",
+        "definition": {
+          "entityName": "Equipment",
+          "schema": {
+            "$ref": "#/backend/entities/Equipment"
+          },
+          "description": "Stores equipment information.",
+          "params": [
+            {
+              "name": "equipmentId",
+              "description": "The unique identifier of the equipment."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/combatEncounters/{combatEncounterId}",
+        "definition": {
+          "entityName": "CombatEncounter",
+          "schema": {
+            "$ref": "#/backend/entities/CombatEncounter"
+          },
+          "description": "Stores combat encounter information.",
+          "params": [
+            {
+              "name": "combatEncounterId",
+              "description": "The unique identifier of the combat encounter."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/combatEncounters/{combatEncounterId}/combatLogs/{combatLogId}",
+        "definition": {
+          "entityName": "CombatLog",
+          "schema": {
+            "$ref": "#/backend/entities/CombatLog"
+          },
+          "description": "Stores combat log data for a specific combat encounter.",
+          "params": [
+            {
+              "name": "combatEncounterId",
+              "description": "The unique identifier of the combat encounter."
+            },
+            {
+              "name": "combatLogId",
+              "description": "The unique identifier of the combat log."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/titles/{titleId}",
+        "definition": {
+          "entityName": "Title",
+          "schema": {
+            "$ref": "#/backend/entities/Title"
+          },
+          "description": "Stores title information.",
+          "params": [
+            {
+              "name": "titleId",
+              "description": "The unique identifier of the title."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/characterTitles/{characterTitleId}",
+        "definition": {
+          "entityName": "CharacterTitle",
+          "schema": {
+            "$ref": "#/backend/entities/CharacterTitle"
+          },
+          "description": "Stores associations between characters and titles.",
+          "params": [
+            {
+              "name": "characterTitleId",
+              "description": "The unique identifier for the character-title association (consider a composite key of characterId and titleId)."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/skills/{skillId}",
+        "definition": {
+          "entityName": "Skill",
+          "schema": {
+            "$ref": "#/backend/entities/Skill"
+          },
+          "description": "Stores skill information.",
+          "params": [
+            {
+              "name": "skillId",
+              "description": "The unique identifier of the skill."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "role_admin",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Indicates that the user is an administrator. Existence of the document grants admin privileges.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "This Firestore structure prioritizes security, scalability, and debuggability, following the core design principles and strategy mandates. It emphasizes authorization independence, clarity of intent, and avoids custom claims (DBAC). The structure is designed to support secure `list` operations (QAPs) and maintain data integrity. \n\n**Authorization Independence:**\nTo ensure authorization independence, the structure denormalizes authorization context where necessary. For example, if `Character` access depended on `Faction` attributes, those attributes would be copied into every `Character` document.\n\n**Structural Segregation:**\nThe design segregates data based on security requirements. User-specific data is stored under `/users/{userId}`, while global data like `Factions` and `Races` reside in root-level collections. This simplifies security rules by ensuring that each collection has a homogeneous security posture.\n\n**Access Modeling:**\n*   **Private Data:** User-owned data (e.g., Characters, Tasks) is stored under `/users/{userId}` to leverage path-based ownership. This allows simple and efficient security rules based on `request.auth.uid`.\n*   **Collaborative Data:**  While not explicitly requested, if collaborative entities were needed, a membership map (`members: {uid1: \"role\", uid2: \"role\"}`) would be used and denormalized.\n*   **Global Roles (DBAC):** Admin roles are managed through the existence of documents in dedicated collections (e.g., `/roles_admin/{uid}`).\n\n**QAPs Support:**\nThe structure supports secure `list` operations (QAPs) by:\n\n*   Segregating data with different access needs into separate collections.  For instance, admin-only data is stored separately from user-owned data.\n*   Using path-based ownership for user-specific data, which allows listing only resources owned by the authenticated user.\n\n**Invariants:**\nThe structure supports data integrity through the use of ownership, timestamps, and denormalized data. Security rules can enforce constraints on these fields to maintain data consistency."
+  }
+}
