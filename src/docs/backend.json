@@ -545,30 +545,33 @@
       "type": "object",
       "description": "Represents an instance of a combat encounter.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the combat encounter."
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["preparing", "active", "ended", "closed"] },
+        "startTime": { "type": "string", "format": "date-time" },
+        "preparationEndTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "monsters": {
+          "type": "array",
+          "items": { "$ref": "#/entities/Monster" }
         },
-        "name": {
-          "type": "string",
-          "description": "Name of the combat encounter"
-        },
-        "startTime": {
-          "type": "string",
-          "description": "The time the combat encounter started.",
-          "format": "date-time"
-        },
-        "endTime": {
-          "type": "string",
-          "description": "The time the combat encounter ended.",
-          "format": "date-time"
-        }
+        "turn": { "type": "number" }
       },
-      "required": [
-        "id",
-        "startTime",
-        "endTime"
-      ]
+      "required": ["id", "name", "status", "startTime", "preparationEndTime", "monsters", "turn"]
+    },
+    "Monster": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Monster",
+      "type": "object",
+      "description": "Represents a monster in a combat encounter.",
+      "properties": {
+        "name": { "type": "string" },
+        "factionId": { "type": "string" },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "hp": { "type": "number" },
+        "atk": { "type": "string" }
+      },
+      "required": ["name", "factionId", "hp", "atk"]
     },
     "Title": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -967,7 +970,7 @@
         "definition": {
           "entityName": "CombatEncounter",
           "schema": {
-            "$ref": "#/backend/entities/CombatEncounter"
+            "$ref": "#/entities/CombatEncounter"
           },
           "description": "Stores combat encounter information.",
           "params": [

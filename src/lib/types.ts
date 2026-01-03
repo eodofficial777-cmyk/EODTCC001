@@ -135,3 +135,22 @@ export interface Title {
 export interface MaintenanceStatus {
   isMaintenance: boolean;
 }
+
+export interface Monster {
+    name: string;
+    factionId: string;
+    imageUrl: string;
+    hp: number;
+    atk: string; // e.g. "20+1D10"
+}
+
+export interface CombatEncounter {
+    id: string;
+    name: string;
+    status: 'preparing' | 'active' | 'ended' | 'closed';
+    startTime: any; // serverTimestamp
+    preparationEndTime: any; // Date
+    endTime?: any; // Date
+    monsters: Monster[];
+    turn: number;
+}

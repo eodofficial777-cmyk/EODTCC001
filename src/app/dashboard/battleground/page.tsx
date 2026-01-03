@@ -13,33 +13,16 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Heart, Shield, Sword, Zap, Target, Timer, Info } from 'lucide-react';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useState, useEffect } from 'react';
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
+import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FACTIONS } from '@/lib/game-data';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import type { CombatEncounter } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
 
-// Mock data for monsters
-const mockMonsters = {
-  yelu: [
-    { id: 'yelu-1', name: '夜鷺先鋒', hp: 8500, maxHp: 10000, image: PlaceHolderImages.find(p => p.id === 'monster-1') },
-    { id: 'yelu-2', name: '夜鷺斥候', hp: 6000, maxHp: 6000, image: PlaceHolderImages.find(p => p.id === 'monster-2') },
-  ],
-  association: [
-    { id: 'association-1', name: '協會衛士', hp: 9200, maxHp: 10000, image: PlaceHolderImages.find(p => p.id === 'monster-3') },
-  ],
-}
-
-type CombatStatus = 'closed' | 'preparing' | 'active' | 'ended';
-
-const PreparationCountdown = ({
-  preparationEndTime
-}: {
-  preparationEndTime: Date
-}) => {
+const PreparationCountdown = ({ preparationEndTime }: { preparationEndTime: Date }) => {
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
@@ -50,7 +33,7 @@ const PreparationCountdown = ({
       if (difference <= 0) {
         setTimeLeft('00:00');
         clearInterval(interval);
-        // Here you would typically trigger the next state ('active')
+        // In a real app, you might want to trigger a state refresh here
         return;
       }
 
@@ -84,11 +67,10 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget }: { monster: any, is
   return (
     <Card className={`overflow-hidden transition-all duration-300 ${isTargeted ? 'border-primary ring-2 ring-primary' : ''}`}>
        <div className="relative aspect-square w-full">
-        {monster.image && (
+        {monster.imageUrl && (
           <Image
-            src={monster.image.imageUrl}
+            src={monster.imageUrl}
             alt={monster.name}
-            data-ai-hint={monster.image.imageHint}
             fill
             className="object-cover"
           />
@@ -101,9 +83,9 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget }: { monster: any, is
         <div className="space-y-1">
           <div className="flex justify-between items-center text-xs font-mono">
             <span>HP</span>
-            <span>{monster.hp.toLocaleString()} / {monster.maxHp.toLocaleString()}</span>
+            <span>{monster.hp.toLocaleString()} / {monster.hp.toLocaleString()}</span>
           </div>
-          <Progress value={(monster.hp / monster.maxHp) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
+          <Progress value={(monster.hp / monster.hp) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
         </div>
       </CardContent>
       <CardFooter className="p-3 pt-0">
@@ -119,20 +101,25 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget }: { monster: any, is
 export default function BattlegroundPage() {
   const { user } = useUser();
   const firestore = useFirestore();
-  const userDocRef = useMemoFirebase(
-    () => (user ? doc(firestore, `users/${user.uid}`) : null),
-    [user, firestore]
-  );
-  const { data: userData } = useDoc(userDocRef);
   
-  // Mock state, in a real app this would come from a global combat document in Firestore
-  const [combatStatus, setCombatStatus] = useState<CombatStatus>('preparing'); 
-  const [preparationEndTime, setPreparationEndTime] = useState(new Date(Date.now() + 30 * 60 * 1000));
+  const userDocRef = useMemoFirebase(() => (user ? doc(firestore, `users/${user.uid}`) : null), [user, firestore]);
+  const { data: userData } = useDoc(userDocRef);
+
+  const latestBattleQuery = useMemoFirebase(
+    () => (firestore ? query(collection(firestore, 'combatEncounters'), orderBy('startTime', 'desc'), limit(1)) : null),
+    [firestore]
+  );
+  const { data: battleData, isLoading: isBattleLoading } = useCollection<CombatEncounter>(latestBattleQuery);
+  const currentBattle = battleData?.[0];
+
   const [supportedFaction, setSupportedFaction] = useState<'yelu' | 'association' | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   
   const isWanderer = userData?.factionId === 'wanderer';
   const playerFaction = isWanderer ? supportedFaction : userData?.factionId;
+  
+  const combatStatus = currentBattle?.status;
+  const preparationEndTime = currentBattle?.preparationEndTime?.toDate();
 
   const handleSupportFaction = (factionId: 'yelu' | 'association') => {
     if (isWanderer && combatStatus !== 'ended') {
@@ -141,10 +128,19 @@ export default function BattlegroundPage() {
     }
   }
   
-  const renderContent = () => {
-    if (combatStatus === 'closed') {
+  const renderContent = (factionId: 'yelu' | 'association') => {
+    if (isBattleLoading) {
       return (
-        <Card className="lg:col-span-2 flex flex-col items-center justify-center min-h-[300px] bg-muted/50">
+          <div className="lg:col-span-2 space-y-6">
+            <Skeleton className="h-48 w-full" />
+            <Skeleton className="h-64 w-full" />
+        </div>
+      );
+    }
+
+    if (!currentBattle || combatStatus === 'ended' || combatStatus === 'closed') {
+      return (
+        <Card className="flex flex-col items-center justify-center min-h-[300px] bg-muted/50">
            <CardHeader className="text-center">
             <CardTitle>共鬥尚未開放</CardTitle>
             <CardDescription>請等待管理員開啟下一場戰鬥。</CardDescription>
@@ -153,9 +149,9 @@ export default function BattlegroundPage() {
       )
     }
 
-    if (combatStatus === 'preparing') {
+    if (combatStatus === 'preparing' && preparationEndTime) {
         return (
-            <div className="lg:col-span-2 space-y-6">
+            <div className="space-y-6">
                 <PreparationCountdown preparationEndTime={preparationEndTime} />
                  {isWanderer && !supportedFaction && (
                      <Alert>
@@ -171,12 +167,11 @@ export default function BattlegroundPage() {
     }
 
     if (combatStatus === 'active') {
-       const factionKey = playerFaction as keyof typeof mockMonsters;
-       const monsters = factionKey ? mockMonsters[factionKey] : [];
+       const monsters = currentBattle.monsters.filter(m => m.factionId === factionId);
 
-       if (!playerFaction) {
+       if (!playerFaction || playerFaction !== factionId) {
          return (
-            <Card className="lg:col-span-2 flex flex-col items-center justify-center min-h-[300px]">
+            <Card className="flex flex-col items-center justify-center min-h-[300px]">
                 <CardHeader className="text-center">
                     <CardTitle>請選擇支援陣營</CardTitle>
                     <CardDescription>身為流浪者，您需要選擇一方勢力以加入戰鬥。</CardDescription>
@@ -186,21 +181,21 @@ export default function BattlegroundPage() {
        }
         
       return (
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>{FACTIONS[factionKey]?.name} 災獸</CardTitle>
-              <CardDescription>當前回合：15 | 下一回合：18秒</CardDescription>
+              <CardTitle>{FACTIONS[factionId]?.name} 災獸</CardTitle>
+              <CardDescription>當前回合：1 | 下一回合：18秒</CardDescription>
             </CardHeader>
             <CardContent>
               {monsters.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {monsters.map(monster => (
+                  {monsters.map((monster, index) => (
                     <MonsterCard 
-                      key={monster.id} 
+                      key={index} 
                       monster={monster}
-                      isTargeted={selectedTarget === monster.id}
-                      onSelectTarget={setSelectedTarget}
+                      isTargeted={selectedTarget === monster.name}
+                      onSelectTarget={() => setSelectedTarget(monster.name)}
                     />
                   ))}
                 </div>
@@ -216,7 +211,6 @@ export default function BattlegroundPage() {
             <CardContent>
               <ScrollArea className="h-64">
                 <div className="space-y-3 text-sm font-mono">
-                  {/* Log entries will go here */}
                   <p><span className="text-primary">[回合 1]</span> 戰鬥開始！</p>
                 </div>
               </ScrollArea>
@@ -225,40 +219,41 @@ export default function BattlegroundPage() {
         </div>
       )
     }
+    
+    // Default fallback
+    return <p>載入中或狀態錯誤...</p>
   }
 
   return (
     <div className="w-full">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Center Column: Monster Info, Battle Log, or Status */}
             <div className="lg:col-span-2">
-                <Tabs defaultValue={userData?.factionId !== 'wanderer' ? userData?.factionId : 'yelu'} className="w-full">
+                {isWanderer && (
+                    <div className="mb-4 p-4 border rounded-lg">
+                        <h4 className="font-bold mb-2">流浪者支援選擇</h4>
+                        <p className="text-sm text-muted-foreground mb-3">選擇一個陣營進行支援。一旦選定，本次戰鬥中將無法更改。</p>
+                        <div className="flex gap-4">
+                            <Button onClick={() => handleSupportFaction('yelu')} variant={supportedFaction === 'yelu' ? 'default' : 'outline'} className="w-full">支援夜鷺</Button>
+                            <Button onClick={() => handleSupportFaction('association')} variant={supportedFaction === 'association' ? 'default' : 'outline'} className="w-full">支援協會</Button>
+                        </div>
+                    </div>
+                )}
+                 <Tabs defaultValue="yelu" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="yelu" disabled={!isWanderer && playerFaction !== 'yelu'}>夜鷺災獸</TabsTrigger>
-                        <TabsTrigger value="association" disabled={!isWanderer && playerFaction !== 'association'}>協會災獸</TabsTrigger>
+                        <TabsTrigger value="yelu">夜鷺戰場</TabsTrigger>
+                        <TabsTrigger value="association">協會戰場</TabsTrigger>
                     </TabsList>
                     <div className="mt-4">
-                        {isWanderer && (
-                            <div className="mb-4 p-4 border rounded-lg">
-                                <h4 className="font-bold mb-2">流浪者支援選擇</h4>
-                                <p className="text-sm text-muted-foreground mb-3">選擇一個陣營進行支援。一旦選定，本次戰鬥中將無法更改。</p>
-                                <div className="flex gap-4">
-                                    <Button onClick={() => handleSupportFaction('yelu')} variant={supportedFaction === 'yelu' ? 'default' : 'outline'} className="w-full">支援夜鷺</Button>
-                                    <Button onClick={() => handleSupportFaction('association')} variant={supportedFaction === 'association' ? 'default' : 'outline'} className="w-full">支援協會</Button>
-                                </div>
-                            </div>
-                        )}
-                        <TabsContent value="yelu">
-                            {playerFaction === 'yelu' ? renderContent() : <p className="text-muted-foreground text-center py-8">您未支援此陣營。</p>}
+                       <TabsContent value="yelu">
+                          {renderContent('yelu')}
                         </TabsContent>
                         <TabsContent value="association">
-                             {playerFaction === 'association' ? renderContent() : <p className="text-muted-foreground text-center py-8">您未支援此陣營。</p>}
+                           {renderContent('association')}
                         </TabsContent>
                     </div>
                 </Tabs>
             </div>
 
-            {/* Right Column: Player Stats and Actions */}
             <div className="lg:col-span-1 space-y-6">
                 <Card>
                 <CardHeader>

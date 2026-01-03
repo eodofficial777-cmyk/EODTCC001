@@ -40,7 +40,7 @@ import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Che
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus } from '@/lib/types';
+import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus, Monster } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -81,6 +81,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { updateMaintenanceStatus } from '@/app/actions/update-maintenance-status';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
+import { createBattle } from '@/app/actions/manage-battle';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -1999,6 +2000,135 @@ function DatabaseManagement() {
     );
 }
 
+function BattleManagement() {
+    const { toast } = useToast();
+    const [battleName, setBattleName] = useState('');
+    const [yeluMonsters, setYeluMonsters] = useState<Partial<Monster>[]>([]);
+    const [associationMonsters, setAssociationMonsters] = useState<Partial<Monster>[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const addMonster = (faction: 'yelu' | 'association') => {
+        const newMonster: Partial<Monster> = { name: '', imageUrl: 'https://images.plurk.com/', hp: 1000, atk: '10+1D6' };
+        if (faction === 'yelu') {
+            setYeluMonsters([...yeluMonsters, newMonster]);
+        } else {
+            setAssociationMonsters([...associationMonsters, newMonster]);
+        }
+    };
+
+    const updateMonster = (faction: 'yelu' | 'association', index: number, field: keyof Monster, value: any) => {
+        if (faction === 'yelu') {
+            const updated = [...yeluMonsters];
+            updated[index] = { ...updated[index], [field]: value };
+            setYeluMonsters(updated);
+        } else {
+            const updated = [...associationMonsters];
+            updated[index] = { ...updated[index], [field]: value };
+            setAssociationMonsters(updated);
+        }
+    };
+    
+    const removeMonster = (faction: 'yelu' | 'association', index: number) => {
+       if (faction === 'yelu') {
+            setYeluMonsters(yeluMonsters.filter((_, i) => i !== index));
+        } else {
+            setAssociationMonsters(associationMonsters.filter((_, i) => i !== index));
+        }
+    }
+
+    const handleCreateBattle = async () => {
+        if (!battleName) {
+            toast({ variant: 'destructive', title: '錯誤', description: '請為戰場命名。' });
+            return;
+        }
+        if (yeluMonsters.length === 0 && associationMonsters.length === 0) {
+            toast({ variant: 'destructive', title: '錯誤', description: '請至少為一個陣營新增一隻災獸。' });
+            return;
+        }
+        
+        setIsLoading(true);
+        try {
+            const allMonsters = [...yeluMonsters.map(m => ({...m, factionId: 'yelu'})), ...associationMonsters.map(m => ({...m, factionId: 'association'}))];
+            const result = await createBattle({ name: battleName, monsters: allMonsters as Monster[] });
+            if (result.error) throw new Error(result.error);
+            toast({ title: '成功', description: `戰場「${battleName}」已開啟！準備時間 30 分鐘。` });
+            setBattleName('');
+            setYeluMonsters([]);
+            setAssociationMonsters([]);
+        } catch (error: any) {
+             toast({ variant: 'destructive', title: '開啟失敗', description: error.message });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    const renderMonsterForm = (faction: 'yelu' | 'association', monsters: Partial<Monster>[]) => {
+        const factionInfo = FACTIONS[faction];
+        return (
+            <Card style={{borderColor: factionInfo.color}}>
+                <CardHeader className="flex-row items-center justify-between">
+                    <CardTitle style={{color: factionInfo.color}}>{factionInfo.name} 災獸</CardTitle>
+                    <Button variant="outline" size="sm" onClick={() => addMonster(faction)}><Plus className="h-4 w-4 mr-2" />新增</Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {monsters.map((monster, index) => (
+                        <div key={index} className="p-4 border rounded-md space-y-3 relative bg-card/50">
+                            <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-muted-foreground" onClick={() => removeMonster(faction, index)}><X className="h-4 w-4"/></Button>
+                            <div className="space-y-1">
+                                <Label>災獸名稱</Label>
+                                <Input value={monster.name} onChange={(e) => updateMonster(faction, index, 'name', e.target.value)} />
+                            </div>
+                             <div className="space-y-1">
+                                <Label>圖片網址</Label>
+                                <Input value={monster.imageUrl} onChange={(e) => updateMonster(faction, index, 'imageUrl', e.target.value)} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <Label>HP</Label>
+                                    <Input type="number" value={monster.hp} onChange={(e) => updateMonster(faction, index, 'hp', parseInt(e.target.value))} />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label>ATK (格式: 20+1D10)</Label>
+                                    <Input value={monster.atk} onChange={(e) => updateMonster(faction, index, 'atk', e.target.value)} />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {monsters.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">此陣營尚無災獸</p>}
+                </CardContent>
+            </Card>
+        )
+    }
+
+    return (
+        <div>
+            <h3 className="text-lg font-semibold">共鬥管理</h3>
+            <p className="text-muted-foreground mt-2">
+                開啟新的共鬥戰場，設定災獸屬性，並查看過去的戰鬥紀錄。
+            </p>
+            <Card className="mt-4">
+                <CardHeader>
+                    <CardTitle>開啟新戰場</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="space-y-2">
+                        <Label htmlFor="battle-name">戰場名稱</Label>
+                        <Input id="battle-name" value={battleName} onChange={(e) => setBattleName(e.target.value)} placeholder="例如：月度BOSS戰、緊急討伐任務"/>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {renderMonsterForm('yelu', yeluMonsters)}
+                        {renderMonsterForm('association', associationMonsters)}
+                    </div>
+                </CardContent>
+                <CardFooter>
+                    <Button onClick={handleCreateBattle} disabled={isLoading} className="w-full">
+                        {isLoading ? "開啟中..." : "確認並開啟戰場"}
+                    </Button>
+                </CardFooter>
+            </Card>
+        </div>
+    );
+}
 
 export default function AdminPage() {
   return (
@@ -2039,10 +2169,7 @@ export default function AdminPage() {
                  <CraftingManagement />
               </TabsContent>
               <TabsContent value="battle">
-                 <h3 className="text-lg font-semibold">共鬥管理</h3>
-                <p className="text-muted-foreground mt-2">
-                  開啟新的共鬥戰場，設定怪物屬性，並查看過去的戰鬥紀錄。
-                </p>
+                 <BattleManagement />
               </TabsContent>
               <TabsContent value="conflict">
                 <ConflictManagement />
