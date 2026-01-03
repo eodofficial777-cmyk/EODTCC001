@@ -6,6 +6,7 @@ import {
   getDocs,
   orderBy,
   limit,
+  query,
 } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
