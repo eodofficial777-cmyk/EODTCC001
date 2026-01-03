@@ -31,8 +31,8 @@ export async function getUserTasks(userId: string) {
       query(
         collection(db, 'tasks'),
         where('userId', '==', userId),
-        orderBy('submissionDate', 'desc'),
-        limit(20) // You can adjust the limit
+        // orderBy('submissionDate', 'desc'), // Temporarily removed to prevent index error
+        limit(20)
       )
     );
 
@@ -48,6 +48,13 @@ export async function getUserTasks(userId: string) {
         submissionDate: data.submissionDate?.toDate().toISOString() || null,
       };
     });
+    
+    // Sort manually since we removed orderBy from the query
+    tasks.sort((a, b) => {
+        if (!a.submissionDate || !b.submissionDate) return 0;
+        return new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime();
+    });
+
 
     return { tasks };
   } catch (error: any) {
