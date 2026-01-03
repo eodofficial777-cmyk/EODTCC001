@@ -22,8 +22,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Shield, Gem, ScrollText, Package } from 'lucide-react';
-import { useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection } from '@/firebase';
+import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -37,15 +37,14 @@ export default function DashboardPage() {
   );
   const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
 
+  const activityLogQuery = useMemoFirebase(
+    () => (user ? query(collection(firestore, `users/${user.uid}/activityLogs`), orderBy('timestamp', 'desc'), limit(5)) : null),
+    [user, firestore]
+  );
+  const { data: recentLogs, isLoading: isLogsLoading } = useCollection(activityLogQuery);
+
   const faction = userData?.factionId ? FACTIONS[userData.factionId as keyof typeof FACTIONS] : null;
   const race = userData?.raceId ? RACES[userData.raceId as keyof typeof RACES] : null;
-
-  const recentLogs = [
-    { id: 'L001', description: '提交「首篇故事」任務', change: '+100 榮譽點', date: '2024-07-20' },
-    { id: 'L002', description: '管理員發放週末獎勵', change: '+500 貨幣', date: '2024-07-22' },
-    { id: 'L003', description: '獲得稱號「初入荒漠」', change: '稱號', date: '2024-07-25' },
-    { id: 'L004', description: '從商店購買「回復藥水」', change: '-100 貨幣', date: '2024-07-26' },
-  ];
   
   const inventory = userData?.items ?? [];
 
@@ -64,13 +63,15 @@ export default function DashboardPage() {
                 <Skeleton className="h-[150px] w-[150px] rounded-full mb-4" />
             ) : (
               userData?.avatarUrl && (
-                <Image
-                  src={userData.avatarUrl}
-                  alt={userData.roleName ?? '角色頭像'}
-                  width={150}
-                  height={150}
-                  className="rounded-full border-4 border-primary/50 shadow-lg mb-4"
-                />
+                <div className="relative w-[150px] h-[150px] mb-4">
+                  <Image
+                    src={userData.avatarUrl}
+                    alt={userData.roleName ?? '角色頭像'}
+                    layout="fill"
+                    objectFit="cover"
+                    className="rounded-full border-4 border-primary/50 shadow-lg"
+                  />
+                </div>
               )
             )}
             {isLoading ? (
@@ -103,6 +104,9 @@ export default function DashboardPage() {
               <Button size="sm" variant="outline" className="w-full mt-2">更換稱號</Button>
             </div>
           </CardContent>
+          <CardFooter>
+             <Button variant="outline" className="w-full">編輯個人資料</Button>
+          </CardFooter>
         </Card>
         
         <Card>
@@ -165,13 +169,13 @@ export default function DashboardPage() {
             <CardDescription>您最近的活動與獲得獎勵</CardDescription>
           </CardHeader>
           <CardContent>
-             {isLoading ? (
+             {isLogsLoading || isLoading ? (
                <div className="space-y-2">
                  <Skeleton className="h-10 w-full" />
                  <Skeleton className="h-10 w-full" />
                  <Skeleton className="h-10 w-full" />
                </div>
-             ) : (
+             ) : recentLogs && recentLogs.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -183,13 +187,20 @@ export default function DashboardPage() {
                 <TableBody>
                   {recentLogs.map((log) => (
                     <TableRow key={log.id}>
-                      <TableCell className="text-muted-foreground">{log.date}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {new Date(log.timestamp.toDate()).toLocaleDateString()}
+                      </TableCell>
                       <TableCell>{log.description}</TableCell>
                       <TableCell className="text-right font-mono">{log.change}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+             ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  <ScrollText className="mx-auto h-10 w-10 mb-4" />
+                  <p>沒有任何活動紀錄</p>
+                </div>
              )}
           </CardContent>
            <CardFooter>
@@ -205,3 +216,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+    
