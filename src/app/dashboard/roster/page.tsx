@@ -27,52 +27,62 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { FACTIONS } from '@/lib/game-data';
+import { FACTIONS, RACES } from '@/lib/game-data';
 import { getRosterData } from '@/app/actions/get-roster-data';
 import type { User } from '@/lib/types';
-import { RefreshCw, Terminal } from 'lucide-react';
+import { RefreshCw, Terminal, Crown, Shield, User as UserIcon } from 'lucide-react';
 
 function CharacterCard({ user }: { user: User }) {
+  const race = RACES[user.raceId as keyof typeof RACES];
+  const title = user.titles?.[0] || '無';
+
   return (
-    <Card className="flex flex-col overflow-hidden">
-      <Dialog>
-        <DialogTrigger asChild>
-          <div className="relative aspect-square w-full cursor-pointer">
-            <Image
-              src={user.avatarUrl}
-              alt={user.roleName}
-              fill
-              className="object-cover transition-transform duration-300 hover:scale-110"
-            />
+    <Card className="overflow-hidden">
+      <div className="flex">
+        <Dialog>
+          <DialogTrigger asChild>
+            <div className="relative aspect-square w-24 sm:w-32 flex-shrink-0 cursor-pointer">
+              <Image
+                src={user.avatarUrl}
+                alt={user.roleName}
+                fill
+                className="object-cover transition-transform duration-300 hover:scale-110"
+              />
+            </div>
+          </DialogTrigger>
+          <DialogContent className="max-w-3xl p-0">
+            <DialogHeader className="p-4">
+              <DialogTitle>{user.roleName} 的角色卡</DialogTitle>
+            </DialogHeader>
+            <div className="relative aspect-[3/4] w-full">
+              <Image
+                src={user.characterSheetUrl}
+                alt={`${user.roleName} character sheet`}
+                fill
+                className="object-contain"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+        <CardContent className="flex flex-col justify-center p-4">
+          <h3 className="text-lg font-bold font-headline truncate">{user.roleName}</h3>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-2">
+            <div className="flex items-center gap-1"><UserIcon className="h-3 w-3" /><span>{race?.name || user.raceId}</span></div>
+            <div className="flex items-center gap-1"><Crown className="h-3 w-3" /><span>{title}</span></div>
           </div>
-        </DialogTrigger>
-        <DialogContent className="max-w-3xl p-0">
-          <DialogHeader className="p-4">
-             <DialogTitle>{user.roleName} 的角色卡</DialogTitle>
-          </DialogHeader>
-          <div className="relative aspect-[3/4] w-full">
-            <Image
-              src={user.characterSheetUrl}
-              alt={`${user.roleName} character sheet`}
-              fill
-              className="object-contain"
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
-      <CardContent className="flex-grow p-4">
-        <h3 className="text-lg font-bold font-headline truncate">{user.roleName}</h3>
-        <div className="flex items-center justify-between text-sm mt-2">
+          <div className="flex items-center justify-between text-sm mt-3">
             <Link href={user.plurkInfo} target="_blank" rel="noopener noreferrer">
-              <Button variant="link" className="p-0 h-auto">
+              <Button variant="link" className="p-0 h-auto text-xs">
                 噗浪
               </Button>
             </Link>
-            <Badge variant="outline" className="font-mono">
-              榮譽 {user.honorPoints.toLocaleString()}
+            <Badge variant="outline" className="font-mono flex items-center gap-1">
+              <Shield className="h-3 w-3" />
+              {user.honorPoints.toLocaleString()}
             </Badge>
-        </div>
-      </CardContent>
+          </div>
+        </CardContent>
+      </div>
     </Card>
   );
 }
@@ -87,14 +97,13 @@ function CharacterGrid({ users }: { users: User[] | undefined }) {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
       {users.map((user) => (
         <CharacterCard key={user.id} user={user} />
       ))}
     </div>
   );
 }
-
 
 export default function RosterPage() {
   const [allUsers, setAllUsers] = useState<User[] | null>(null);
@@ -130,23 +139,22 @@ export default function RosterPage() {
 
   return (
     <div className="w-full">
-        <CardHeader className="px-0">
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle className="font-headline">角色名冊</CardTitle>
-              <CardDescription>
-                搜尋和篩選所有已批准的角色。資料於每日凌晨 0 點更新。
-              </CardDescription>
-              {cacheTimestamp && !isLoading && <p className="text-xs text-muted-foreground mt-1">當前資料版本：{cacheTimestamp}</p>}
-            </div>
-            <Button onClick={fetchRoster} variant="ghost" size="icon" disabled={isLoading}>
-                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </Button>
+      <CardHeader className="px-0 pt-0">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <CardTitle className="font-headline">角色名冊</CardTitle>
+            <CardDescription>
+              搜尋和篩選所有已批准的角色。資料於每日凌晨 0 點更新。
+            </CardDescription>
+            {cacheTimestamp && !isLoading && <p className="text-xs text-muted-foreground mt-1">當前資料版本：{cacheTimestamp}</p>}
           </div>
-        </CardHeader>
+          <Button onClick={fetchRoster} variant="ghost" size="icon" disabled={isLoading}>
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
        
         {error && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="mb-4">
                 <Terminal className="h-4 w-4" />
                 <AlertTitle>讀取失敗</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
@@ -155,7 +163,7 @@ export default function RosterPage() {
 
         {!error && (
         <Tabs defaultValue="all">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
             {factionTabs.map((faction) => (
               <TabsTrigger key={faction.id} value={faction.id}>
                 {faction.name}
@@ -164,9 +172,16 @@ export default function RosterPage() {
           </TabsList>
 
           {isLoading ? (
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {Array.from({ length: 8 }).map((_, i) => (
-                    <Skeleton key={i} className="aspect-square w-full" />
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                {Array.from({ length: 9 }).map((_, i) => (
+                  <div key={i} className="flex gap-4 p-4 border rounded-lg">
+                    <Skeleton className="h-24 w-24 rounded-lg" />
+                    <div className="space-y-2 flex-1">
+                      <Skeleton className="h-5 w-3/4" />
+                      <Skeleton className="h-4 w-1/2" />
+                      <Skeleton className="h-4 w-1/3" />
+                    </div>
+                  </div>
                 ))}
             </div>
           ) : (
@@ -183,6 +198,6 @@ export default function RosterPage() {
           )}
         </Tabs>
         )}
-    </div>
+      </div>
   );
 }
