@@ -58,7 +58,7 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
     const titlesPromise = getDocs(collection(db, 'titles'));
     const craftRecipesPromise = getDocs(collection(db, 'craftRecipes'));
     const skillsPromise = getDocs(collection(db, 'skills'));
-    const pendingTasksPromise = getDocs(query(collection(db, 'tasks'), where('status', '==', 'pending')));
+    const pendingTasksPromise = getDocs(query(collection(db, 'tasks'), where('status', '==', 'pending'), orderBy('submissionDate', 'asc')));
 
 
     const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot, craftRecipesSnapshot, skillsSnapshot, pendingTasksSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise, craftRecipesPromise, skillsPromise, pendingTasksPromise]);
@@ -104,7 +104,7 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
     } as Skill));
 
     // Process pending tasks
-    let pendingTasks = pendingTasksSnapshot.docs.map(doc => {
+    const pendingTasks = pendingTasksSnapshot.docs.map(doc => {
        const data = doc.data();
         return {
             ...data,
@@ -112,10 +112,6 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
             submissionDate: data.submissionDate?.toDate().toISOString() || new Date().toISOString(),
         } as Task;
     });
-
-    // Manually sort tasks after fetching to avoid composite index requirement
-    pendingTasks.sort((a, b) => new Date(a.submissionDate).getTime() - new Date(b.submissionDate).getTime());
-
 
     return { users, taskTypes, items, titles, craftRecipes, skills, pendingTasks };
   } catch (error: any) {
