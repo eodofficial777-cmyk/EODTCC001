@@ -1,3 +1,8 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import {
   Card,
   CardContent,
@@ -6,110 +11,157 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ListOrdered, Search } from 'lucide-react';
-import { FACTIONS, RACES } from '@/lib/game-data';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { FACTIONS } from '@/lib/game-data';
+import { getRosterData } from '@/app/actions/get-roster-data';
+import type { User } from '@/lib/types';
+import { RefreshCw, Terminal } from 'lucide-react';
 
-const rosterData = [
-  { id: 1, name: '角色A', faction: 'yelu', race: 'human', honorPoints: 1250 },
-  { id: 2, name: '角色B', faction: 'association', race: 'esper', honorPoints: 1100 },
-  { id: 3, name: '角色C', faction: 'yelu', race: 'corruptor', honorPoints: 980 },
-  { id: 4, name: '角色D', faction: 'wanderer', race: 'human', honorPoints: 850 },
-  { id: 5, name: '角色E', faction: 'association', race: 'esper', honorPoints: 1300 },
-  { id: 6, name: '角色F', faction: 'yelu', race: 'corruptor', honorPoints: 720 },
-];
+function CharacterCard({ user }: { user: User }) {
+  return (
+    <Card className="flex flex-col overflow-hidden">
+      <Dialog>
+        <DialogTrigger asChild>
+          <div className="relative aspect-square w-full cursor-pointer">
+            <Image
+              src={user.avatarUrl}
+              alt={user.roleName}
+              fill
+              className="object-cover transition-transform duration-300 hover:scale-110"
+            />
+          </div>
+        </DialogTrigger>
+        <DialogContent className="max-w-3xl p-0">
+          <DialogHeader className="p-4">
+             <DialogTitle>{user.roleName} 的角色卡</DialogTitle>
+          </DialogHeader>
+          <div className="relative aspect-[3/4] w-full">
+            <Image
+              src={user.characterSheetUrl}
+              alt={`${user.roleName} character sheet`}
+              fill
+              className="object-contain"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+      <CardContent className="flex-grow p-4">
+        <h3 className="text-lg font-bold font-headline truncate">{user.roleName}</h3>
+        <div className="flex items-center justify-between text-sm mt-2">
+            <Link href={user.plurkInfo} target="_blank" rel="noopener noreferrer">
+              <Button variant="link" className="p-0 h-auto">
+                噗浪
+              </Button>
+            </Link>
+            <Badge variant="outline" className="font-mono">
+              榮譽 {user.honorPoints.toLocaleString()}
+            </Badge>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function RosterPage() {
+  const [rosterData, setRosterData] = useState<Record<string, User[]> | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [cacheTimestamp, setCacheTimestamp] = useState<string | null>(null);
+  
+  const fetchRoster = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getRosterData();
+      if (result.error) throw new Error(result.error);
+      setRosterData(result.rosterByFaction || {});
+      setCacheTimestamp(result.cacheTimestamp || null);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoster();
+  }, []);
+
+  const factionTabs = Object.values(FACTIONS);
+
   return (
     <div className="w-full">
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">角色名冊</CardTitle>
-          <CardDescription>
-            搜尋和篩選所有已批准的角色。
-          </CardDescription>
-          <div className="flex flex-col sm:flex-row gap-2 pt-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="搜尋角色名稱..." className="pl-8" />
+        <CardHeader className="px-0">
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle className="font-headline">角色名冊</CardTitle>
+              <CardDescription>
+                搜尋和篩選所有已批准的角色。資料於每日凌晨 0 點更新。
+              </CardDescription>
+              {cacheTimestamp && !isLoading && <p className="text-xs text-muted-foreground mt-1">當前資料版本：{cacheTimestamp}</p>}
             </div>
-            <Select>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="所有陣營" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">所有陣營</SelectItem>
-                {Object.values(FACTIONS).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="所有種族" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">所有種族</SelectItem>
-                {Object.values(RACES).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" className="w-full sm:w-auto">
-              <ListOrdered className="mr-2 h-4 w-4" />
-              按榮譽點排序
+            <Button onClick={fetchRoster} variant="ghost" size="icon" disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>角色名稱</TableHead>
-                  <TableHead>陣營</TableHead>
-                  <TableHead>種族</TableHead>
-                  <TableHead className="text-right">榮譽點</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rosterData
-                  .sort((a, b) => b.honorPoints - a.honorPoints)
-                  .map((character) => {
-                    const faction = FACTIONS[character.faction as keyof typeof FACTIONS];
-                    const race = RACES[character.race as keyof typeof RACES];
-                    return (
-                      <TableRow key={character.id}>
-                        <TableCell className="font-medium">{character.name}</TableCell>
-                        <TableCell>
-                          <Badge style={{ backgroundColor: faction?.color, color: 'white' }}>{faction?.name}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{race?.name}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {character.honorPoints.toLocaleString()}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+       
+        {error && (
+            <Alert variant="destructive">
+                <Terminal className="h-4 w-4" />
+                <AlertTitle>讀取失敗</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+            </Alert>
+        )}
+
+        {!error && (
+        <Tabs defaultValue={factionTabs[0].id}>
+          <TabsList className="grid w-full grid-cols-3">
+            {factionTabs.map((faction) => (
+              <TabsTrigger key={faction.id} value={faction.id}>
+                {faction.name}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {factionTabs.map((faction) => (
+            <TabsContent key={faction.id} value={faction.id} className="mt-6">
+              {isLoading ? (
+                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                        <Skeleton key={i} className="aspect-square w-full" />
+                    ))}
+                 </div>
+              ) : rosterData && rosterData[faction.id]?.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {rosterData[faction.id].map((user) => (
+                    <CharacterCard key={user.id} user={user} />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16 text-muted-foreground">
+                  <p>該陣營目前沒有任何角色。</p>
+                </div>
+              )}
+            </TabsContent>
+          ))}
+        </Tabs>
+        )}
     </div>
   );
 }
