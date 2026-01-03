@@ -95,6 +95,10 @@ export async function seedDatabase() {
         },
     });
 
+    // 8. Seed initial maintenance status
+    const maintenanceRef = db.collection('globals').doc('maintenance');
+    batch.set(maintenanceRef, { isMaintenance: false });
+
 
     // Create an empty tasks collection by adding and immediately deleting a document
     // This ensures the collection exists for list queries.

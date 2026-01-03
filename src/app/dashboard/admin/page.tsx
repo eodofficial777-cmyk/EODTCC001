@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -17,7 +16,6 @@ import {
 } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { seedDatabase } from '@/app/actions/seed-database';
 import { useState, useEffect, useMemo } from 'react';
 import { getAdminData } from '@/app/actions/get-admin-data';
 import { updateUser } from '@/app/actions/update-user';
@@ -38,11 +36,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType } from '@/lib/types';
+import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -80,6 +78,9 @@ import { updateTaskStatus } from '@/app/actions/update-task-status';
 import { Badge } from '@/components/ui/badge';
 import { distributeRewards, FilterCriteria } from '@/app/actions/distribute-rewards';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { updateMaintenanceStatus } from '@/app/actions/update-maintenance-status';
+import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -1938,33 +1939,68 @@ function RewardDistribution() {
     );
 }
 
+function DatabaseManagement() {
+    const { toast } = useToast();
+    const firestore = useFirestore();
+    const maintenanceDocRef = useMemoFirebase(() => doc(firestore, 'globals', 'maintenance'), [firestore]);
+    const { data: maintenanceStatus, isLoading } = useDoc<MaintenanceStatus>(maintenanceDocRef);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleMaintenanceToggle = async (enabled: boolean) => {
+        setIsSaving(true);
+        try {
+            const result = await updateMaintenanceStatus(enabled);
+            if (result.error) throw new Error(result.error);
+            toast({
+                title: '成功',
+                description: `維護模式已${enabled ? '開啟' : '關閉'}。`,
+            });
+        } catch (error: any) {
+            toast({
+                variant: 'destructive',
+                title: '操作失敗',
+                description: error.message,
+            });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    return (
+         <div>
+             <h3 className="text-lg font-semibold">資料庫管理</h3>
+            <p className="text-muted-foreground mt-2">
+              執行資料庫維護操作。請謹慎使用。
+            </p>
+            <Card className="mt-4">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5" /> 伺服器維修模式</CardTitle>
+                    <CardDescription>開啟後，所有非管理員玩家將看到維修頁面，無法存取遊戲內容。</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {isLoading ? (
+                        <Skeleton className="h-10 w-48" />
+                    ) : (
+                        <div className="flex items-center space-x-2">
+                            <Switch
+                                id="maintenance-mode"
+                                checked={maintenanceStatus?.isMaintenance || false}
+                                onCheckedChange={handleMaintenanceToggle}
+                                disabled={isSaving}
+                            />
+                            <Label htmlFor="maintenance-mode" className={maintenanceStatus?.isMaintenance ? 'text-destructive' : 'text-green-500'}>
+                                {isSaving ? '更新中...' : maintenanceStatus?.isMaintenance ? '維修模式已開啟' : '維修模式已關閉'}
+                            </Label>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
 
 export default function AdminPage() {
-  const { toast } = useToast();
-  const [isSeeding, setIsSeeding] = useState(false);
-
-  const handleSeedDatabase = async () => {
-    setIsSeeding(true);
-    try {
-      const result = await seedDatabase();
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      toast({
-        title: '成功',
-        description: '資料庫已成功植入初始資料。',
-      });
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: '錯誤',
-        description: `植入資料時發生錯誤：${error.message}`,
-      });
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
   return (
     <div className="w-full">
       <Card>
@@ -2021,16 +2057,7 @@ export default function AdminPage() {
                   <RewardDistribution />
               </TabsContent>
               <TabsContent value="database">
-                 <h3 className="text-lg font-semibold">資料庫管理</h3>
-                <p className="text-muted-foreground mt-2">
-                  執行資料庫維護操作。請謹慎使用。
-                </p>
-                <Button onClick={handleSeedDatabase} disabled={isSeeding} className="mt-4">
-                  {isSeeding ? '植入資料中...' : '植入初始遊戲資料'}
-                </Button>
-                 <p className="text-xs text-muted-foreground mt-2">
-                  點擊此按鈕將會在您的資料庫中建立或覆蓋基礎遊戲資料，例如陣營、種族、任務類型和物品等。
-                </p>
+                <DatabaseManagement />
               </TabsContent>
             </div>
           </Tabs>

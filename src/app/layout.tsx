@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
+import MaintenanceWrapper from './maintenance';
 
 export const metadata: Metadata = {
   title: 'EOD 終端機',
@@ -24,7 +25,11 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        <FirebaseClientProvider>{children}</FirebaseClientProvider>
+        <FirebaseClientProvider>
+          <MaintenanceWrapper>
+            {children}
+          </MaintenanceWrapper>
+        </FirebaseClientProvider>
         <Toaster />
       </body>
     </html>

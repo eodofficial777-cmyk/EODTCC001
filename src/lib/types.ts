@@ -131,4 +131,7 @@ export interface Title {
   isManual: boolean;
   trigger?: TitleTrigger;
 }
-    
+
+export interface MaintenanceStatus {
+  isMaintenance: boolean;
+}

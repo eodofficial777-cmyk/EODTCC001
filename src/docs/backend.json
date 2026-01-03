@@ -755,6 +755,19 @@
             "resultItemId",
             "isPublished"
         ]
+    },
+    "Maintenance": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Maintenance",
+        "type": "object",
+        "description": "Global maintenance status of the application.",
+        "properties": {
+            "isMaintenance": {
+                "type": "boolean",
+                "description": "If true, the application is in maintenance mode."
+            }
+        },
+        "required": ["isMaintenance"]
     }
   },
   "auth": {
@@ -1047,6 +1060,17 @@
               "description": "The unique identifier of the user."
             }
           ]
+        }
+      },
+      {
+        "path": "/globals/maintenance",
+        "definition": {
+          "entityName": "Maintenance",
+          "schema": {
+            "$ref": "#/backend/entities/Maintenance"
+          },
+          "description": "Stores global application settings, like maintenance mode.",
+          "params": []
         }
       }
     ],
