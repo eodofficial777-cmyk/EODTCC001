@@ -1,4 +1,5 @@
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -37,14 +38,28 @@ export interface TaskType {
   singleSubmission?: boolean;
 }
 
+export type AttributeEffect = {
+  attribute: 'hp' | 'atk' | 'def';
+  operator: '+' | '*' | 'd'; // d for dice roll, e.g., 1d6
+  value: number;
+};
+
+export type TriggeredEffect = {
+  trigger: 'on_use';
+  probability: number; // 0-100
+  effectType: 'hp_recovery' | 'damage_enemy' | 'atk_buff' | 'def_buff' | 'hp_cost';
+  value: number;
+  duration?: number; // in turns
+};
+
 export interface Item {
     id: string;
     name: string;
     description: string;
-    effects: string;
+    effects: Array<AttributeEffect | TriggeredEffect>;
     imageUrl: string;
     price: number;
-    itemTypeId: string;
+    itemTypeId: 'equipment' | 'consumable' | 'special';
     factionId: string;
     raceId: string;
     isPublished: boolean;

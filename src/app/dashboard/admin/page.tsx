@@ -37,11 +37,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, TaskType, Item } from '@/lib/types';
+import type { User, TaskType, Item, AttributeEffect, TriggeredEffect } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -437,7 +437,7 @@ function TaskManagement() {
   const handleSave = async (taskData: Partial<TaskType>) => {
     setIsSaving(true);
     try {
-        const result = await updateTaskType(taskData as TaskType);
+        const result = await updateTaskType(taskData as TaskType & { id: string });
         if (result.error) throw new Error(result.error);
         toast({ title: '成功', description: '任務類型已儲存。' });
         setEditingTask(null);
@@ -537,7 +537,7 @@ function TaskManagement() {
                                         </DialogHeader>
                                         <DialogFooter>
                                             <DialogClose asChild><Button variant="outline">取消</Button></DialogClose>
-                                            <Button variant="destructive" onClick={() => handleSave({...task, _delete: true})}>刪除</Button>
+                                            <Button variant="destructive" onClick={() => handleSave({...task, id: task.id, _delete: true})}>刪除</Button>
                                         </DialogFooter>
                                     </DialogContent>
                                 </Dialog>
@@ -563,7 +563,13 @@ function ItemEditor({
   onCancel: () => void;
   isSaving: boolean;
 }) {
-  const [editedItem, setEditedItem] = useState(item);
+  const [editedItem, setEditedItem] = useState<Partial<Item>>(item);
+
+  useEffect(() => {
+    if (!editedItem.effects) {
+      setEditedItem(prev => ({ ...prev, effects: [] }));
+    }
+  }, [editedItem.effects]);
 
   const handleSave = () => {
     if (!editedItem.name || !editedItem.id) {
@@ -579,12 +585,41 @@ function ItemEditor({
       { id: 'special', name: '特殊道具' },
   ];
 
+  const handleEffectChange = (index: number, field: string, value: any) => {
+    const newEffects = [...(editedItem.effects || [])];
+    const effectToUpdate = { ...newEffects[index], [field]: value };
+    
+    // For triggered effects, convert probability to a number
+    if ('probability' in effectToUpdate && typeof effectToUpdate.probability === 'string') {
+        effectToUpdate.probability = parseFloat(effectToUpdate.probability) || 0;
+    }
+
+    newEffects[index] = effectToUpdate;
+    setEditedItem({ ...editedItem, effects: newEffects });
+  };
+
+  const addEffect = () => {
+    const newEffect: AttributeEffect = { attribute: 'atk', operator: '+', value: 0 };
+    setEditedItem({ ...editedItem, effects: [...(editedItem.effects || []), newEffect] });
+  };
+
+  const removeEffect = (index: number) => {
+    const newEffects = [...(editedItem.effects || [])];
+    newEffects.splice(index, 1);
+    setEditedItem({ ...editedItem, effects: newEffects });
+  };
+  
+  const isEquipment = editedItem.itemTypeId === 'equipment';
+  const isConsumable = editedItem.itemTypeId === 'consumable';
+
+
   return (
     <Card className="mt-4 bg-muted/30">
       <CardHeader>
         <CardTitle>{item.id ? '編輯道具' : '新增道具'}</CardTitle>
       </CardHeader>
       <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Basic Info */}
         <div className="space-y-2">
           <Label htmlFor="item-id">ID (英文，不可重複)</Label>
           <Input id="item-id" value={editedItem.id || ''} onChange={e => setEditedItem({ ...editedItem, id: e.target.value })} disabled={!!item.id} placeholder="例如：potion-1" />
@@ -597,6 +632,23 @@ function ItemEditor({
             <Label htmlFor="item-imageUrl">圖片網址</Label>
             <Input id="item-imageUrl" value={editedItem.imageUrl || ''} onChange={e => setEditedItem({...editedItem, imageUrl: e.target.value })} placeholder="https://images.plurk.com/..."/>
         </div>
+         <div className="md:col-span-2 space-y-2">
+            <Label htmlFor="item-desc">描述</Label>
+            <Input id="item-desc" value={editedItem.description || ''} onChange={e => setEditedItem({...editedItem, description: e.target.value })} placeholder="道具的說明文字"/>
+        </div>
+        
+        {/* Categorization and Price */}
+        <div className="space-y-2">
+          <Label htmlFor="item-type">類型</Label>
+          <Select value={editedItem.itemTypeId} onValueChange={(value) => setEditedItem({ ...editedItem, itemTypeId: value as Item['itemTypeId'] })}>
+            <SelectTrigger id="item-type"><SelectValue placeholder="選擇類型" /></SelectTrigger>
+            <SelectContent>
+              {itemTypes.map(t => (
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-2">
           <Label htmlFor="item-price">價格</Label>
           <Input id="item-price" type="number" value={editedItem.price || 0} onChange={e => setEditedItem({ ...editedItem, price: parseInt(e.target.value) || 0 })} />
@@ -606,7 +658,7 @@ function ItemEditor({
           <Select value={editedItem.factionId} onValueChange={(value) => setEditedItem({ ...editedItem, factionId: value })}>
             <SelectTrigger id="item-faction"><SelectValue placeholder="選擇陣營" /></SelectTrigger>
             <SelectContent>
-              {Object.values(FACTIONS).filter(f => f.id !== 'wanderer').map(f => (
+              {Object.values(FACTIONS).map(f => (
                 <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
               ))}
             </SelectContent>
@@ -624,26 +676,65 @@ function ItemEditor({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="item-type">類型</Label>
-          <Select value={editedItem.itemTypeId} onValueChange={(value) => setEditedItem({ ...editedItem, itemTypeId: value })}>
-            <SelectTrigger id="item-type"><SelectValue placeholder="選擇類型" /></SelectTrigger>
-            <SelectContent>
-              {itemTypes.map(t => (
-                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
+        {/* Effects Editor */}
+        <div className="md:col-span-2 space-y-4">
+            <div className="flex justify-between items-center">
+                <Label>效果</Label>
+                { (isEquipment || isConsumable) && <Button size="sm" variant="outline" onClick={addEffect}><Plus className="mr-2 h-4 w-4"/>新增效果</Button>}
+            </div>
+
+            { (editedItem.effects || []).map((effect, index) => (
+                <div key={index} className="p-3 border rounded-md bg-background/50 space-y-4 relative">
+                    <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeEffect(index)}><X className="h-4 w-4"/></Button>
+                   
+                    {isEquipment && 'attribute' in effect && (
+                        <div className="grid grid-cols-3 gap-2">
+                            <Select value={effect.attribute} onValueChange={v => handleEffectChange(index, 'attribute', v)}>
+                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="atk">ATK</SelectItem>
+                                    <SelectItem value="def">DEF</SelectItem>
+                                    <SelectItem value="hp">HP</SelectItem>
+                                </SelectContent>
+                            </Select>
+                             <Select value={effect.operator} onValueChange={v => handleEffectChange(index, 'operator', v)}>
+                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="+">+</SelectItem>
+                                    <SelectItem value="*">*</SelectItem>
+                                    <SelectItem value="d">d (骰)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Input type="number" value={effect.value} onChange={e => handleEffectChange(index, 'value', parseFloat(e.target.value) || 0)} />
+                        </div>
+                    )}
+
+                    {isConsumable && (
+                        <div className="space-y-3">
+                           <div className="grid grid-cols-3 gap-2">
+                             <Select value={(effect as TriggeredEffect).effectType} onValueChange={v => handleEffectChange(index, 'effectType', v)}>
+                                <SelectTrigger><SelectValue placeholder="效果類型"/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="hp_recovery">恢復HP</SelectItem>
+                                    <SelectItem value="damage_enemy">造成傷害</SelectItem>
+                                    <SelectItem value="atk_buff">攻擊加成</SelectItem>
+                                    <SelectItem value="def_buff">防禦加成</SelectItem>
+                                    <SelectItem value="hp_cost">扣除HP</SelectItem>
+                                </SelectContent>
+                            </Select>
+                             <Input type="number" placeholder="數值" value={(effect as TriggeredEffect).value} onChange={e => handleEffectChange(index, 'value', parseFloat(e.target.value) || 0)} />
+                             <Input type="number" placeholder="機率 (0-100)%" value={(effect as TriggeredEffect).probability} onChange={e => handleEffectChange(index, 'probability', e.target.value)} />
+                           </div>
+                           <Input type="number" placeholder="持續回合數 (選填)" value={(effect as TriggeredEffect).duration} onChange={e => handleEffectChange(index, 'duration', parseInt(e.target.value) || undefined)} />
+                        </div>
+                    )}
+                </div>
+            ))}
+            { editedItem.itemTypeId === 'special' && <p className="text-sm text-muted-foreground">特殊道具無效果，主要用於合成。</p>}
         </div>
-         <div className="md:col-span-2 space-y-2">
-            <Label htmlFor="item-desc">描述</Label>
-            <Input id="item-desc" value={editedItem.description || ''} onChange={e => setEditedItem({...editedItem, description: e.target.value })} placeholder="道具的說明文字"/>
-        </div>
-        <div className="md:col-span-2 space-y-2">
-            <Label htmlFor="item-effects">效果</Label>
-            <Input id="item-effects" value={editedItem.effects || ''} onChange={e => setEditedItem({...editedItem, effects: e.target.value })} placeholder="ATK +5, DEF +3 / 恢復 50 HP / 無"/>
-        </div>
-        <div className="flex items-center space-x-2">
+
+        <div className="md:col-span-2 flex items-center space-x-2">
             <Checkbox id="item-published" checked={editedItem.isPublished} onCheckedChange={checked => setEditedItem({...editedItem, isPublished: !!checked})}/>
             <Label htmlFor="item-published" className="text-sm font-medium">上架於陣營商店</Label>
         </div>
@@ -655,6 +746,7 @@ function ItemEditor({
     </Card>
   );
 }
+
 
 function StoreManagement() {
     const { toast } = useToast();
@@ -718,7 +810,7 @@ function StoreManagement() {
                     <h3 className="text-lg font-semibold">商店道具管理</h3>
                     <p className="text-muted-foreground mt-1 text-sm">新增、編輯和上下架商店中的商品。</p>
                 </div>
-                <Button onClick={() => setEditingItem({ isPublished: true })} disabled={!!editingItem}>新增道具</Button>
+                <Button onClick={() => setEditingItem({ isPublished: true, effects: [] })} disabled={!!editingItem}>新增道具</Button>
             </div>
 
             {editingItem && (

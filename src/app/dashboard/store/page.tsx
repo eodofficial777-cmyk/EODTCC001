@@ -14,10 +14,41 @@ import { Badge } from '@/components/ui/badge';
 import { Gem } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import type { Item } from '@/lib/types';
+import type { Item, AttributeEffect, TriggeredEffect } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDoc } from '@/firebase';
 import { doc } from 'firebase/firestore';
+
+function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
+    if ('attribute' in effect) { // AttributeEffect
+        const op = effect.operator === 'd' ? `d${effect.value}` : `${effect.operator} ${effect.value}`;
+        return `${effect.attribute.toUpperCase()} ${op}`;
+    }
+    // TriggeredEffect
+    let desc = `${effect.probability}%機率`;
+    switch(effect.effectType) {
+        case 'hp_recovery':
+            desc += `恢復 ${effect.value} HP`;
+            break;
+        case 'damage_enemy':
+            desc += `造成 ${effect.value} 點傷害`;
+            break;
+        case 'atk_buff':
+            desc += `提升攻擊力 ${effect.value}%`;
+            break;
+        case 'def_buff':
+            desc += `提升防禦力 ${effect.value}%`;
+            break;
+        case 'hp_cost':
+            desc += `消耗 ${effect.value} HP`;
+            break;
+    }
+    if (effect.duration) {
+        desc += `，持續 ${effect.duration} 回合`;
+    }
+    return desc;
+}
+
 
 export default function StorePage() {
   const { user, isUserLoading } = useUser();
@@ -33,7 +64,7 @@ export default function StorePage() {
 
   const itemsQuery = useMemoFirebase(
     () =>
-      firestore && userFactionId
+      firestore && userFactionId && userFactionId !== 'wanderer'
         ? query(
             collection(firestore, 'items'),
             where('factionId', '==', userFactionId),
@@ -64,10 +95,10 @@ export default function StorePage() {
         </Card>
       ))}
 
-      {!isLoading && items && items.length === 0 && (
+      {!isLoading && (userFactionId === 'wanderer' || !items || items.length === 0) && (
           <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4 text-center text-muted-foreground py-16">
               <h3 className="text-xl font-semibold">商店目前沒有商品</h3>
-              <p>您所屬的陣營目前沒有任何上架的商品。</p>
+              <p>{userFactionId === 'wanderer' ? '流浪者沒有專屬商店。' : '您所屬的陣營目前沒有任何上架的商品。'}</p>
           </div>
       )}
 
@@ -93,9 +124,16 @@ export default function StorePage() {
               <CardDescription>{item.description}</CardDescription>
             </CardHeader>
             <CardContent className="flex-grow">
-               <p className="text-sm text-primary-foreground/80 bg-primary/20 p-2 rounded-md">
-                <span className="font-semibold">效果：</span>{item.effects}
-               </p>
+               <div className="text-sm text-primary-foreground/80 bg-primary/20 p-2 rounded-md space-y-1">
+                <span className="font-semibold">效果：</span>
+                {item.effects && item.effects.length > 0 ? (
+                    <ul className="list-disc pl-4">
+                        {item.effects.map((effect, index) => (
+                            <li key={index}>{formatEffect(effect)}</li>
+                        ))}
+                    </ul>
+                ) : <p>無</p>}
+               </div>
             </CardContent>
             <CardFooter className="flex justify-between items-center">
               <div className="flex items-center gap-1 font-mono text-lg font-bold text-primary">

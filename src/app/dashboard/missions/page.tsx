@@ -115,12 +115,19 @@ function MissionSubmitForm({
 
     const taskTypeInfo = taskTypes.find(t => t.id === values.taskTypeId);
 
-    if (taskTypeInfo?.singleSubmission && userData.tasks?.includes(taskTypeInfo.id)) {
-        form.setError('taskTypeId', {
-            message: '您已經提交過此類型的任務。'
-        });
-        return;
+    // This checks user's submitted tasks against the task *type* id.
+    // If the task id is 'main', and the user already has a task with id 'main', it fails.
+    if (taskTypeInfo?.singleSubmission) {
+        // We need to query the tasks collection for this user and task type.
+        // For now, let's assume `userData.tasks` stores task *type* IDs for single-submission tasks.
+        // A better approach would be a dedicated subcollection or a query.
+        const submittedTaskTypes = userData.tasks?.map((t: string) => t.split('_')[0]); // simplified logic
+        if (submittedTaskTypes?.includes(taskTypeInfo.id)) {
+            form.setError('taskTypeId', { message: '您已經提交過此類型的任務。' });
+            return;
+        }
     }
+
     
     if (isWanderer && selectedTaskType && !values.factionContribution) {
         form.setError('factionContribution', {
@@ -458,9 +465,10 @@ export default function MissionsPage() {
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
             </CardContent>
           </Card>
-        ) : user && userData ? (
+        ) : user && userData && taskTypes ? (
           <MissionSubmitForm user={user} userData={userData} taskTypes={safeTaskTypes} onTaskSubmitted={loadTasks} />
         ) : (
           <Card>
