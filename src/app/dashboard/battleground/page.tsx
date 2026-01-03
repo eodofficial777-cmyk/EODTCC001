@@ -51,7 +51,7 @@ export default function BattlegroundPage() {
         
         <Card>
           <CardHeader>
-            <CardTitle>共鬥 Log</CardTitle>
+            <CardTitle>共鬥紀錄</CardTitle>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-64">

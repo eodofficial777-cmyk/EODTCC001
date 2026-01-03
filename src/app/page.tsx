@@ -38,12 +38,12 @@ export default function AuthPage() {
         <CardContent>
           <Tabs defaultValue="login">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">登入 Login</TabsTrigger>
-              <TabsTrigger value="register">註冊 Register</TabsTrigger>
+              <TabsTrigger value="login">登入</TabsTrigger>
+              <TabsTrigger value="register">註冊</TabsTrigger>
             </TabsList>
             <TabsContent value="login">
-              <CardHeader className="p-2 text-center">
-                <CardTitle className="text-2xl font-headline">登入 Login</CardTitle>
+              <CardHeader className="p-2 pt-4 text-center">
+                <CardTitle className="text-2xl font-headline">登入</CardTitle>
                 <CardDescription>
                   輸入您的憑證以存取您的帳戶
                 </CardDescription>
@@ -79,29 +79,26 @@ export default function AuthPage() {
               </div>
             </TabsContent>
             <TabsContent value="register">
-               <CardHeader className="p-2 text-center">
-                <CardTitle className="text-2xl font-headline">註冊 Register</CardTitle>
+               <CardHeader className="p-2 pt-4 text-center">
+                <CardTitle className="text-2xl font-headline">註冊</CardTitle>
                 <CardDescription>
                   建立您的新角色帳戶
                 </CardDescription>
               </CardHeader>
               <div className="grid gap-4 p-2">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="register-account">登入帳號</Label>
-                    <div className="flex items-center">
-                      <Input id="register-account" placeholder="帳號" required className="rounded-r-none" />
-                      <span className="flex h-10 items-center rounded-r-md border border-l-0 border-input bg-background px-3 text-sm text-muted-foreground">
-                        @eodtcc.com
-                      </span>
-                    </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="character-name">角色名稱</Label>
-                    <Input id="character-name" placeholder="您的角色名稱" required />
+                <div className="grid gap-2">
+                  <Label htmlFor="register-account">登入帳號</Label>
+                  <div className="flex items-center">
+                    <Input id="register-account" placeholder="帳號" required className="rounded-r-none" />
+                    <span className="flex h-10 items-center rounded-r-md border border-l-0 border-input bg-background px-3 text-sm text-muted-foreground">
+                      @eodtcc.com
+                    </span>
                   </div>
                 </div>
-                
+                <div className="grid gap-2">
+                  <Label htmlFor="character-name">角色名稱</Label>
+                  <Input id="character-name" placeholder="您的角色名稱" required />
+                </div>
                 <div className="grid gap-2">
                   <Label htmlFor="register-password">自定義密碼</Label>
                   <Input id="register-password" type="password" required />
