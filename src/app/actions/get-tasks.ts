@@ -29,9 +29,10 @@ export interface TaskFilter {
 
 export async function getTasks(filters: TaskFilter = {}) {
   try {
+    // We add sorting later in code, so we can't limit here.
+    // We will limit after sorting.
     const constraints: QueryConstraint[] = [
-        orderBy('submissionDate', 'desc'),
-        limit(50) // Increase limit for filtering
+        orderBy('submissionDate', 'desc')
     ];
 
     if (filters.category) {
@@ -48,7 +49,7 @@ export async function getTasks(filters: TaskFilter = {}) {
       return { tasks: [] };
     }
 
-    const tasks = tasksSnapshot.docs.map((doc) => {
+    let tasks = tasksSnapshot.docs.map((doc) => {
       const data = doc.data();
       return {
         ...data,
@@ -57,6 +58,16 @@ export async function getTasks(filters: TaskFilter = {}) {
         submissionDate: data.submissionDate?.toDate().toISOString() || null,
       };
     });
+
+    // Manual sort in code as Firestore query with multiple inequalities can be complex
+    // and require many composite indexes.
+    tasks.sort((a, b) => {
+        if (!a.submissionDate || !b.submissionDate) return 0;
+        return new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime();
+    });
+
+    // Apply limit after sorting
+    tasks = tasks.slice(0, 50);
 
     return { tasks };
   } catch (error: any) {
