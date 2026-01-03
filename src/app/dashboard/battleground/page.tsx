@@ -19,7 +19,7 @@ import { doc, collection, query, orderBy, limit, where } from 'firebase/firestor
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { CombatEncounter, User, Item, Skill, AttributeEffect } from '@/lib/types';
+import type { CombatEncounter, User, Item, Skill, AttributeEffect, Monster } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
@@ -64,7 +64,7 @@ const PreparationCountdown = ({ preparationEndTime, battleName }: { preparationE
 };
 
 
-const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { monster: any, isTargeted: boolean, onSelectTarget: (id: string) => void, isSelectable: boolean }) => {
+const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { monster: Monster, isTargeted: boolean, onSelectTarget: (id: string) => void, isSelectable: boolean }) => {
   return (
     <Card className={`overflow-hidden transition-all duration-300 ${isTargeted && isSelectable ? 'border-primary ring-2 ring-primary' : ''}`}>
        <div className="relative aspect-square w-full">
@@ -80,13 +80,17 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { mo
           <h4 className="font-bold">{monster.name}</h4>
         </div>
       </div>
-      <CardContent className="p-3">
+      <CardContent className="p-3 space-y-2">
         <div className="space-y-1">
           <div className="flex justify-between items-center text-xs font-mono">
-            <span>HP</span>
+            <span className='flex items-center gap-1'><Heart className="h-3 w-3 text-red-400" /> HP</span>
             <span>{monster.hp.toLocaleString()} / {monster.hp.toLocaleString()}</span>
           </div>
           <Progress value={(monster.hp / monster.hp) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
+        </div>
+        <div className="text-xs font-mono flex items-center justify-between text-muted-foreground">
+           <span className='flex items-center gap-1'><Sword className="h-3 w-3" /> ATK</span>
+           <span>{monster.atk}</span>
         </div>
       </CardContent>
       {isSelectable &&
@@ -100,6 +104,44 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { mo
     </Card>
   )
 }
+
+const ActionCooldown = ({ cooldown, onCooldownEnd }: { cooldown: number, onCooldownEnd: () => void }) => {
+    const [progress, setProgress] = useState(100);
+    const totalDuration = 20; // 20 seconds
+
+    useEffect(() => {
+        if (cooldown > 0) {
+            const interval = setInterval(() => {
+                const now = Date.now();
+                const elapsed = (now - cooldown) / 1000;
+                const remaining = totalDuration - elapsed;
+                
+                if (remaining <= 0) {
+                    setProgress(100);
+                    clearInterval(interval);
+                    onCooldownEnd();
+                } else {
+                    setProgress((remaining / totalDuration) * 100);
+                }
+            }, 100); // update every 100ms for smooth progress bar
+
+            return () => clearInterval(interval);
+        } else {
+            setProgress(100);
+        }
+    }, [cooldown, onCooldownEnd]);
+    
+    if (cooldown === 0) {
+        return null;
+    }
+
+    return (
+        <div className="p-2">
+            <Progress value={100 - progress} className="h-2" />
+        </div>
+    );
+};
+
 
 export default function BattlegroundPage() {
   const { user } = useUser();
@@ -130,6 +172,7 @@ export default function BattlegroundPage() {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [battleHP, setBattleHP] = useState(0);
   const [equippedItems, setEquippedItems] = useState<string[]>([]);
+  const [actionCooldown, setActionCooldown] = useState<number>(0);
   
   // --- Computed Values & Memos ---
   const isWanderer = userData?.factionId === 'wanderer';
@@ -137,6 +180,7 @@ export default function BattlegroundPage() {
   const combatStatus = currentBattle?.status;
   const preparationEndTime = currentBattle?.preparationEndTime?.toDate();
   const hasFallen = battleHP <= 0;
+  const isOnCooldown = actionCooldown > 0;
 
   const { inventoryEquipment, inventoryConsumables } = useMemo(() => {
     if (!userData?.items || !allItems) return { inventoryEquipment: [], inventoryConsumables: [] };
@@ -178,10 +222,10 @@ export default function BattlegroundPage() {
 
   // --- Effects ---
   useEffect(() => {
-    if (userData?.attributes.hp) {
+    if (userData?.attributes.hp && battleHP === 0) {
       setBattleHP(userData.attributes.hp);
     }
-  }, [userData?.attributes.hp]);
+  }, [userData?.attributes.hp, battleHP]);
 
   useEffect(() => {
     if (combatStatus === 'active' && userData?.attributes.hp) {
@@ -208,10 +252,15 @@ export default function BattlegroundPage() {
         return prev; // Do nothing if already 2 items are equipped
     });
   }
+  
+  const handleAction = () => {
+    setActionCooldown(Date.now());
+  }
 
   // --- Render Functions ---
   const renderMonsters = (factionId: 'yelu' | 'association') => {
        const monsters = currentBattle?.monsters.filter(m => m.factionId === factionId) || [];
+       
        if (combatStatus === 'active' && playerFaction && playerFaction !== factionId) {
         return (
           <Card className="flex flex-col items-center justify-center min-h-[300px]">
@@ -227,7 +276,7 @@ export default function BattlegroundPage() {
          <Card>
             <CardHeader>
               <CardTitle>{FACTIONS[factionId]?.name} 災獸</CardTitle>
-              {combatStatus === 'active' && <CardDescription>當前回合：1 | 下一回合：20秒</CardDescription>}
+              {combatStatus === 'active' && <CardDescription>當前回合：1</CardDescription>}
             </CardHeader>
             <CardContent>
               {monsters.length > 0 ? (
@@ -273,7 +322,7 @@ export default function BattlegroundPage() {
 
     return (
       <div className="space-y-6">
-        {/* Log / Preparation Area */}
+        <div>{renderMonsters(factionId)}</div>
         {combatStatus === 'preparing' && preparationEndTime ? (
           <div>
             <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle.name} />
@@ -284,9 +333,6 @@ export default function BattlegroundPage() {
                 <AlertDescription>共鬥開始前，請在上方選擇您想支援的陣營。</AlertDescription>
               </Alert>
             )}
-             <div className="mt-4">
-                {renderMonsters(factionId)}
-            </div>
           </div>
         ) : (
           <Card>
@@ -294,7 +340,7 @@ export default function BattlegroundPage() {
               <CardTitle>共鬥紀錄</CardTitle>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-64">
+              <ScrollArea className="h-40">
                 <div className="space-y-3 text-sm font-mono">
                   <p><span className="text-primary">[回合 1]</span> 戰鬥開始！</p>
                   {hasFallen && <p className="text-red-500">[系統] 您的HP已歸零，無法繼續行動。</p>}
@@ -303,8 +349,6 @@ export default function BattlegroundPage() {
             </CardContent>
           </Card>
         )}
-        
-        {combatStatus === 'active' && <div>{renderMonsters(factionId)}</div>}
       </div>
     );
   }
@@ -366,16 +410,18 @@ export default function BattlegroundPage() {
                 </Card>
 
                 <Card>
-                <CardHeader>
-                    <CardTitle>行動</CardTitle>
-                    <CardDescription>冷卻時間：20秒</CardDescription>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-2">
-                    <Button disabled={combatStatus !== 'active' || !selectedTarget || hasFallen}>攻擊</Button>
-                    <Button variant="outline" disabled={combatStatus !== 'active' || hasFallen}>技能</Button>
-                    <Button variant="outline" disabled={combatStatus !== 'active' || hasFallen}>道具</Button>
-                    <Button variant="ghost" disabled={combatStatus !== 'active' || hasFallen}>防禦</Button>
-                </CardContent>
+                    <CardHeader>
+                        <CardTitle>行動</CardTitle>
+                        <CardDescription>
+                            {isOnCooldown ? '冷卻中...' : '選擇一個行動'}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-3 gap-2">
+                        <Button onClick={handleAction} disabled={combatStatus !== 'active' || !selectedTarget || hasFallen || isOnCooldown}>攻擊</Button>
+                        <Button onClick={handleAction} variant="outline" disabled={combatStatus !== 'active' || hasFallen || isOnCooldown}>技能</Button>
+                        <Button onClick={handleAction} variant="outline" disabled={combatStatus !== 'active' || hasFallen || isOnCooldown}>道具</Button>
+                    </CardContent>
+                    {isOnCooldown && <CardFooter className="p-0"><ActionCooldown cooldown={actionCooldown} onCooldownEnd={() => setActionCooldown(0)} /></CardFooter>}
                 </Card>
                 
                  <Tabs defaultValue="equipment" className="w-full">
