@@ -17,7 +17,7 @@ import {
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { User } from '@/lib/types';
+import type { User, Item, Title } from '@/lib/types';
 
 const ADMIN_EMAIL = 'admin@eodtcc.com';
 const ADMIN_PASSWORD = 'password';
@@ -80,6 +80,18 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
     const { targetUserIds, filters, rewards } = payload;
     let finalUserIds: string[] = [];
 
+    // --- Pre-fetch item/title names for logging ---
+    let itemName = '';
+    if (rewards.itemId) {
+      const itemSnap = await getDoc(doc(db, 'items', rewards.itemId));
+      if (itemSnap.exists()) itemName = (itemSnap.data() as Item).name;
+    }
+    let titleName = '';
+    if (rewards.titleId) {
+        const titleSnap = await getDoc(doc(db, 'titles', rewards.titleId));
+        if (titleSnap.exists()) titleName = (titleSnap.data() as Title).name;
+    }
+
     // --- Determine Target Users ---
     if (targetUserIds && targetUserIds.length > 0) {
       finalUserIds = targetUserIds;
@@ -130,9 +142,11 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
             }
             if (rewards.itemId) {
                 userUpdate.items = arrayUnion(rewards.itemId);
+                changeLog.push(`獲得道具「${itemName || rewards.itemId}」`);
             }
             if (rewards.titleId) {
                 userUpdate.titles = arrayUnion(rewards.titleId);
+                 changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
             }
 
             if (Object.keys(userUpdate).length > 0) {
@@ -156,6 +170,7 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
     // For the summary, fetch the user data of the processed IDs
     const finalUsersData = await Promise.all(finalUserIds.map(id => getDocs(query(collection(db, 'users'), where('id', '==', id)))));
     const processedUsers = finalUsersData.map(snap => {
+        if (snap.docs.length === 0) return { id: 'unknown', roleName: 'Unknown User' };
         const userData = snap.docs[0].data() as User;
         return { id: userData.id, roleName: userData.roleName };
     })
