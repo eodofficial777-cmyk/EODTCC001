@@ -1,3 +1,4 @@
+
 export interface User {
   id: string;
   roleName: string;
@@ -22,3 +23,15 @@ export interface User {
   };
   isAdmin?: boolean;
 }
+
+export interface TaskType {
+  id: string;
+  name: string;
+  description: string;
+  honorPoints: number;
+  currency: number;
+  titleAwarded?: string;
+  itemAwarded?: string;
+}
+
+    

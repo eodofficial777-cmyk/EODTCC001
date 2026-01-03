@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -36,12 +37,25 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Trash2, Edit } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User } from '@/lib/types';
-
+import type { User, TaskType } from '@/lib/types';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { getTaskTypes } from '@/app/actions/get-task-types';
+import { updateTaskType } from '@/app/actions/update-task-type';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+  DialogClose,
+} from '@/components/ui/dialog';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -249,6 +263,202 @@ function AccountApproval() {
   );
 }
 
+function TaskTypeEditor({
+  taskType,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  taskType: Partial<TaskType>;
+  onSave: (task: Partial<TaskType>) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [editedTask, setEditedTask] = useState(taskType);
+
+  const handleSave = () => {
+    // Basic validation
+    if (!editedTask.name || !editedTask.id) {
+        alert('ID 和名稱為必填項目');
+        return;
+    }
+    onSave(editedTask);
+  };
+
+  return (
+    <Card className="mt-4 bg-muted/30">
+      <CardHeader>
+        <CardTitle>{taskType.id ? '編輯任務類型' : '新增任務類型'}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+            <Label htmlFor="task-id">ID</Label>
+            <Input id="task-id" value={editedTask.id || ''} onChange={e => setEditedTask({...editedTask, id: e.target.value })} disabled={!!taskType.id} placeholder="例如：main, general, premium"/>
+        </div>
+        <div className="space-y-2">
+            <Label htmlFor="task-name">名稱</Label>
+            <Input id="task-name" value={editedTask.name || ''} onChange={e => setEditedTask({...editedTask, name: e.target.value })} placeholder="例如：主線任務"/>
+        </div>
+        <div className="md:col-span-2 space-y-2">
+            <Label htmlFor="task-desc">描述</Label>
+            <Input id="task-desc" value={editedTask.description || ''} onChange={e => setEditedTask({...editedTask, description: e.target.value })} placeholder="任務的詳細說明"/>
+        </div>
+         <div className="space-y-2">
+            <Label htmlFor="task-honor">榮譽點</Label>
+            <Input id="task-honor" type="number" value={editedTask.honorPoints || 0} onChange={e => setEditedTask({...editedTask, honorPoints: parseInt(e.target.value) || 0 })} />
+        </div>
+         <div className="space-y-2">
+            <Label htmlFor="task-currency">貨幣</Label>
+            <Input id="task-currency" type="number" value={editedTask.currency || 0} onChange={e => setEditedTask({...editedTask, currency: parseInt(e.target.value) || 0 })} />
+        </div>
+         <div className="space-y-2">
+            <Label htmlFor="task-title">稱號獎勵 (選填)</Label>
+            <Input id="task-title" value={editedTask.titleAwarded || ''} onChange={e => setEditedTask({...editedTask, titleAwarded: e.target.value })} placeholder="例如：荒漠英雄"/>
+        </div>
+        <div className="space-y-2">
+            <Label htmlFor="task-item">物品獎勵 (選填)</Label>
+            <Input id="task-item" value={editedTask.itemAwarded || ''} onChange={e => setEditedTask({...editedTask, itemAwarded: e.target.value })} placeholder="例如：item_id_123"/>
+        </div>
+      </CardContent>
+      <CardFooter className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onCancel}>取消</Button>
+        <Button onClick={handleSave} disabled={isSaving}>{isSaving ? "儲存中..." : "儲存"}</Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
+
+function TaskManagement() {
+  const { toast } = useToast();
+  const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingTask, setEditingTask] = useState<Partial<TaskType> | null>(null);
+
+  const fetchTaskTypes = async () => {
+    setIsLoading(true);
+    try {
+      const result = await getTaskTypes();
+      if (result.error) throw new Error(result.error);
+      setTaskTypes(result.taskTypes || []);
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: '讀取失敗', description: error.message });
+      setTaskTypes([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTaskTypes();
+  }, []);
+  
+  const handleSave = async (taskData: Partial<TaskType>) => {
+    setIsSaving(true);
+    try {
+        const result = await updateTaskType(taskData as TaskType);
+        if (result.error) throw new Error(result.error);
+        toast({ title: '成功', description: '任務類型已儲存。' });
+        setEditingTask(null);
+        fetchTaskTypes(); // Refresh list
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: '儲存失敗', description: error.message });
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
+  return (
+    <div>
+        <div className="flex justify-between items-center mb-4">
+            <div>
+            <h3 className="text-lg font-semibold">任務類型管理</h3>
+            <p className="text-muted-foreground mt-1 text-sm">
+                新增、編輯或刪除玩家可提交的任務種類。
+            </p>
+            </div>
+            <Button onClick={() => setEditingTask({})} disabled={!!editingTask}>
+                新增任務類型
+            </Button>
+        </div>
+
+        {editingTask && (
+            <TaskTypeEditor 
+                taskType={editingTask}
+                onSave={handleSave}
+                onCancel={() => setEditingTask(null)}
+                isSaving={isSaving}
+            />
+        )}
+        
+        <div className="border rounded-md mt-4">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>名稱</TableHead>
+                        <TableHead>榮譽</TableHead>
+                        <TableHead>貨幣</TableHead>
+                        <TableHead>稱號</TableHead>
+                        <TableHead>物品</TableHead>
+                        <TableHead>操作</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                 {isLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : taskTypes.length === 0 ? (
+                    <TableRow>
+                        <TableCell colSpan={7} className="text-center h-24">尚未建立任何任務類型</TableCell>
+                    </TableRow>
+                ) : (
+                    taskTypes.map(task => (
+                        <TableRow key={task.id}>
+                            <TableCell className="font-mono">{task.id}</TableCell>
+                            <TableCell className="font-medium">{task.name}</TableCell>
+                            <TableCell>{task.honorPoints}</TableCell>
+                            <TableCell>{task.currency}</TableCell>
+                            <TableCell>{task.titleAwarded || '無'}</TableCell>
+                            <TableCell>{task.itemAwarded || '無'}</TableCell>
+                            <TableCell className="space-x-2">
+                                <Button variant="ghost" size="icon" onClick={() => setEditingTask(task)}>
+                                    <Edit className="h-4 w-4"/>
+                                </Button>
+                                 <Dialog>
+                                    <DialogTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                                            <Trash2 className="h-4 w-4"/>
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                        <DialogTitle>確認刪除</DialogTitle>
+                                        <DialogDescription>
+                                            您確定要刪除「{task.name}」這個任務類型嗎？此操作無法復原。
+                                        </DialogDescription>
+                                        </DialogHeader>
+                                        <DialogFooter>
+                                            <DialogClose asChild><Button variant="outline">取消</Button></DialogClose>
+                                            <Button variant="destructive" onClick={() => handleSave({...task, _delete: true})}>刪除</Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
+                            </TableCell>
+                        </TableRow>
+                    ))
+                )}
+                </TableBody>
+            </Table>
+        </div>
+    </div>
+  )
+}
+
 
 export default function AdminPage() {
   const { toast } = useToast();
@@ -286,7 +496,7 @@ export default function AdminPage() {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="accounts">
-           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:w-max lg:grid-flow-col">
             <TabsTrigger value="accounts">帳號審核</TabsTrigger>
             <TabsTrigger value="missions">任務管理</TabsTrigger>
             <TabsTrigger value="battle">共鬥管理</TabsTrigger>
@@ -304,10 +514,7 @@ export default function AdminPage() {
               <AccountApproval />
             </TabsContent>
             <TabsContent value="missions">
-              <h3 className="text-lg font-semibold">任務管理</h3>
-              <p className="text-muted-foreground mt-2">
-                用於新增任務類型、審核玩家提交的任務以及分配榮譽點的介面。
-              </p>
+              <TaskManagement />
             </TabsContent>
             <TabsContent value="battle">
                <h3 className="text-lg font-semibold">共鬥管理</h3>
@@ -370,3 +577,5 @@ export default function AdminPage() {
     </Card>
   );
 }
+
+    
