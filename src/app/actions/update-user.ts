@@ -35,6 +35,7 @@ interface UserUpdatePayload {
     factionId?: string;
     raceId?: string;
     titles?: string[];
+    avatarUrl?: string;
     // Add other fields that can be updated by an admin here
 }
 
@@ -64,6 +65,9 @@ export async function updateUser(userId: string, payload: UserUpdatePayload, asA
     }
     if (payload.titles) {
         updateData.titles = payload.titles;
+    }
+    if (payload.avatarUrl) {
+      updateData.avatarUrl = payload.avatarUrl;
     }
 
 

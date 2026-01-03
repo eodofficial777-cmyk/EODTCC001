@@ -1,3 +1,4 @@
+
 'use client';
 
 import Image from 'next/image';
@@ -39,11 +40,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose
+  DialogClose,
+  DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { updateUser } from '../actions/update-user';
 import { useToast } from '@/hooks/use-toast';
 
@@ -132,16 +140,94 @@ function ChangeTitleDialog({ user, userData, onTitleChanged }: { user: any, user
                         ))}
                     </RadioGroup>
                 </div>
-                <DialogClose asChild>
-                  <Button variant="ghost">取消</Button>
-                </DialogClose>
-                <Button onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? "儲存中..." : "設為目前稱號"}
-                </Button>
+                 <DialogFooter>
+                    <DialogClose asChild>
+                    <Button variant="ghost">取消</Button>
+                    </DialogClose>
+                    <Button onClick={handleSave} disabled={isSaving}>
+                        {isSaving ? "儲存中..." : "設為目前稱號"}
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 }
+
+const avatarSchema = z.object({
+  avatarUrl: z
+    .string()
+    .url('請輸入有效的網址')
+    .startsWith(
+      'https://images.plurk.com/',
+      '大頭貼必須以 https://images.plurk.com/ 開頭'
+    ),
+});
+
+function ChangeAvatarDialog({ user, userData, onAvatarChanged }: { user: any, userData: any, onAvatarChanged: () => void }) {
+  const { toast } = useToast();
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const form = useForm<z.infer<typeof avatarSchema>>({
+    resolver: zodResolver(avatarSchema),
+    defaultValues: {
+      avatarUrl: userData?.avatarUrl || '',
+    },
+  });
+
+  const onSubmit = async (values: z.infer<typeof avatarSchema>) => {
+    try {
+      const result = await updateUser(user.uid, { avatarUrl: values.avatarUrl });
+      if (result.error) throw new Error(result.error);
+      toast({ title: '成功', description: '您的大頭貼已更新！' });
+      onAvatarChanged();
+      setIsOpen(false);
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: '更新失敗', description: error.message });
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="w-full">編輯個人資料</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>更換大頭貼</DialogTitle>
+          <DialogDescription>
+            請輸入新的噗浪圖床 (images.plurk.com) 網址。
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="avatarUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>大頭貼網址</FormLabel>
+                  <FormControl>
+                    <Input placeholder="https://images.plurk.com/..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="secondary">取消</Button>
+              </DialogClose>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? '儲存中...' : '儲存變更'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
@@ -218,7 +304,9 @@ export default function DashboardPage() {
             {isLoading ? (
                 <Skeleton className="h-5 w-24" />
             ) : (
-                <p className="text-muted-foreground">{userData?.plurkInfo}</p>
+                 <Link href={userData?.plurkInfo || '#'} target="_blank" className="text-muted-foreground hover:underline">
+                  {userData?.plurkInfo.replace('https://www.plurk.com/', '@')}
+                </Link>
             )}
             <div className="flex gap-2 mt-2">
               {isLoading ? (
@@ -237,11 +325,11 @@ export default function DashboardPage() {
              <div className="text-left w-full">
               <h4 className="font-semibold mb-2 text-center">當前稱號</h4>
                {isLoading ? <Skeleton className="h-7 w-36 mx-auto" /> : <p className="text-center text-primary text-lg font-medium">{userData?.titles?.[0] ?? '無'}</p>}
-               {user && userData && <ChangeTitleDialog user={user} userData={userData} onTitleChanged={mutate} />}
+               {user && userData && userData.titles && userData.titles.length > 0 && <ChangeTitleDialog user={user} userData={userData} onTitleChanged={mutate} />}
             </div>
           </CardContent>
           <CardFooter>
-             <Button variant="outline" className="w-full">編輯個人資料</Button>
+             {user && userData && <ChangeAvatarDialog user={user} userData={userData} onAvatarChanged={mutate} />}
           </CardFooter>
         </Card>
       </div>
@@ -379,4 +467,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-    
