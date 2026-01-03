@@ -38,7 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -78,6 +78,8 @@ import { updateTitle } from '@/app/actions/update-title';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { updateTaskStatus } from '@/app/actions/update-task-status';
 import { Badge } from '@/components/ui/badge';
+import { distributeRewards, FilterCriteria } from '@/app/actions/distribute-rewards';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -1119,7 +1121,7 @@ function CraftingManagement() {
     return (
        <Alert variant="destructive">
         <Terminal className="h-4 w-4" />
-        <AlertTitle>讀取失敗</AlertTitle>
+        <AlertTitle>讀取失败</AlertTitle>
         <AlertDescription>
           無法讀取資料，請檢查後端日誌。
           <pre className="mt-2 text-xs bg-black/20 p-2 rounded-md font-mono">{error}</pre>
@@ -1604,7 +1606,7 @@ function TitleManagement() {
             setEditingTitle(null);
             fetchAdminData();
         } catch (e: any) {
-            toast({ variant: 'destructive', title: '儲存失敗', description: e.message });
+            toast({ variant: 'destructive', title: '儲存失败', description: e.message });
         } finally {
             setIsSaving(false);
         }
@@ -1688,6 +1690,255 @@ function TitleManagement() {
     );
 }
 
+function RewardDistribution() {
+    const { toast } = useToast();
+    const [allUsers, setAllUsers] = useState<User[]>([]);
+    const [allItems, setAllItems] = useState<Item[]>([]);
+    const [allTitles, setAllTitles] = useState<Title[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [mode, setMode] = useState<'filter' | 'single'>('filter');
+    const [filters, setFilters] = useState<FilterCriteria>({});
+    const [rewards, setRewards] = useState({ honorPoints: 0, currency: 0, itemId: '', titleId: '', logMessage: '' });
+    const [selectedUser, setSelectedUser] = useState<string>('');
+    const [preview, setPreview] = useState<{ count: number; users: { id: string; roleName: string }[] } | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    useEffect(() => {
+        async function fetchData() {
+            setIsLoading(true);
+            const data = await getAdminData();
+            if (data.users) setAllUsers(data.users);
+            if (data.items) setAllItems(data.items);
+            if (data.titles) setAllTitles(data.titles);
+            setIsLoading(false);
+        }
+        fetchData();
+    }, []);
+
+    const handlePreview = async () => {
+        setIsProcessing(true);
+        setPreview(null);
+        try {
+            const payload = {
+                targetUserIds: mode === 'single' ? [selectedUser] : undefined,
+                filters: mode === 'filter' ? filters : undefined,
+                rewards: { logMessage: "Preview" },
+            };
+            // Use a "dry-run" concept with the backend if possible, for now we simulate it.
+            // This is a simplified frontend simulation of the backend logic.
+            let targetUsers: User[] = [];
+            if (mode === 'single' && selectedUser) {
+                const user = allUsers.find(u => u.id === selectedUser);
+                if (user) targetUsers = [user];
+            } else if (mode === 'filter') {
+                 targetUsers = allUsers.filter(user => {
+                    if (filters.factionId && user.factionId !== filters.factionId) return false;
+                    if (filters.raceId && user.raceId !== filters.raceId) return false;
+                    if (filters.honorPoints_op === '>' && user.honorPoints <= (filters.honorPoints_val || 0)) return false;
+                    if (filters.honorPoints_op === '<' && user.honorPoints >= (filters.honorPoints_val || 0)) return false;
+                    if (filters.currency_op === '>' && user.currency <= (filters.currency_val || 0)) return false;
+                    if (filters.currency_op === '<' && user.currency >= (filters.currency_val || 0)) return false;
+                    if (filters.taskCount_op === '>' && (user.tasks || []).length <= (filters.taskCount_val || 0)) return false;
+                    if (filters.taskCount_op === '<' && (user.tasks || []).length >= (filters.taskCount_val || 0)) return false;
+                    return true;
+                });
+            }
+            
+            if (targetUsers.length === 0) {
+                 toast({ variant: 'destructive', title: '預覽結果', description: '沒有任何玩家符合條件。'});
+            }
+
+            setPreview({
+                count: targetUsers.length,
+                users: targetUsers.map(u => ({ id: u.id, roleName: u.roleName })),
+            });
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: '預覽失敗', description: e.message });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleDistribute = async () => {
+        if (!rewards.logMessage) {
+            toast({ variant: 'destructive', title: '錯誤', description: '請輸入獎勵發放的日誌訊息。' });
+            return;
+        }
+
+        setIsProcessing(true);
+        try {
+            const result = await distributeRewards({
+                targetUserIds: mode === 'single' ? [selectedUser] : preview?.users.map(u => u.id),
+                rewards: {
+                    honorPoints: rewards.honorPoints || undefined,
+                    currency: rewards.currency || undefined,
+                    itemId: rewards.itemId || undefined,
+                    titleId: rewards.titleId || undefined,
+                    logMessage: rewards.logMessage,
+                },
+            });
+            if (result.error) throw new Error(result.error);
+            toast({ title: '成功', description: `已向 ${result.processedCount} 位玩家發放獎勵。` });
+            setPreview(null);
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: '發放失敗', description: e.message });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+    
+    if (isLoading) return <Skeleton className="w-full h-64" />;
+
+    return (
+        <div>
+            <h3 className="text-lg font-semibold">特殊獎勵發放</h3>
+            <p className="text-muted-foreground mt-1 text-sm">
+                使用複合篩選條件或指定單一玩家來發放獎勵。
+            </p>
+            
+            <Card className="mt-4">
+                <CardHeader>
+                    <CardTitle>1. 選擇目標</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <RadioGroup value={mode} onValueChange={(v) => setMode(v as any)} className="mb-4">
+                        <div className="flex items-center space-x-2"><RadioGroupItem value="filter" id="filter" /><Label htmlFor="filter">複合篩選</Label></div>
+                        <div className="flex items-center space-x-2"><RadioGroupItem value="single" id="single" /><Label htmlFor="single">指定單一玩家</Label></div>
+                    </RadioGroup>
+                    
+                    {mode === 'filter' && (
+                        <div className="p-4 border rounded-md bg-muted/30 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <Select onValueChange={v => setFilters(f => ({ ...f, factionId: v === 'all' ? undefined : v }))}>
+                                    <SelectTrigger><SelectValue placeholder="所有陣營" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">所有陣營</SelectItem>
+                                        {Object.values(FACTIONS).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                 <Select onValueChange={v => setFilters(f => ({ ...f, raceId: v === 'all' ? undefined : v }))}>
+                                    <SelectTrigger><SelectValue placeholder="所有種族" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">所有種族</SelectItem>
+                                        {Object.values(RACES).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                                <Label className="shrink-0">榮譽點</Label>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, honorPoints_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="數量" onChange={e => setFilters(f => ({...f, honorPoints_val: parseInt(e.target.value)}))}/>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                                <Label className="shrink-0">貨幣</Label>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, currency_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="數量" onChange={e => setFilters(f => ({...f, currency_val: parseInt(e.target.value)}))}/>
+                            </div>
+                             <div className="flex gap-2 items-center">
+                                <Label className="shrink-0">任務數</Label>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, taskCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="數量" onChange={e => setFilters(f => ({...f, taskCount_val: parseInt(e.target.value)}))}/>
+                            </div>
+                        </div>
+                    )}
+                    {mode === 'single' && (
+                        <Select onValueChange={setSelectedUser}>
+                            <SelectTrigger><SelectValue placeholder="選擇一個玩家..." /></SelectTrigger>
+                            <SelectContent>
+                                {allUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.roleName}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card className="mt-4">
+                <CardHeader>
+                    <CardTitle>2. 設定獎勵內容</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex gap-2 items-center">
+                        <Label className="shrink-0">活動日誌訊息</Label>
+                        <Input placeholder="例如：新年紅包" value={rewards.logMessage} onChange={e => setRewards(r => ({ ...r, logMessage: e.target.value }))} />
+                    </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                             <Label>榮譽點</Label>
+                             <Input type="number" value={rewards.honorPoints} onChange={e => setRewards(r => ({ ...r, honorPoints: parseInt(e.target.value) || 0}))} />
+                        </div>
+                        <div className="space-y-2">
+                             <Label>貨幣</Label>
+                             <Input type="number" value={rewards.currency} onChange={e => setRewards(r => ({ ...r, currency: parseInt(e.target.value) || 0}))} />
+                        </div>
+                         <div className="space-y-2">
+                            <Label>道具</Label>
+                            <Select onValueChange={v => setRewards(r => ({ ...r, itemId: v === 'none' ? '' : v}))}>
+                                <SelectTrigger><SelectValue placeholder="選擇道具"/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">無</SelectItem>
+                                    {allItems.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                         </div>
+                         <div className="space-y-2">
+                            <Label>稱號</Label>
+                            <Select onValueChange={v => setRewards(r => ({ ...r, titleId: v === 'none' ? '' : v}))}>
+                                <SelectTrigger><SelectValue placeholder="選擇稱號"/></SelectTrigger>
+                                <SelectContent>
+                                     <SelectItem value="none">無</SelectItem>
+                                     {allTitles.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                         </div>
+                     </div>
+                </CardContent>
+            </Card>
+
+             <Card className="mt-4">
+                <CardHeader>
+                    <CardTitle>3. 預覽與發放</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handlePreview} disabled={isProcessing} className="w-full">
+                        {isProcessing ? '預覽中...' : '預覽發放對象'}
+                    </Button>
+                    {preview && (
+                        <div className="mt-4 p-4 border rounded-md">
+                            <h4 className="font-semibold">預覽結果：共 {preview.count} 位玩家</h4>
+                            <ScrollArea className="h-40 mt-2">
+                               <ul className="text-sm text-muted-foreground list-disc pl-5">
+                                 {preview.users.map(u => <li key={u.id}>{u.roleName}</li>)}
+                               </ul>
+                            </ScrollArea>
+                            {preview.count > 0 && (
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="destructive" className="w-full mt-4" disabled={isProcessing}>確認發放</Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>您確定要發放獎勵嗎？</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                此操作將會對 {preview.count} 位玩家發放獎勵，此操作無法復原。
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>取消</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleDistribute}>確定發放</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            )}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+        </div>
+    );
+}
+
+
 export default function AdminPage() {
   const { toast } = useToast();
   const [isSeeding, setIsSeeding] = useState(false);
@@ -1767,10 +2018,7 @@ export default function AdminPage() {
                  <TitleManagement />
               </TabsContent>
                <TabsContent value="rewards">
-                 <h3 className="text-lg font-semibold">特殊獎勵發放</h3>
-                <p className="text-muted-foreground mt-2">
-                  使用複合篩選條件向特定玩家群體發放獎勵。
-                </p>
+                  <RewardDistribution />
               </TabsContent>
               <TabsContent value="database">
                  <h3 className="text-lg font-semibold">資料庫管理</h3>
@@ -1791,4 +2039,3 @@ export default function AdminPage() {
     </div>
   );
 }
-

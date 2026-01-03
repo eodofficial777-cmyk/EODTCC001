@@ -5,7 +5,7 @@ import { getFirestore, collection, getDocs, orderBy, query, where } from 'fireba
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, Task, TaskType, CraftRecipe, Skill, Title } from '@/lib/types';
+import type { User, Task, TaskType, CraftRecipe, Skill, Title, Item } from '@/lib/types';
 
 // IMPORTANT: Use a dedicated admin service account credentials in a real production app.
 // For this development environment, we will sign in as a pre-defined admin user.
@@ -47,7 +47,7 @@ async function ensureAdminAuth() {
   }
 }
 
-export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: TaskType[]; items?: any[], titles?: any[], craftRecipes?: CraftRecipe[], skills?: Skill[], pendingTasks?: Task[], error?: string }> {
+export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: TaskType[]; items?: Item[], titles?: any[], craftRecipes?: CraftRecipe[], skills?: Skill[], pendingTasks?: Task[], error?: string }> {
   try {
     await ensureAdminAuth();
 
@@ -83,7 +83,7 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
     const items = itemsSnapshot.docs.map(doc => ({
       ...doc.data(),
       id: doc.id,
-    }));
+    } as Item));
 
     // Process titles
     const titles = titlesSnapshot.docs.map(doc => ({
