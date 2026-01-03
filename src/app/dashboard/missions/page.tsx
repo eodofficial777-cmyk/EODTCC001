@@ -29,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Form,
@@ -59,8 +58,11 @@ import {
 } from 'firebase/firestore';
 import { FACTIONS, TASK_TYPES } from '@/lib/game-data';
 import { submitTask } from '@/app/actions/submit-task';
+import { getTasks } from '@/app/actions/get-tasks';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
+import { RefreshCw } from 'lucide-react';
+
 
 const formSchema = z.object({
   taskTypeId: z.string({ required_error: '請選擇一個任務類型' }),
@@ -75,9 +77,11 @@ const formSchema = z.object({
 function MissionSubmitForm({
   user,
   userData,
+  onTaskSubmitted,
 }: {
   user: any;
   userData: any;
+  onTaskSubmitted: () => void;
 }) {
   const { toast } = useToast();
   const form = useForm<z.infer<typeof formSchema>>({
@@ -144,6 +148,7 @@ function MissionSubmitForm({
         taskTypeId: '',
         factionContribution: undefined
       });
+      onTaskSubmitted();
     } catch (error: any) {
       toast({
         variant: 'destructive',
@@ -263,16 +268,7 @@ function MissionSubmitForm({
   );
 }
 
-function AllSubmissionsFeed() {
-  const firestore = useFirestore();
-  const tasksQuery = useMemoFirebase(
-    () =>
-      firestore
-        ? query(collection(firestore, 'tasks'), orderBy('submissionDate', 'desc'), limit(10))
-        : null,
-    [firestore]
-  );
-  const { data: tasks, isLoading, error } = useCollection(tasksQuery);
+function AllSubmissionsFeed({ tasks, isLoading, onRefresh }: { tasks: any[] | null; isLoading: boolean; onRefresh: () => void; }) {
   
   const getFactionBadge = (factionId: string) => {
     const faction = FACTIONS[factionId as keyof typeof FACTIONS];
@@ -280,21 +276,22 @@ function AllSubmissionsFeed() {
     return <Badge style={{ backgroundColor: faction.color, color: 'white' }}>{faction.name}</Badge>
   }
 
-  // Handle case where collection doesn't exist yet, which throws a permission error initially.
-  // We can treat this as an empty, non-loading state.
-  const displayTasks = (!isLoading && !error) ? tasks : [];
-
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="font-headline">所有人的任務</CardTitle>
-        <CardDescription>看看大家最近在忙什麼。</CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="font-headline">所有人的任務</CardTitle>
+          <CardDescription>看看大家最近在忙什麼。</CardDescription>
+        </div>
+        <Button variant="ghost" size="icon" onClick={onRefresh} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+        </Button>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-96">
           <div className="space-y-4">
             {isLoading && Array.from({length: 5}).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-            {displayTasks && displayTasks.map((task) => (
+            {tasks && tasks.map((task) => (
               <div key={task.id} className="flex items-center justify-between text-sm">
                 <div>
                    <p className="font-medium">
@@ -309,7 +306,7 @@ function AllSubmissionsFeed() {
                 {getFactionBadge(task.userFactionId)}
               </div>
             ))}
-             {!isLoading && displayTasks?.length === 0 && (
+             {!isLoading && tasks?.length === 0 && (
                 <p className="text-center text-muted-foreground py-4">目前沒有人提交任務。</p>
             )}
           </div>
@@ -401,6 +398,34 @@ export default function MissionsPage() {
   );
   const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
 
+  const [tasks, setTasks] = React.useState<any[] | null>(null);
+  const [tasksLoading, setTasksLoading] = React.useState(true);
+  const { toast } = useToast();
+
+  const loadTasks = React.useCallback(async () => {
+    setTasksLoading(true);
+    try {
+      const result = await getTasks();
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      setTasks(result.tasks || []);
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '載入任務失敗',
+        description: error.message,
+      });
+      setTasks([]); // Set to empty array on error to prevent crash
+    } finally {
+      setTasksLoading(false);
+    }
+  }, [toast]);
+
+  React.useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
   const isLoading = isUserLoading || isUserDataLoading;
 
   return (
@@ -416,7 +441,7 @@ export default function MissionsPage() {
             </CardContent>
           </Card>
         ) : user && userData ? (
-          <MissionSubmitForm user={user} userData={userData} />
+          <MissionSubmitForm user={user} userData={userData} onTaskSubmitted={loadTasks} />
         ) : (
           <Card>
             <CardHeader>
@@ -429,7 +454,7 @@ export default function MissionsPage() {
         )}
       </div>
       <div className="lg:col-span-2">
-         <AllSubmissionsFeed />
+         <AllSubmissionsFeed tasks={tasks} isLoading={tasksLoading} onRefresh={loadTasks} />
       </div>
        <div className="lg:col-span-3">
          {user && <UserSubmissionsHistory userId={user.uid} />}
