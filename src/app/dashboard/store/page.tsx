@@ -19,6 +19,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useDoc } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { RACES } from '@/lib/game-data';
+import { useToast } from '@/hooks/use-toast';
+import { buyItem } from '@/app/actions/buy-item';
+import { useState } from 'react';
 
 function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
     if ('attribute' in effect) { // AttributeEffect
@@ -60,12 +63,14 @@ const itemTypeTranslations: { [key in Item['itemTypeId']]: string } = {
 export default function StorePage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
+  const [isBuying, setIsBuying] = useState<Record<string, boolean>>({});
 
   const userDocRef = useMemoFirebase(
     () => (user ? doc(firestore, `users/${user.uid}`) : null),
     [user, firestore]
   );
-  const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
+  const { data: userData, isLoading: isUserDataLoading, refetch: refetchUserData } = useDoc(userDocRef);
   
   const userFactionId = userData?.factionId;
 
@@ -73,16 +78,42 @@ export default function StorePage() {
     if (!firestore || !userFactionId) {
       return null;
     }
-    // All players, including wanderers, see items assigned to their factionId.
+    // Wanderers can see 'wanderer' items, others see their specific faction items.
+    const factionsToShow = ['wanderer'];
+    if (userFactionId !== 'wanderer') {
+        factionsToShow.push(userFactionId);
+    }
+    
     return query(
       collection(firestore, 'items'),
-      where('factionId', '==', userFactionId),
+      where('factionId', 'in', factionsToShow),
       where('isPublished', '==', true)
     );
   }, [firestore, userFactionId]);
 
 
   const { data: items, isLoading: areItemsLoading } = useCollection<Item>(itemsQuery);
+
+  const handleBuy = async (item: Item) => {
+    if (!user || !userData) {
+      toast({ variant: 'destructive', title: '請先登入' });
+      return;
+    }
+
+    setIsBuying(prev => ({...prev, [item.id]: true}));
+    try {
+      const result = await buyItem({ userId: user.uid, itemId: item.id });
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      toast({ title: '購買成功！', description: `「${item.name}」已加入您的背包。`});
+      refetchUserData(); // Refresh user data to show new currency and items
+    } catch(error: any) {
+      toast({ variant: 'destructive', title: '購買失敗', description: error.message });
+    } finally {
+      setIsBuying(prev => ({...prev, [item.id]: false}));
+    }
+  }
 
   const isLoading = isUserLoading || isUserDataLoading || areItemsLoading;
 
@@ -110,10 +141,17 @@ export default function StorePage() {
           </div>
       )}
 
-      {!isLoading && items && items.map((item) => {
+      {!isLoading && items && userData && items.map((item) => {
         const raceName = item.raceId === 'all' ? '通用' : RACES[item.raceId as keyof typeof RACES]?.name || '未知';
         const itemTypeName = itemTypeTranslations[item.itemTypeId] || '道具';
+        const canAfford = userData.currency >= item.price;
+        const meetsRaceRequirement = item.raceId === 'all' || userData.raceId === item.raceId;
+        const canBuy = canAfford && meetsRaceRequirement && !isBuying[item.id];
         
+        let disabledTooltip = '';
+        if (!canAfford) disabledTooltip = '貨幣不足';
+        else if (!meetsRaceRequirement) disabledTooltip = '種族不符';
+
         return (
           <Card key={item.id} className="flex flex-col">
             <CardHeader>
@@ -156,7 +194,9 @@ export default function StorePage() {
                 <Gem className="h-4 w-4" />
                 {item.price.toLocaleString()}
               </div>
-              <Button>購買</Button>
+              <Button onClick={() => handleBuy(item)} disabled={!canBuy} title={disabledTooltip}>
+                {isBuying[item.id] ? '處理中...' : '購買'}
+              </Button>
             </CardFooter>
           </Card>
         )

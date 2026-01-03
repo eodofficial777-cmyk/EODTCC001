@@ -28,7 +28,7 @@ export interface User {
 export interface TaskType {
   id: string;
   name: string;
-  category: 'main' | 'side' | 'general';
+  category: string;
   description: string;
   honorPoints: number;
   currency: number;
