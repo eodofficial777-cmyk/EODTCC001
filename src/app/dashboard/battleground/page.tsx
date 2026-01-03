@@ -16,7 +16,7 @@ export default function BattlegroundPage() {
   const monsterImage = PlaceHolderImages.find(p => p.id === 'faction-beast');
   
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
       {/* Center Column: Monster Info and Battle Log */}
       <div className="lg:col-span-2 space-y-6">
         <Card className="overflow-hidden">

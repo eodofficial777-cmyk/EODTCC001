@@ -64,7 +64,7 @@ export default function ConflictPage() {
   const yeluPercentage = totalWeightedScore > 0 ? (yelu?.weightedScore ?? 0) / totalWeightedScore * 100 : 50;
 
   return (
-    <div className="max-w-4xl mx-auto w-full">
+    <div className="w-full">
       <Card className="bg-card/50">
         <CardHeader>
           <div className="flex justify-between items-center">
