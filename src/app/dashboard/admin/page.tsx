@@ -16,7 +16,227 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/app/actions/seed-database';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getAllUsers } from '@/app/actions/get-all-users';
+import { updateUser } from '@/app/actions/update-user';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { FACTIONS, RACES } from '@/lib/game-data';
+import { RefreshCw } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import Link from 'next/link';
+
+interface User {
+  id: string;
+  roleName: string;
+  plurkInfo: string;
+  registrationDate: string;
+  approved: boolean;
+  factionId: string;
+  raceId: string;
+}
+
+function AccountApproval() {
+  const { toast } = useToast();
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState<Record<string, boolean>>({});
+
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+      const result = await getAllUsers();
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      setUsers(result.users || []);
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '錯誤',
+        description: `讀取使用者列表失敗: ${error.message}`,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const handleFieldChange = (userId: string, field: keyof User, value: any) => {
+    setUsers((prevUsers) =>
+      prevUsers.map((user) =>
+        user.id === userId ? { ...user, [field]: value } : user
+      )
+    );
+  };
+
+  const handleUpdateUser = async (userId: string) => {
+    const userToUpdate = users.find((user) => user.id === userId);
+    if (!userToUpdate) return;
+
+    setIsUpdating((prev) => ({ ...prev, [userId]: true }));
+    try {
+      const result = await updateUser(userId, {
+        approved: userToUpdate.approved,
+        factionId: userToUpdate.factionId,
+        raceId: userToUpdate.raceId,
+      });
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      toast({
+        title: '成功',
+        description: `已更新使用者 ${userToUpdate.roleName} 的資料。`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '更新失敗',
+        description: error.message,
+      });
+      // Optional: Revert state on failure
+      fetchUsers();
+    } finally {
+      setIsUpdating((prev) => ({ ...prev, [userId]: false }));
+    }
+  };
+  
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h3 className="text-lg font-semibold">帳號管理</h3>
+          <p className="text-muted-foreground mt-1 text-sm">
+            審核新註冊的帳號，或手動修改現有使用者的狀態與資料。
+          </p>
+        </div>
+        <Button onClick={fetchUsers} variant="outline" size="icon" disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+
+      <div className="border rounded-md">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>角色名稱</TableHead>
+              <TableHead>噗浪</TableHead>
+              <TableHead>註冊日期</TableHead>
+              <TableHead>狀態</TableHead>
+              <TableHead>陣營</TableHead>
+              <TableHead>種族</TableHead>
+              <TableHead>操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell colSpan={7}>
+                    <Skeleton className="h-8 w-full" />
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : users.length === 0 ? (
+                <TableRow>
+                    <TableCell colSpan={7} className="text-center h-24">沒有待審核或已註冊的使用者</TableCell>
+                </TableRow>
+            ) : (
+              users.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell className="font-medium">{user.roleName}</TableCell>
+                  <TableCell>
+                    <Link href={user.plurkInfo} target="_blank" className="text-primary hover:underline">
+                      前往
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                     {new Date(user.registrationDate).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                     <div className="flex items-center gap-2">
+                        <Switch
+                          checked={user.approved}
+                          onCheckedChange={(value) => handleFieldChange(user.id, 'approved', value)}
+                          aria-label="啟用帳號"
+                        />
+                         <span className={user.approved ? 'text-green-500' : 'text-red-500'}>
+                             {user.approved ? '已啟用' : '未啟用'}
+                         </span>
+                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={user.factionId}
+                      onValueChange={(value) => handleFieldChange(user.id, 'factionId', value)}
+                    >
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.values(FACTIONS).map((f) => (
+                          <SelectItem key={f.id} value={f.id}>
+                            {f.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={user.raceId}
+                      onValueChange={(value) => handleFieldChange(user.id, 'raceId', value)}
+                    >
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.values(RACES).map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      onClick={() => handleUpdateUser(user.id)}
+                      disabled={isUpdating[user.id]}
+                    >
+                      {isUpdating[user.id] ? '更新中...' : '更新'}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
 
 export default function AdminPage() {
   const { toast } = useToast();
@@ -69,11 +289,7 @@ export default function AdminPage() {
 
           <div className="mt-4 p-4 border rounded-md min-h-[400px]">
             <TabsContent value="accounts">
-              <h3 className="text-lg font-semibold">帳號管理</h3>
-              <p className="text-muted-foreground mt-2">
-                此處將顯示待審核帳戶列表，以及用於啟用、停用或修改角色的工具。
-              </p>
-              <Button className="mt-4">刷新待審核列表</Button>
+              <AccountApproval />
             </TabsContent>
             <TabsContent value="missions">
               <h3 className="text-lg font-semibold">任務管理</h3>
