@@ -47,17 +47,14 @@ import {
   useCollection,
   useMemoFirebase,
 } from '@/firebase';
-import {
-  collection,
-  doc,
-} from 'firebase/firestore';
+import { collection, doc } from 'firebase/firestore';
 import { FACTIONS } from '@/lib/game-data';
 import { submitTask } from '@/app/actions/submit-task';
-import { getTasks } from '@/app/actions/get-tasks';
+import { getTasks, TaskFilter } from '@/app/actions/get-tasks';
 import { getUserTasks } from '@/app/actions/get-user-tasks';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Gift, Award, Heart, Shield, Gem } from 'lucide-react';
 import type { TaskType } from '@/lib/types';
 
 
@@ -91,7 +88,7 @@ function MissionSubmitForm({
       title: '',
     },
   });
-  
+
   const isSubmitting = form.formState.isSubmitting;
   const isWanderer = userData?.factionId === 'wanderer';
 
@@ -107,10 +104,10 @@ function MissionSubmitForm({
     control: form.control,
     name: 'taskCategory',
   });
-  
+
   const filteredTasks = React.useMemo(() => {
-      if (!selectedCategory || !taskTypes) return [];
-      return taskTypes.filter(t => t.category === selectedCategory);
+    if (!selectedCategory || !taskTypes) return [];
+    return taskTypes.filter(t => t.category === selectedCategory);
   }, [selectedCategory, taskTypes]);
 
   const selectedTaskTypeId = useWatch({
@@ -137,19 +134,11 @@ function MissionSubmitForm({
       return;
     }
 
-    const taskTypeInfo = taskTypes.find(t => t.id === values.taskTypeId);
-    
-    // Check if user already submitted a single-submission task
-    if (taskTypeInfo?.singleSubmission && userSubmittedTaskIds.includes(taskTypeInfo.id)) {
-        form.setError('taskTypeId', { message: '您已經提交過此類型的任務。' });
-        return;
-    }
-    
     if (isWanderer && selectedTaskType && !values.factionContribution) {
-        form.setError('factionContribution', {
-            message: '身為流浪者，請選擇要貢獻的陣營。'
-        });
-        return;
+      form.setError('factionContribution', {
+        message: '身為流浪者，請選擇要貢獻的陣營。',
+      });
+      return;
     }
 
     try {
@@ -199,7 +188,7 @@ function MissionSubmitForm({
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4">
               <FormField
                 control={form.control}
                 name="taskCategory"
@@ -238,10 +227,10 @@ function MissionSubmitForm({
                       </FormControl>
                       <SelectContent>
                         {filteredTasks.map((task) => (
-                          <SelectItem 
-                              key={task.id} 
-                              value={task.id} 
-                              disabled={task.singleSubmission && userSubmittedTaskIds.includes(task.id)}
+                          <SelectItem
+                            key={task.id}
+                            value={task.id}
+                            disabled={task.singleSubmission && userSubmittedTaskIds.includes(task.id)}
                           >
                             {task.name}
                             {task.singleSubmission && userSubmittedTaskIds.includes(task.id) && ' (已完成)'}
@@ -249,12 +238,24 @@ function MissionSubmitForm({
                         ))}
                       </SelectContent>
                     </Select>
-                    {selectedTaskType && <p className="text-xs text-muted-foreground pt-1">{selectedTaskType.description}</p>}
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+
+            {selectedTaskType && (
+              <Card className="bg-muted/50 p-4 space-y-3">
+                <p className="text-sm text-muted-foreground">{selectedTaskType.description}</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div className="flex items-center gap-2"><Shield className="h-4 w-4 text-primary" /> 榮譽點: {selectedTaskType.honorPoints}</div>
+                  <div className="flex items-center gap-2"><Gem className="h-4 w-4 text-primary" /> 貨幣: {selectedTaskType.currency}</div>
+                  {selectedTaskType.titleAwarded && <div className="flex items-center gap-2"><Award className="h-4 w-4 text-primary" /> 稱號: {selectedTaskType.titleAwarded}</div>}
+                  {selectedTaskType.itemAwarded && <div className="flex items-center gap-2"><Gift className="h-4 w-4 text-primary" /> 物品: {selectedTaskType.itemAwarded}</div>}
+                </div>
+              </Card>
+            )}
+
             {isWanderer && selectedTaskType && (
               <FormField
                 control={form.control}
@@ -329,52 +330,103 @@ function MissionSubmitForm({
   );
 }
 
-function AllSubmissionsFeed({ tasks, isLoading, onRefresh, taskTypes }: { tasks: any[] | null; isLoading: boolean; onRefresh: () => void; taskTypes: TaskType[] }) {
+function AllSubmissionsFeed({ tasks, isLoading, onRefresh, taskTypes, onFilterChange }: { tasks: any[] | null; isLoading: boolean; onRefresh: () => void; taskTypes: TaskType[]; onFilterChange: (filters: TaskFilter) => void; }) {
+  const [filters, setFilters] = React.useState<TaskFilter>({});
+
+  const handleFilterChange = (key: keyof TaskFilter, value: string) => {
+    const newFilters = { ...filters, [key]: value === 'all' ? undefined : value };
+    setFilters(newFilters);
+    onFilterChange(newFilters);
+  };
   
   const getFactionBadge = (factionId: string) => {
     const faction = FACTIONS[factionId as keyof typeof FACTIONS];
     if (!faction) return null;
-    return <Badge style={{ backgroundColor: faction.color, color: 'white' }}>{faction.name}</Badge>
-  }
-  
-  const getTaskName = (taskTypeId: string) => {
-    return taskTypes.find(t => t.id === taskTypeId)?.name || taskTypeId;
-  }
+    return <Badge style={{ backgroundColor: faction.color, color: 'white' }}>{faction.name}</Badge>;
+  };
+
+  const getTaskInfo = (taskTypeId: string) => {
+    const task = taskTypes.find(t => t.id === taskTypeId);
+    return { name: task?.name || taskTypeId, category: task?.category || 'N/A' };
+  };
+
+  const taskCategories = React.useMemo(() => {
+    if (!taskTypes) return [];
+    return Array.from(new Set(taskTypes.map(t => t.category)));
+  }, [taskTypes]);
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle className="font-headline">所有人的任務</CardTitle>
-          <CardDescription>看看大家最近在忙什麼。</CardDescription>
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+                <CardTitle className="font-headline">所有任務</CardTitle>
+                <CardDescription>看看大家最近在忙什麼。</CardDescription>
+            </div>
+            <Button variant="ghost" size="icon" onClick={onRefresh} disabled={isLoading}>
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
         </div>
-        <Button variant="ghost" size="icon" onClick={onRefresh} disabled={isLoading}>
-          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2 pt-4">
+            <Select onValueChange={(value) => handleFilterChange('category', value)}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="所有任務類型" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">所有任務類型</SelectItem>
+                    {taskCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                </SelectContent>
+            </Select>
+            <Select onValueChange={(value) => handleFilterChange('factionId', value)}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="所有陣營" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">所有陣營</SelectItem>
+                    {Object.values(FACTIONS).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                </SelectContent>
+            </Select>
+        </div>
       </CardHeader>
       <CardContent>
-        <ScrollArea className="h-96">
-          <div className="space-y-4">
-            {isLoading && Array.from({length: 5}).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-            {tasks && tasks.map((task) => (
-              <div key={task.id} className="flex items-center justify-between text-sm">
-                <div>
-                   <p className="font-medium">
-                     <Link href={task.submissionUrl} target="_blank" className="hover:underline">
-                      {task.title}
-                     </Link>
-                   </p>
-                   <p className="text-muted-foreground">
-                      {task.userName} 提交了「{getTaskName(task.taskTypeId)}」
-                   </p>
-                </div>
-                {getFactionBadge(task.userFactionId)}
-              </div>
-            ))}
-             {!isLoading && tasks?.length === 0 && (
-                <p className="text-center text-muted-foreground py-4">目前沒有人提交任務。</p>
-            )}
-          </div>
+        <ScrollArea className="h-[40rem]">
+           <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>標題</TableHead>
+                    <TableHead>類型</TableHead>
+                    <TableHead>名稱</TableHead>
+                    <TableHead>提交者</TableHead>
+                    <TableHead>陣營</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading && Array.from({ length: 10 }).map((_, i) => 
+                <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+              )}
+              {tasks && tasks.map((task) => {
+                const { name, category } = getTaskInfo(task.taskTypeId);
+                return (
+                  <TableRow key={task.id}>
+                    <TableCell className="font-medium">
+                      <Link href={task.submissionUrl} target="_blank" className="hover:underline">
+                        {task.title}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{category}</TableCell>
+                    <TableCell>{name}</TableCell>
+                    <TableCell>{task.userName}</TableCell>
+                    <TableCell>{getFactionBadge(task.userFactionId)}</TableCell>
+                  </TableRow>
+                );
+              })}
+              {!isLoading && tasks?.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">目前沒有人提交任務。</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </ScrollArea>
       </CardContent>
     </Card>
@@ -382,100 +434,100 @@ function AllSubmissionsFeed({ tasks, isLoading, onRefresh, taskTypes }: { tasks:
 }
 
 function UserSubmissionsHistory({ userId, taskTypes, refreshTrigger }: { userId: string, taskTypes: TaskType[], refreshTrigger: number }) {
-    const { toast } = useToast();
-    const [userTasks, setUserTasks] = React.useState<any[] | null>(null);
-    const [isLoading, setIsLoading] = React.useState(true);
+  const { toast } = useToast();
+  const [userTasks, setUserTasks] = React.useState<any[] | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-    React.useEffect(() => {
-      const loadUserTasks = async () => {
-        if (!userId) return;
-        setIsLoading(true);
-        try {
-          const result = await getUserTasks(userId);
-          if (result.error) {
-            throw new Error(result.error);
-          }
-          setUserTasks(result.tasks || []);
-        } catch (error: any) {
-          toast({
-            variant: 'destructive',
-            title: '載入您的任務失敗',
-            description: error.message,
-          });
-          setUserTasks([]);
-        } finally {
-          setIsLoading(false);
+  React.useEffect(() => {
+    const loadUserTasks = async () => {
+      if (!userId) return;
+      setIsLoading(true);
+      try {
+        const result = await getUserTasks(userId);
+        if (result.error) {
+          throw new Error(result.error);
         }
-      };
+        setUserTasks(result.tasks || []);
+      } catch (error: any) {
+        toast({
+          variant: 'destructive',
+          title: '載入您的任務失敗',
+          description: error.message,
+        });
+        setUserTasks([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-      loadUserTasks();
-    }, [userId, toast, refreshTrigger]);
-    
-    const getTaskName = (taskTypeId: string) => {
-        if (!taskTypes) return taskTypeId;
-        return taskTypes.find(t => t.id === taskTypeId)?.name || taskTypeId;
+    loadUserTasks();
+  }, [userId, toast, refreshTrigger]);
+
+  const getTaskName = (taskTypeId: string) => {
+    if (!taskTypes) return taskTypeId;
+    return taskTypes.find(t => t.id === taskTypeId)?.name || taskTypeId;
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'approved': return <Badge variant="secondary" className="bg-green-600 text-white">已通過</Badge>;
+      case 'rejected': return <Badge variant="destructive">未通過</Badge>;
+      default: return <Badge variant="outline">審核中</Badge>;
     }
+  };
 
-    const getStatusBadge = (status: string) => {
-        switch(status) {
-            case 'approved': return <Badge variant="secondary" className="bg-green-600 text-white">已通過</Badge>;
-            case 'rejected': return <Badge variant="destructive">未通過</Badge>;
-            default: return <Badge variant="outline">審核中</Badge>;
-        }
-    }
-
-    return (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">我的提交紀錄</CardTitle>
-            <CardDescription>您最近提交的任務列表。</CardDescription>
-          </CardHeader>
-          <CardContent>
-             <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>標題</TableHead>
-                    <TableHead>類型</TableHead>
-                    <TableHead>獎勵</TableHead>
-                    <TableHead>狀態</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading && Array.from({length: 3}).map((_, i) => (
-                      <TableRow key={i}>
-                          <TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell>
-                      </TableRow>
-                  ))}
-                  {userTasks && userTasks.map((task) => (
-                    <TableRow key={task.id}>
-                      <TableCell>
-                        <Link href={task.submissionUrl} target="_blank" className="font-medium hover:underline">
-                           {task.title}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{getTaskName(task.taskTypeId)}</TableCell>
-                      <TableCell className="font-mono">
-                        +{task.honorPointsAwarded} HP / +{task.currencyAwarded} C
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(task.status)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                   {!isLoading && userTasks?.length === 0 && (
-                     <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                            您尚未提交任何任務。
-                        </TableCell>
-                    </TableRow>
-                   )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-    )
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-headline">我的提交紀錄</CardTitle>
+        <CardDescription>您最近提交的任務列表。</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>標題</TableHead>
+                <TableHead>類型</TableHead>
+                <TableHead>獎勵</TableHead>
+                <TableHead>狀態</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading && Array.from({ length: 3 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell>
+                </TableRow>
+              ))}
+              {userTasks && userTasks.map((task) => (
+                <TableRow key={task.id}>
+                  <TableCell>
+                    <Link href={task.submissionUrl} target="_blank" className="font-medium hover:underline">
+                      {task.title}
+                    </Link>
+                  </TableCell>
+                  <TableCell>{getTaskName(task.taskTypeId)}</TableCell>
+                  <TableCell className="font-mono whitespace-nowrap">
+                    +{task.honorPointsAwarded} 榮譽 / +{task.currencyAwarded} 貨幣
+                  </TableCell>
+                  <TableCell>
+                    {getStatusBadge(task.status)}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!isLoading && userTasks?.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                    您尚未提交任何任務。
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function MissionsPage() {
@@ -490,7 +542,7 @@ export default function MissionsPage() {
   const [tasks, setTasks] = React.useState<any[] | null>(null);
   const [tasksLoading, setTasksLoading] = React.useState(true);
   const [refreshTrigger, setRefreshTrigger] = React.useState(0);
-  
+
   const taskTypesQuery = useMemoFirebase(
     () => (firestore ? collection(firestore, 'taskTypes') : null),
     [firestore]
@@ -500,16 +552,15 @@ export default function MissionsPage() {
   const { toast } = useToast();
 
   const handleTaskSubmitted = () => {
-    // Trigger a refresh of both all tasks and user-specific data
     loadTasks();
     refetchUserData();
     setRefreshTrigger(t => t + 1);
   };
-  
-  const loadTasks = React.useCallback(async () => {
+
+  const loadTasks = React.useCallback(async (filters: TaskFilter = {}) => {
     setTasksLoading(true);
     try {
-      const result = await getTasks();
+      const result = await getTasks(filters);
       if (result.error) {
         throw new Error(result.error);
       }
@@ -560,11 +611,17 @@ export default function MissionsPage() {
         )}
       </div>
       <div className="lg:col-span-2">
-         <AllSubmissionsFeed tasks={tasks} isLoading={tasksLoading} onRefresh={loadTasks} taskTypes={safeTaskTypes} />
+        <AllSubmissionsFeed
+          tasks={tasks}
+          isLoading={tasksLoading}
+          onRefresh={() => loadTasks()}
+          taskTypes={safeTaskTypes}
+          onFilterChange={loadTasks}
+        />
       </div>
-       <div className="lg:col-span-3">
-         {user && taskTypes && <UserSubmissionsHistory userId={user.uid} taskTypes={safeTaskTypes} refreshTrigger={refreshTrigger} />}
-       </div>
+      <div className="lg:col-span-3">
+        {user && taskTypes && <UserSubmissionsHistory userId={user.uid} taskTypes={safeTaskTypes} refreshTrigger={refreshTrigger} />}
+      </div>
     </div>
   );
 }
