@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -41,7 +42,7 @@ import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles } fr
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType } from '@/lib/types';
+import type { User, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -73,6 +74,8 @@ import { updateItem } from '@/app/actions/update-item';
 import { resetSeason } from '@/app/actions/reset-season';
 import { updateCraftRecipe } from '@/app/actions/update-craft-recipe';
 import { updateSkill } from '@/app/actions/update-skill';
+import { updateTitle } from '@/app/actions/update-title';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -1202,6 +1205,7 @@ function SkillEditor({
     isSaving: boolean;
     owner: { factionId: string; raceId: string };
 }) {
+    const { toast } = useToast();
     const [editedSkill, setEditedSkill] = useState<Partial<Skill>>({
         ...skill,
         factionId: owner.factionId,
@@ -1438,6 +1442,217 @@ function SkillManagement() {
     );
 }
 
+const titleTriggerTypes: { value: TitleTriggerType, label: string, requiresItem: boolean, requiresDamage: boolean }[] = [
+    { value: 'honor_points', label: '榮譽點達到', requiresItem: false, requiresDamage: false },
+    { value: 'currency', label: '貨幣達到', requiresItem: false, requiresDamage: false },
+    { value: 'tasks_submitted', label: '提交任務達到', requiresItem: false, requiresDamage: false },
+    { value: 'battles_participated', label: '參加共鬥達到', requiresItem: false, requiresDamage: false },
+    { value: 'battles_hp_zero', label: '共鬥血量歸零達到', requiresItem: false, requiresDamage: false },
+    { value: 'item_used', label: '使用道具 O X 次', requiresItem: true, requiresDamage: false },
+    { value: 'item_damage', label: '使用道具 O 造成 A 傷害共 X 次', requiresItem: true, requiresDamage: true },
+];
+
+function TitleEditor({ title, items, onSave, onCancel, isSaving }: { title: Partial<Title>, items: Item[], onSave: (data: Partial<Title>) => void, onCancel: () => void, isSaving: boolean }) {
+    const { toast } = useToast();
+    const [editedTitle, setEditedTitle] = useState<Partial<Title>>(title);
+
+    const handleTriggerTypeChange = (type: TitleTriggerType) => {
+        const newTrigger: TitleTrigger = { type, value: 0 };
+        const triggerInfo = titleTriggerTypes.find(t => t.value === type);
+        if (triggerInfo?.requiresItem) {
+            newTrigger.itemId = items[0]?.id;
+        }
+        setEditedTitle(prev => ({...prev, trigger: newTrigger}));
+    };
+
+    const handleSave = () => {
+        if (!editedTitle.id || !editedTitle.name) {
+            toast({ variant: 'destructive', title: '錯誤', description: 'ID 和名稱為必填項。' });
+            return;
+        }
+        onSave(editedTitle);
+    };
+
+    const currentTriggerInfo = titleTriggerTypes.find(t => t.value === editedTitle.trigger?.type);
+
+    return (
+        <Card className="mt-4 bg-muted/30">
+            <CardHeader><CardTitle>{title.id ? '編輯稱號' : '新增稱號'}</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label>ID (英文，不可重複)</Label>
+                        <Input value={editedTitle.id || ''} onChange={e => setEditedTitle({ ...editedTitle, id: e.target.value })} disabled={!!title.id} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>名稱</Label>
+                        <Input value={editedTitle.name || ''} onChange={e => setEditedTitle({ ...editedTitle, name: e.target.value })} />
+                    </div>
+                    <div className="md:col-span-2 space-y-2">
+                        <Label>描述</Label>
+                        <Input value={editedTitle.description || ''} onChange={e => setEditedTitle({ ...editedTitle, description: e.target.value })} />
+                    </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Checkbox id="title-hidden" checked={editedTitle.isHidden} onCheckedChange={checked => setEditedTitle({ ...editedTitle, isHidden: !!checked })} />
+                    <Label htmlFor="title-hidden">達成前隱藏此稱號</Label>
+                </div>
+                <div className="space-y-3">
+                    <Label>發放方式</Label>
+                    <RadioGroup value={editedTitle.isManual ? 'manual' : 'auto'} onValueChange={v => setEditedTitle({ ...editedTitle, isManual: v === 'manual', trigger: v === 'manual' ? undefined : { type: 'honor_points', value: 0 }})}>
+                        <div className="flex items-center space-x-2"><RadioGroupItem value="manual" id="manual" /><Label htmlFor="manual">手動發放</Label></div>
+                        <div className="flex items-center space-x-2"><RadioGroupItem value="auto" id="auto" /><Label htmlFor="auto">自動發放 (達成條件)</Label></div>
+                    </RadioGroup>
+                </div>
+                {!editedTitle.isManual && (
+                    <div className="p-4 border rounded-md bg-background/50 space-y-4">
+                        <h4 className="font-semibold">自動發放條件</h4>
+                        <Select value={editedTitle.trigger?.type} onValueChange={(v) => handleTriggerTypeChange(v as TitleTriggerType)}>
+                            <SelectTrigger><SelectValue placeholder="選擇觸發條件" /></SelectTrigger>
+                            <SelectContent>
+                                {titleTriggerTypes.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+
+                        {currentTriggerInfo?.requiresItem && (
+                             <Select value={editedTitle.trigger?.itemId} onValueChange={v => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, itemId: v} : undefined}))}>
+                                <SelectTrigger><SelectValue placeholder="選擇道具" /></SelectTrigger>
+                                <SelectContent>
+                                    {items.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        )}
+                        <Input type="number" placeholder="目標數值 (例如: 100)" value={editedTitle.trigger?.value || ''} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, value: parseInt(e.target.value) || 0} : undefined}))}/>
+                    </div>
+                )}
+            </CardContent>
+            <CardFooter className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={onCancel}>取消</Button>
+                <Button onClick={handleSave} disabled={isSaving}>{isSaving ? "儲存中..." : "儲存"}</Button>
+            </CardFooter>
+        </Card>
+    );
+}
+
+
+function TitleManagement() {
+    const { toast } = useToast();
+    const [titles, setTitles] = useState<Title[]>([]);
+    const [items, setItems] = useState<Item[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [editingTitle, setEditingTitle] = useState<Partial<Title> | null>(null);
+
+    const fetchAdminData = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const result = await getAdminData();
+            if (result.error) throw new Error(result.error);
+            setTitles(result.titles || []);
+            setItems(result.items || []);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAdminData();
+    }, []);
+
+    const handleSave = async (titleData: Partial<Title>) => {
+        setIsSaving(true);
+        try {
+            const result = await updateTitle(titleData as Title);
+            if (result.error) throw new Error(result.error);
+            toast({ title: '成功', description: '稱號已儲存。' });
+            setEditingTitle(null);
+            fetchAdminData();
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: '儲存失敗', description: e.message });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const getTriggerDescription = (title: Title) => {
+        if (title.isManual || !title.trigger) return '手動發放';
+        const triggerInfo = titleTriggerTypes.find(t => t.value === title.trigger.type);
+        if (!triggerInfo) return '未知條件';
+        
+        let desc = triggerInfo.label;
+        if(triggerInfo.requiresItem) {
+            const itemName = items.find(i => i.id === title.trigger?.itemId)?.name || '未知道具';
+            desc = desc.replace('O', `「${itemName}」`);
+        }
+        if(triggerInfo.requiresDamage) {
+            desc = desc.replace('A', `${title.trigger.value}`);
+            desc = desc.replace('X', 'Y'); // Placeholder for now
+        } else {
+            desc = desc.replace('X', `${title.trigger.value}`);
+        }
+        return desc;
+    };
+
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <div>
+                    <h3 className="text-lg font-semibold">稱號管理</h3>
+                    <p className="text-muted-foreground mt-1 text-sm">新增和管理一般及隱藏稱號的達成條件。</p>
+                </div>
+                <Button onClick={() => setEditingTitle({ isHidden: false, isManual: true })} disabled={!!editingTitle}>新增稱號</Button>
+            </div>
+
+            {editingTitle && (
+                <TitleEditor
+                    title={editingTitle}
+                    items={items}
+                    onSave={handleSave}
+                    onCancel={() => setEditingTitle(null)}
+                    isSaving={isSaving}
+                />
+            )}
+
+             <div className="border rounded-md mt-4">
+                <Table>
+                    <TableHeader><TableRow><TableHead>名稱</TableHead><TableHead>描述</TableHead><TableHead>達成條件</TableHead><TableHead>狀態</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                        {isLoading ? (
+                            <TableRow><TableCell colSpan={5}><Skeleton className="h-8 w-full"/></TableCell></TableRow>
+                        ) : titles.length > 0 ? (
+                            titles.map(title => (
+                                <TableRow key={title.id}>
+                                    <TableCell>{title.name}</TableCell>
+                                    <TableCell className="text-xs text-muted-foreground max-w-xs truncate">{title.description}</TableCell>
+                                    <TableCell className="text-xs">{getTriggerDescription(title)}</TableCell>
+                                    <TableCell>{title.isHidden ? '隱藏' : '公開'}</TableCell>
+                                    <TableCell>
+                                        <Button variant="ghost" size="icon" onClick={() => setEditingTitle(title)}><Edit className="h-4 w-4"/></Button>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader><AlertDialogTitle>確認刪除</AlertDialogTitle><AlertDialogDescription>您確定要刪除稱號「{title.name}」嗎？</AlertDialogDescription></AlertDialogHeader>
+                                                <AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => handleSave({...title, _delete: true})}>刪除</AlertDialogAction></AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow><TableCell colSpan={5} className="h-24 text-center">尚未建立任何稱號</TableCell></TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+        </div>
+    );
+}
+
 export default function AdminPage() {
   const { toast } = useToast();
   const [isSeeding, setIsSeeding] = useState(false);
@@ -1514,10 +1729,7 @@ export default function AdminPage() {
                  <SkillManagement />
               </TabsContent>
                <TabsContent value="titles">
-                 <h3 className="text-lg font-semibold">稱號管理</h3>
-                <p className="text-muted-foreground mt-2">
-                  新增和管理一般及隱藏稱號的達成條件。
-                </p>
+                 <TitleManagement />
               </TabsContent>
                <TabsContent value="rewards">
                  <h3 className="text-lg font-semibold">特殊獎勵發放</h3>

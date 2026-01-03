@@ -1,7 +1,4 @@
 
-
-
-
 export interface User {
   id: string;
   roleName: string;
@@ -102,4 +99,21 @@ export interface Skill {
     effects: SkillEffect[];
 }
 
+export type TitleTriggerType = 'honor_points' | 'currency' | 'tasks_submitted' | 'battles_participated' | 'battles_hp_zero' | 'item_used' | 'item_damage';
+
+export type TitleTrigger = {
+  type: TitleTriggerType;
+  value: number;
+  itemId?: string; // For item-related triggers
+};
+
+
+export interface Title {
+  id: string;
+  name: string;
+  description: string;
+  isHidden: boolean;
+  isManual: boolean;
+  trigger?: TitleTrigger;
+}
     

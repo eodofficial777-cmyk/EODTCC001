@@ -576,29 +576,32 @@
       "type": "object",
       "description": "Represents a title or achievement a user can earn.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the title."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the title."
-        },
-        "description": {
-          "type": "string",
-          "description": "A description of how to earn the title."
-        },
-        "isHidden": {
-          "type": "boolean",
-          "description": "Indicates whether the title is hidden until earned."
+        "id": { "type": "string", "description": "Unique identifier for the title." },
+        "name": { "type": "string", "description": "The name of the title." },
+        "description": { "type": "string", "description": "A description of how to earn the title." },
+        "isHidden": { "type": "boolean", "description": "Indicates whether the title is hidden until earned." },
+        "isManual": { "type": "boolean", "description": "True if the title is awarded manually by an admin." },
+        "trigger": {
+          "type": "object",
+          "description": "The condition that automatically awards this title.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["honor_points", "currency", "tasks_submitted", "battles_participated", "battles_hp_zero", "item_used", "item_damage"]
+            },
+            "value": {
+              "type": "number",
+              "description": "The target value for the trigger type (e.g., 1000 for 1000 honor points)."
+            },
+            "itemId": {
+              "type": "string",
+              "description": "The ID of the item for item-related triggers."
+            }
+          },
+          "required": ["type", "value"]
         }
       },
-      "required": [
-        "id",
-        "name",
-        "description",
-        "isHidden"
-      ]
+      "required": ["id", "name", "description", "isHidden", "isManual"]
     },
     "CharacterTitle": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1050,5 +1053,4 @@
     "reasoning": "This Firestore structure prioritizes security, scalability, and debuggability, following the core design principles and strategy mandates. It emphasizes authorization independence, clarity of intent, and avoids custom claims (DBAC). The structure is designed to support secure `list` operations (QAPs) and maintain data integrity. \n\n**Authorization Independence:**\nTo ensure authorization independence, the structure denormalizes authorization context where necessary. For example, if `Character` access depended on `Faction` attributes, those attributes would be copied into every `Character` document.\n\n**Structural Segregation:**\nThe design segregates data based on security requirements. User-specific data is stored under `/users/{userId}`, while global data like `Factions` and `Races` reside in root-level collections. This simplifies security rules by ensuring that each collection has a homogeneous security posture. The global `tasks` collection is introduced for easy querying of all submissions by admins and for the public feed.\n\n**Access Modeling:**\n*   **Private Data:** User-owned data (e.g., Characters, ActivityLogs) is stored under `/users/{userId}` to leverage path-based ownership. This allows simple and efficient security rules based on `request.auth.uid`.\n*   **Collaborative Data:** The global `/tasks` collection is readable by all but can only be created by authenticated users, supporting a public submission feed.\n*   **Global Roles (DBAC):** Admin roles are managed through the existence of documents in dedicated collections (e.g., `/roles_admin/{uid}`).\n\n**QAPs Support:**\nThe structure supports secure `list` operations (QAPs) by:\n\n*   Segregating data with different access needs into separate collections. For instance, admin-only data is stored separately from user-owned data.\n*   Using path-based ownership for user-specific data, which allows listing only resources owned by the authenticated user.\n\n**Invariants:**\nThe structure supports data integrity through the use of ownership, timestamps, and denormalized data. Security rules can enforce constraints on these fields to maintain data consistency."
   }
 }
-
     
