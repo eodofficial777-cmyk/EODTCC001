@@ -61,7 +61,7 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
     const pendingTasksPromise = getDocs(query(collection(db, 'tasks'), where('status', '==', 'pending')));
 
 
-    const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot, craftRecipesSnapshot, skillsSnapshot, pendingTasksSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise, craftRecipesPromise, skillsPromise, pendingTasksSnapshot]);
+    const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot, craftRecipesSnapshot, skillsSnapshot, pendingTasksSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise, craftRecipesPromise, skillsPromise, pendingTasksPromise]);
 
     // Process users
     const users = usersSnapshot.docs.map(doc => {
