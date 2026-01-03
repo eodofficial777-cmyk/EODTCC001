@@ -144,10 +144,12 @@ export default function StorePage() {
         const itemTypeName = itemTypeTranslations[item.itemTypeId] || '道具';
         const canAfford = userData.currency >= item.price;
         const meetsRaceRequirement = item.raceId === 'all' || userData.raceId === item.raceId;
-        const canBuy = canAfford && meetsRaceRequirement && !isBuying[item.id];
+        const isEquipmentAndOwned = item.itemTypeId === 'equipment' && userData.items?.includes(item.id);
+        const canBuy = canAfford && meetsRaceRequirement && !isEquipmentAndOwned && !isBuying[item.id];
         
         let disabledTooltip = '';
-        if (!canAfford) disabledTooltip = '貨幣不足';
+        if (isEquipmentAndOwned) disabledTooltip = '已擁有';
+        else if (!canAfford) disabledTooltip = '貨幣不足';
         else if (!meetsRaceRequirement) disabledTooltip = '種族不符';
 
         return (
@@ -193,7 +195,7 @@ export default function StorePage() {
                 {item.price.toLocaleString()}
               </div>
               <Button onClick={() => handleBuy(item)} disabled={!canBuy} title={disabledTooltip}>
-                {isBuying[item.id] ? '處理中...' : '購買'}
+                {isBuying[item.id] ? '處理中...' : isEquipmentAndOwned ? '已擁有' : '購買'}
               </Button>
             </CardFooter>
           </Card>

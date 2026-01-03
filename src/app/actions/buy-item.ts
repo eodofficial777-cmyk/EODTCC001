@@ -65,6 +65,11 @@ export async function buyItem(payload: BuyItemPayload): Promise<{ success: boole
          throw new Error('您的陣營無法購買此道具。');
       }
 
+      // 4. Check for unique equipment
+      if (item.itemTypeId === 'equipment' && user.items?.includes(item.id)) {
+        throw new Error('您已經擁有此裝備，無法重複購買。');
+      }
+
 
       // All checks passed, perform the updates
       const newCurrency = user.currency - item.price;
@@ -74,7 +79,7 @@ export async function buyItem(payload: BuyItemPayload): Promise<{ success: boole
         items: arrayUnion(itemId),
       });
       
-      // Create an activity log entry (not part of the transaction to avoid contention, but will be committed with it)
+      // Create an activity log entry
        const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
        transaction.set(activityLogRef, {
             id: activityLogRef.id,

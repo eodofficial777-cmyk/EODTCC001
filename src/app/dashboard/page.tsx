@@ -10,14 +10,6 @@ import {
   CardTitle,
   CardFooter,
 } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
@@ -26,6 +18,50 @@ import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection } from '@
 import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { Item, AttributeEffect, TriggeredEffect } from '@/lib/types';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+
+function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
+    if ('attribute' in effect) { // AttributeEffect
+        const op = effect.operator === 'd' ? `d${effect.value}` : `${effect.operator} ${effect.value}`;
+        return `${effect.attribute.toUpperCase()} ${op}`;
+    }
+    // TriggeredEffect
+    let desc = `${effect.probability}%機率`;
+    switch(effect.effectType) {
+        case 'hp_recovery':
+            desc += `恢復 ${effect.value} HP`;
+            break;
+        case 'damage_enemy':
+            desc += `造成 ${effect.value} 點傷害`;
+            break;
+        case 'atk_buff':
+            desc += `提升攻擊力 ${effect.value}%`;
+            break;
+        case 'def_buff':
+            desc += `提升防禦力 ${effect.value}%`;
+            break;
+        case 'hp_cost':
+            desc += `消耗 ${effect.value} HP`;
+            break;
+    }
+    if (effect.duration) {
+        desc += `，持續 ${effect.duration} 回合`;
+    }
+    return desc;
+}
+
+const itemTypeTranslations: { [key in Item['itemTypeId']]: { name: string; color: string } } = {
+  equipment: { name: '裝備', color: 'bg-blue-600' },
+  consumable: { name: '戰鬥道具', color: 'bg-green-600' },
+  special: { name: '特殊道具', color: 'bg-purple-600' },
+};
+
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
@@ -37,6 +73,9 @@ export default function DashboardPage() {
   );
   const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
 
+  const itemsQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'items') : null), [firestore]);
+  const { data: allItems, isLoading: areItemsLoading } = useCollection<Item>(itemsQuery);
+
   const activityLogQuery = useMemoFirebase(
     () => (user ? query(collection(firestore, `users/${user.uid}/activityLogs`), orderBy('timestamp', 'desc'), limit(5)) : null),
     [user, firestore]
@@ -46,9 +85,26 @@ export default function DashboardPage() {
   const faction = userData?.factionId ? FACTIONS[userData.factionId as keyof typeof FACTIONS] : null;
   const race = userData?.raceId ? RACES[userData.raceId as keyof typeof RACES] : null;
   
-  const inventory = userData?.items ?? [];
+  const processedInventory = useMemoFirebase(() => {
+    if (!userData?.items || !allItems) return [];
+    
+    const itemCounts: { [id: string]: number } = userData.items.reduce((acc, id) => {
+        acc[id] = (acc[id] || 0) + 1;
+        return acc;
+    }, {} as { [id: string]: number });
 
-  const isLoading = isUserLoading || isUserDataLoading;
+    return Object.keys(itemCounts).map(id => {
+        const itemData = allItems.find(item => item.id === id);
+        return {
+            id: id,
+            count: itemCounts[id],
+            data: itemData
+        }
+    }).filter(item => item.data); // Filter out items that might not exist in allItems yet
+  }, [userData?.items, allItems]);
+
+
+  const isLoading = isUserLoading || isUserDataLoading || areItemsLoading;
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -108,36 +164,6 @@ export default function DashboardPage() {
              <Button variant="outline" className="w-full">編輯個人資料</Button>
           </CardFooter>
         </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">背包</CardTitle>
-             <CardDescription>您目前持有的物品</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-8 w-full" />
-                <Skeleton className="h-8 w-full" />
-                <Skeleton className="h-8 w-full" />
-              </div>
-            ) : inventory.length > 0 ? (
-              <ul className="space-y-2 text-sm">
-                {inventory.map((item, index) => (
-                  <li key={index} className="flex items-center justify-between bg-card-foreground/5 p-2 rounded-md">
-                    <span>{item}</span> 
-                    <Badge variant="outline">道具</Badge>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="text-center text-muted-foreground py-4">
-                <Package className="mx-auto h-8 w-8 mb-2" />
-                <p>背包是空的</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       <div className="lg:col-span-2 space-y-6">
@@ -160,6 +186,63 @@ export default function DashboardPage() {
                 </div>
                 {isLoading ? <Skeleton className="h-7 w-24" /> : <span className="text-2xl font-bold font-mono">{userData?.currency?.toLocaleString() ?? '0'}</span>}
               </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline">背包</CardTitle>
+             <CardDescription>您目前持有的物品</CardDescription>
+          </CardHeader>
+          <CardContent>
+             <TooltipProvider>
+                {isLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                ) : processedInventory.length > 0 ? (
+                  <ul className="space-y-2 text-sm">
+                    {processedInventory.map(({ id, count, data }) => {
+                       const itemTypeInfo = data?.itemTypeId ? itemTypeTranslations[data.itemTypeId] : { name: '道具', color: 'bg-gray-500' };
+                       return (
+                          <Tooltip key={id}>
+                            <TooltipTrigger asChild>
+                              <li className="flex items-center justify-between bg-card-foreground/5 p-2 rounded-md cursor-default">
+                                <div className="flex items-center gap-3">
+                                  <Badge className={`${itemTypeInfo.color} text-white`}>{itemTypeInfo.name}</Badge>
+                                  <span>{data?.name || '未知物品'}</span>
+                                </div>
+                                <span className="font-mono text-muted-foreground">x{count}</span>
+                              </li>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <p className="font-bold">{data?.name}</p>
+                              <p className="text-xs text-muted-foreground mb-2">{data?.description}</p>
+                              <Separator/>
+                               <div className="mt-2 text-primary-foreground/80 bg-primary/20 p-2 rounded-md space-y-1">
+                                <span className="font-semibold text-foreground">效果：</span>
+                                {data?.effects && data.effects.length > 0 ? (
+                                    <ul className="list-disc pl-4 text-foreground/90">
+                                        {data.effects.map((effect, index) => (
+                                            <li key={index}>{formatEffect(effect)}</li>
+                                        ))}
+                                    </ul>
+                                ) : <p className="text-foreground/90">無</p>}
+                               </div>
+                            </TooltipContent>
+                          </Tooltip>
+                       )
+                    })}
+                  </ul>
+                ) : (
+                  <div className="text-center text-muted-foreground py-4">
+                    <Package className="mx-auto h-8 w-8 mb-2" />
+                    <p>背包是空的</p>
+                  </div>
+                )}
+             </TooltipProvider>
           </CardContent>
         </Card>
         
