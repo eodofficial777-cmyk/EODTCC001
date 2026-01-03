@@ -25,6 +25,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+
 
 function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
     if ('attribute' in effect) { // AttributeEffect
