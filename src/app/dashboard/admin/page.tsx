@@ -53,8 +53,8 @@ export default function AdminPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="accounts">
-          <TabsList className="grid h-auto w-full grid-cols-2 flex-wrap sm:grid-cols-3 md:grid-cols-5">
+        <Tabs defaultValue="accounts" orientation="vertical" className="flex flex-col md:flex-row gap-6">
+          <TabsList className="grid w-full md:w-[200px] h-auto grid-cols-2 md:grid-cols-1 flex-shrink-0">
             <TabsTrigger value="accounts">帳號審核</TabsTrigger>
             <TabsTrigger value="missions">任務管理</TabsTrigger>
             <TabsTrigger value="battle">共鬥管理</TabsTrigger>
@@ -67,7 +67,7 @@ export default function AdminPage() {
             <TabsTrigger value="database">資料庫</TabsTrigger>
           </TabsList>
 
-          <div className="mt-4 p-4 border rounded-md min-h-[300px]">
+          <div className="flex-1 p-4 border rounded-md min-h-[400px]">
             <TabsContent value="accounts">
               <h3 className="text-lg font-semibold">帳號管理</h3>
               <p className="text-muted-foreground mt-2">
