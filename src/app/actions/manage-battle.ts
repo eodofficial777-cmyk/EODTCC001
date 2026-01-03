@@ -1,6 +1,6 @@
 'use server';
 
-import { getFirestore, doc, setDoc, serverTimestamp, collection } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, serverTimestamp, collection, updateDoc } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
@@ -24,8 +24,8 @@ async function ensureAdminAuth() {
     try {
       await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
     } catch (error) {
-      console.error('Admin sign-in failed during battle creation:', error);
-      throw new Error('管理員登入失敗，無法開啟戰場。');
+      console.error('Admin sign-in failed during battle management:', error);
+      throw new Error('管理員登入失敗，無法管理戰場。');
     }
   }
 }
@@ -62,5 +62,24 @@ export async function createBattle(payload: CreateBattlePayload): Promise<{ succ
   } catch (error: any) {
     console.error('Failed to create battle:', error);
     return { success: false, error: error.message || '開啟戰場失敗。' };
+  }
+}
+
+export async function startBattle(battleId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await ensureAdminAuth();
+    if (!battleId) {
+      throw new Error('缺少戰場 ID。');
+    }
+    
+    const battleRef = doc(db, 'combatEncounters', battleId);
+    await updateDoc(battleRef, {
+      status: 'active',
+    });
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to start battle:', error);
+    return { success: false, error: error.message || '開始戰場失敗。' };
   }
 }

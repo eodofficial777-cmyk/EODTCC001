@@ -81,7 +81,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { updateMaintenanceStatus } from '@/app/actions/update-maintenance-status';
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
-import { createBattle } from '@/app/actions/manage-battle';
+import { createBattle, startBattle } from '@/app/actions/manage-battle';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -2019,7 +2019,7 @@ function BattleManagement() {
       () => (firestore ? query(collection(firestore, 'combatEncounters'), orderBy('startTime', 'desc'), limit(1)) : null),
       [firestore]
     );
-    const { data: battleData, isLoading: isBattleLoading } = useCollection<CombatEncounter>(latestBattleQuery);
+    const { data: battleData, isLoading: isBattleLoading, mutate } = useCollection<CombatEncounter>(latestBattleQuery);
     const currentBattle = battleData?.[0];
 
     const addMonster = (faction: 'yelu' | 'association') => {
@@ -2070,6 +2070,7 @@ function BattleManagement() {
             setBattleName('');
             setYeluMonsters([]);
             setAssociationMonsters([]);
+            mutate();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '開啟失敗', description: error.message });
         } finally {
@@ -2077,6 +2078,21 @@ function BattleManagement() {
         }
     };
     
+    const handleStartBattle = async () => {
+        if (!currentBattle) return;
+        setIsLoading(true);
+        try {
+            const result = await startBattle(currentBattle.id);
+            if (result.error) throw new Error(result.error);
+            toast({ title: '成功', description: '戰場已正式開始！' });
+            mutate();
+        } catch (error: any) {
+             toast({ variant: 'destructive', title: '操作失敗', description: error.message });
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
     const renderMonsterForm = (faction: 'yelu' | 'association', monsters: Partial<Monster>[]) => {
         const factionInfo = FACTIONS[faction];
         return (
@@ -2121,7 +2137,7 @@ function BattleManagement() {
             <p className="text-muted-foreground mt-2">
                 開啟新的共鬥戰場，設定災獸屬性，並查看過去的戰鬥紀錄。
             </p>
-            {isBattleLoading ? <Skeleton className="h-48 w-full mt-4" /> : currentBattle && (
+            {isBattleLoading ? <Skeleton className="h-48 w-full mt-4" /> : currentBattle && currentBattle.status !== 'ended' && (
               <Card className="mt-4 border-primary">
                   <CardHeader>
                       <CardTitle>當前戰場：{currentBattle.name}</CardTitle>
@@ -2151,6 +2167,11 @@ function BattleManagement() {
                           })}
                       </div>
                   </CardContent>
+                  {currentBattle.status === 'preparing' && (
+                    <CardFooter>
+                        <Button onClick={handleStartBattle} disabled={isLoading} variant="destructive">手動開始戰鬥</Button>
+                    </CardFooter>
+                  )}
               </Card>
             )}
             <Card className="mt-4">

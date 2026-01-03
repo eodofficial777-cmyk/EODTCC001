@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Heart, Shield, Sword, Zap, Target, Timer, Info, CheckCircle2 } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, orderBy, limit, where } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -24,7 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 
-const PreparationCountdown = ({ preparationEndTime, battleName }: { preparationEndTime: Date, battleName: string }) => {
+const PreparationCountdown = ({ preparationEndTime, battleName, onFinished }: { preparationEndTime: Date, battleName: string, onFinished: () => void }) => {
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
@@ -35,6 +35,7 @@ const PreparationCountdown = ({ preparationEndTime, battleName }: { preparationE
       if (difference <= 0) {
         setTimeLeft('00:00');
         clearInterval(interval);
+        onFinished();
         return;
       }
 
@@ -45,7 +46,7 @@ const PreparationCountdown = ({ preparationEndTime, battleName }: { preparationE
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [preparationEndTime]);
+  }, [preparationEndTime, onFinished]);
 
   return (
     <Card className="text-center bg-blue-500/10 border-blue-500/30">
@@ -155,7 +156,7 @@ export default function BattlegroundPage() {
     () => (firestore ? query(collection(firestore, 'combatEncounters'), orderBy('startTime', 'desc'), limit(1)) : null),
     [firestore]
   );
-  const { data: battleData, isLoading: isBattleLoading } = useCollection<CombatEncounter>(latestBattleQuery);
+  const { data: battleData, isLoading: isBattleLoading, mutate } = useCollection<CombatEncounter>(latestBattleQuery);
   const currentBattle = battleData?.[0];
 
   const allItemsQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'items') : null), [firestore]);
@@ -257,6 +258,10 @@ export default function BattlegroundPage() {
     setActionCooldown(Date.now());
   }
 
+  const handleCountdownFinished = useCallback(() => {
+    mutate(); // Re-fetch the battle data
+  }, [mutate]);
+
   // --- Render Functions ---
   const renderMonsters = (factionId: 'yelu' | 'association') => {
        const monsters = currentBattle?.monsters.filter(m => m.factionId === factionId) || [];
@@ -325,7 +330,7 @@ export default function BattlegroundPage() {
         <div>{renderMonsters(factionId)}</div>
         {combatStatus === 'preparing' && preparationEndTime ? (
           <div>
-            <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle.name} />
+            <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle.name} onFinished={handleCountdownFinished} />
              {isWanderer && !supportedFaction && (
               <Alert className="mt-4">
                 <Info className="h-4 w-4" />
