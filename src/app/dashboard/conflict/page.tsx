@@ -8,7 +8,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RefreshCw } from 'lucide-react';
@@ -64,25 +63,13 @@ export default function ConflictPage() {
   const totalWeightedScore = (yelu?.weightedScore ?? 0) + (association?.weightedScore ?? 0);
   const yeluPercentage = totalWeightedScore > 0 ? (yelu?.weightedScore ?? 0) / totalWeightedScore * 100 : 50;
 
-  const pastSeasons = [
-    { id: 13, yelu: 1250, association: 1100, winner: 'yelu' },
-    { id: 12, yelu: 980, association: 1400, winner: 'association' },
-  ];
-
   return (
     <div className="max-w-4xl mx-auto w-full">
       <Card className="bg-card/50">
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle className="font-headline text-3xl">戰區態勢 (War Room)</CardTitle>
+            <CardTitle className="font-headline text-3xl">陣營發展情形</CardTitle>
             <div className="flex items-center gap-4">
-                <Badge variant="secondary" className="bg-green-500/20 text-green-300 border-green-500">
-                    <span className="relative flex h-2 w-2 mr-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                    </span>
-                    積分加權機制運作中
-                </Badge>
                 <Button onClick={fetchData} variant="ghost" size="icon" disabled={isLoading}>
                     <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                 </Button>
@@ -130,15 +117,8 @@ export default function ConflictPage() {
 
             <div>
                 <h4 className="font-headline text-xl mb-4 text-center">過往賽季紀錄</h4>
-                <div className="flex justify-center gap-4">
-                    {pastSeasons.map(season => (
-                        <div key={season.id} className={`p-4 rounded-lg border-2 w-32 text-center ${season.winner === 'yelu' ? 'border-destructive' : 'border-blue-500'}`} style={{backgroundColor: season.winner === 'yelu' ? `${FACTIONS.yelu.color}20` : `${FACTIONS.association.color}20` }}>
-                            <p className="font-bold">賽季 {season.id}</p>
-                            <p className="font-mono text-sm">
-                                <span className="text-destructive">{season.yelu}</span> vs <span className="text-blue-400">{season.association}</span>
-                            </p>
-                        </div>
-                    ))}
+                <div className="text-center text-muted-foreground py-4">
+                  沒有過往賽季紀錄
                 </div>
             </div>
         </CardContent>
