@@ -41,6 +41,24 @@
       "description": "A fearsome beast for the faction conflict",
       "imageUrl": "https://images.unsplash.com/photo-1763054766315-e9216ab5e223?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxmYW50YXN5JTIwbW9uc3RlcnxlbnwwfHx8fDE3Njc0MzU4NzZ8MA&ixlib=rb-4.1.0&q=80&w=1080",
       "imageHint": "fantasy monster"
+    },
+    {
+      "id": "monster-1",
+      "description": "A dark fantasy monster with glowing eyes",
+      "imageUrl": "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxkYXJrJTIwbW9uc3RlcnxlbnwwfHx8fDE3Njc0NTk5ODl8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "dark monster"
+    },
+    {
+      "id": "monster-2",
+      "description": "A horned beast in a forest",
+      "imageUrl": "https://images.unsplash.com/photo-1615625391366-86185f46e521?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxob3JuZWQlMjBiZWFzdHxlbnwwfHx8fDE3Njc0NTk5ODl8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "horned beast"
+    },
+    {
+      "id": "monster-3",
+      "description": "A crystalline golem",
+      "imageUrl": "https://images.unsplash.com/photo-1630189186089-d83dec9ccc26?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxjcnlzdGFsJTIwZ29sZW18ZW58MHx8fHwxNzY3Mzc2NDYxfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "crystal golem"
     }
   ]
 }
