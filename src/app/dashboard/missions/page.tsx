@@ -10,7 +10,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from '@/components/ui/card';
 import {
   Table,
@@ -51,14 +50,11 @@ import {
 import {
   collection,
   doc,
-  query,
-  orderBy,
-  limit,
-  where,
 } from 'firebase/firestore';
 import { FACTIONS } from '@/lib/game-data';
 import { submitTask } from '@/app/actions/submit-task';
 import { getTasks } from '@/app/actions/get-tasks';
+import { getUserTasks } from '@/app/actions/get-user-tasks';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { RefreshCw } from 'lucide-react';
@@ -115,12 +111,7 @@ function MissionSubmitForm({
 
     const taskTypeInfo = taskTypes.find(t => t.id === values.taskTypeId);
 
-    // This checks user's submitted tasks against the task *type* id.
-    // If the task id is 'main', and the user already has a task with id 'main', it fails.
     if (taskTypeInfo?.singleSubmission) {
-        // We need to query the tasks collection for this user and task type.
-        // For now, let's assume `userData.tasks` stores task *type* IDs for single-submission tasks.
-        // A better approach would be a dedicated subcollection or a query.
         const submittedTaskTypes = userData.tasks?.map((t: string) => t.split('_')[0]); // simplified logic
         if (submittedTaskTypes?.includes(taskTypeInfo.id)) {
             form.setError('taskTypeId', { message: '您已經提交過此類型的任務。' });
@@ -332,15 +323,34 @@ function AllSubmissionsFeed({ tasks, isLoading, onRefresh, taskTypes }: { tasks:
 }
 
 function UserSubmissionsHistory({ userId, taskTypes }: { userId: string, taskTypes: TaskType[] }) {
-    const firestore = useFirestore();
-    const userTasksQuery = useMemoFirebase(
-      () =>
-        firestore && userId
-          ? query(collection(firestore, 'tasks'), where('userId', '==', userId), orderBy('submissionDate', 'desc'), limit(10))
-          : null,
-      [firestore, userId]
-    );
-    const { data: userTasks, isLoading } = useCollection(userTasksQuery);
+    const { toast } = useToast();
+    const [userTasks, setUserTasks] = React.useState<any[] | null>(null);
+    const [isLoading, setIsLoading] = React.useState(true);
+
+    React.useEffect(() => {
+      const loadUserTasks = async () => {
+        if (!userId) return;
+        setIsLoading(true);
+        try {
+          const result = await getUserTasks(userId);
+          if (result.error) {
+            throw new Error(result.error);
+          }
+          setUserTasks(result.tasks || []);
+        } catch (error: any) {
+          toast({
+            variant: 'destructive',
+            title: '載入您的任務失敗',
+            description: error.message,
+          });
+          setUserTasks([]);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      loadUserTasks();
+    }, [userId, toast]);
     
     const getTaskName = (taskTypeId: string) => {
         return taskTypes.find(t => t.id === taskTypeId)?.name || taskTypeId;
@@ -442,7 +452,7 @@ export default function MissionsPage() {
         title: '載入任務失敗',
         description: error.message,
       });
-      setTasks([]); // Set to empty array on error to prevent crash
+      setTasks([]);
     } finally {
       setTasksLoading(false);
     }
