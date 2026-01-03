@@ -2,11 +2,6 @@
 
 import {
   getFirestore,
-  collection,
-  getDocs,
-  query,
-  where,
-  Timestamp,
   doc,
   getDoc,
 } from 'firebase/firestore';
@@ -38,50 +33,26 @@ export interface ConflictData {
 
 export async function getConflictData(): Promise<{ data?: ConflictData, error?: string }> {
   try {
-    // 1. Get start of the current month
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfMonthTimestamp = Timestamp.fromDate(startOfMonth);
+    const seasonDocRef = doc(db, 'war-seasons', 'current');
+    const seasonDocSnap = await getDoc(seasonDocRef);
 
-    // 2. Fetch all tasks submitted this month
-    const tasksQuery = query(
-      collection(db, 'tasks'),
-      where('submissionDate', '>=', startOfMonthTimestamp)
-    );
-    const tasksSnapshot = await getDocs(tasksQuery);
-
-    const activePlayersYelu = new Set<string>();
-    const activePlayersAssociation = new Set<string>();
-
-    tasksSnapshot.forEach(taskDoc => {
-      const task = taskDoc.data();
-      // Only count active players from yelu and association
-      if (task.userFactionId === 'yelu') {
-        activePlayersYelu.add(task.userId);
-      } else if (task.userFactionId === 'association') {
-        activePlayersAssociation.add(task.userId);
-      }
-    });
-
-    const yeluPlayerCount = activePlayersYelu.size;
-    const associationPlayerCount = activePlayersAssociation.size;
-    const totalActivePlayers = yeluPlayerCount + associationPlayerCount;
-
-    // 3. Fetch current faction scores
-    const yeluDoc = await getDoc(doc(db, 'factions', 'yelu'));
-    const associationDoc = await getDoc(doc(db, 'factions', 'association'));
-
-    if (!yeluDoc.exists() || !associationDoc.exists()) {
-        throw new Error("無法讀取陣營資料");
+    if (!seasonDocSnap.exists()) {
+        throw new Error("找不到當前賽季資料。請先從管理後台植入初始資料。");
     }
 
-    const yeluRawScore = yeluDoc.data().score || 0;
-    const associationRawScore = associationDoc.data().score || 0;
+    const seasonData = seasonDocSnap.data();
 
-    // 4. Calculate weights and weighted scores
+    const yeluPlayerCount = seasonData.yelu.activePlayers.length;
+    const associationPlayerCount = seasonData.association.activePlayers.length;
+    const totalActivePlayers = yeluPlayerCount + associationPlayerCount;
+
+    const yeluRawScore = seasonData.yelu.rawScore || 0;
+    const associationRawScore = seasonData.association.rawScore || 0;
+
+    // Calculate weights and weighted scores
     // Avoid division by zero
-    const yeluWeight = yeluPlayerCount > 0 ? totalActivePlayers / yeluPlayerCount : 1;
-    const associationWeight = associationPlayerCount > 0 ? totalActivePlayers / associationPlayerCount : 1;
+    const yeluWeight = totalActivePlayers > 0 && yeluPlayerCount > 0 ? totalActivePlayers / yeluPlayerCount : 1;
+    const associationWeight = totalActivePlayers > 0 && associationPlayerCount > 0 ? totalActivePlayers / associationPlayerCount : 1;
 
     const yeluWeightedScore = yeluRawScore * yeluWeight;
     const associationWeightedScore = associationRawScore * associationWeight;

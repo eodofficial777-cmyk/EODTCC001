@@ -57,10 +57,10 @@ export async function seedDatabase() {
 
     // 5. Seed Items
      const items = [
-        { id: 'item-1', name: '回復藥水', price: 100, description: '恢復少量HP。', effects: '恢復 15 HP', itemTypeId: 'consumable', factionId: 'yelu', raceId: 'all', isPublished: true, imageUrl: 'https://picsum.photos/seed/item1/400/300' },
-        { id: 'item-2', name: '遠古之劍', price: 5000, description: '一把鋒利的舊時代武器。', effects: 'ATK +10', itemTypeId: 'equipment', factionId: 'yelu', raceId: 'all', isPublished: true, imageUrl: 'https://picsum.photos/seed/item2/400/300' },
-        { id: 'item-3', name: '神秘護符', price: 2500, description: '據說能帶來好運。', effects: '無', itemTypeId: 'special', factionId: 'association', raceId: 'all', isPublished: true, imageUrl: 'https://picsum.photos/seed/item3/400/300' },
-        { id: 'item-4', name: '皮製護甲', price: 1200, description: '提供基礎的防護。', effects: 'DEF +5', itemTypeId: 'equipment', factionId: 'association', raceId: 'human', isPublished: false, imageUrl: 'https://picsum.photos/seed/item4/400/300' },
+        { id: 'item-1', name: '回復藥水', price: 100, description: '恢復少量HP。', effects: [{ trigger: 'on_use', probability: 100, effectType: 'hp_recovery', value: 15 }], itemTypeId: 'consumable', factionId: 'yelu', raceId: 'all', isPublished: true, imageUrl: 'https://picsum.photos/seed/item1/400/300' },
+        { id: 'item-2', name: '遠古之劍', price: 5000, description: '一把鋒利的舊時代武器。', effects: [{ attribute: 'atk', operator: '+', value: 10 }], itemTypeId: 'equipment', factionId: 'yelu', raceId: 'all', isPublished: true, imageUrl: 'https://picsum.photos/seed/item2/400/300' },
+        { id: 'item-3', name: '神秘護符', price: 2500, description: '據說能帶來好運。', effects: [], itemTypeId: 'special', factionId: 'association', raceId: 'all', isPublished: true, imageUrl: 'https://picsum.photos/seed/item3/400/300' },
+        { id: 'item-4', name: '皮製護甲', price: 1200, description: '提供基礎的防護。', effects: [{ attribute: 'def', operator: '+', value: 5 }], itemTypeId: 'equipment', factionId: 'association', raceId: 'human', isPublished: false, imageUrl: 'https://picsum.photos/seed/item4/400/300' },
     ];
     for (const item of items) {
       const itemRef = db.collection('items').doc(item.id);
@@ -78,6 +78,21 @@ export async function seedDatabase() {
         const titleRef = db.collection('titles').doc(title.id);
         batch.set(titleRef, title);
     }
+
+    // 7. Seed initial war season
+    const seasonRef = db.collection('war-seasons').doc('current');
+    batch.set(seasonRef, {
+        id: 'current',
+        startDate: new Date(),
+        yelu: {
+            rawScore: 0,
+            activePlayers: [],
+        },
+        association: {
+            rawScore: 0,
+            activePlayers: [],
+        },
+    });
 
 
     // Create an empty tasks collection by adding and immediately deleting a document
