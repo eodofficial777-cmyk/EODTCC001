@@ -140,6 +140,7 @@ export default function AuthPage() {
         equipment: [],
         items: [],
         tasks: [],
+        submittedMainQuest: false,
         attributes: {
           hp: selectedRace.hp,
           atk: selectedRace.atk,
@@ -180,7 +181,7 @@ export default function AuthPage() {
     } catch (error: any) {
       console.error('登入失敗:', error);
       let description = '請檢查您的帳號或密碼。';
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
          description = '帳號或密碼錯誤。';
       } else if (error.code === 'auth/user-disabled') {
          description = '此帳戶已被停用或尚未審核通過。';
@@ -256,8 +257,8 @@ export default function AuthPage() {
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" className="w-full">
-                    登入
+                  <Button type="submit" className="w-full" disabled={loginForm.formState.isSubmitting}>
+                    {loginForm.formState.isSubmitting ? '登入中...' : '登入'}
                   </Button>
                   <div className="mt-2 text-center text-xs text-muted-foreground">
                     帳戶需要經過管理員批准後才能啟用登入。
@@ -344,7 +345,7 @@ export default function AuthPage() {
                       render={({ field }) => (
                         <FormItem className="grid gap-2">
                           <FormLabel>種族</FormLabel>
-                           <Select onValuechange={field.onChange} defaultValue={field.value}>
+                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="選擇種族" />
@@ -417,3 +418,4 @@ export default function AuthPage() {
     </div>
   );
 }
+

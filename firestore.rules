@@ -3,7 +3,7 @@
  * It combines a strict user-ownership model for player-specific data with a global read-only model for common game data.
  * Administrative privileges are managed via a database-as-access-control (DBAC) collection.
  *
- * Data Structure: Player-specific data, such as user profiles, characters, and task submissions, is nested
+ * Data Structure: Player-specific data, such as user profiles, characters, and activity logs, is nested
  * under the `/users/{userId}` path. This structure leverages path-based security to ensure players can only
  * access their own information. Global game data, like factions, races, items, and skills, is stored in
  * top-level collections, making it easily accessible for all clients.
@@ -86,11 +86,9 @@ service cloud.firestore {
      * @principle A user can create their own profile, which can then only be managed by themselves or an admin.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if false;
+      allow get, update, delete: if isOwner(userId) || isAdmin();
+      allow list: if false; // Security Best Practice: Never allow listing all users.
       allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if (isOwner(userId) || isAdmin()) && resource != null;
-      allow delete: if (isOwner(userId) || isAdmin()) && resource != null;
     }
 
     /**
@@ -101,11 +99,7 @@ service cloud.firestore {
      * @principle Restricts all access to a user's own data tree, enforcing strict ownership.
      */
     match /users/{userId}/characters/{characterId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId) && hasCorrectUserId(userId);
-      allow update: if isOwnerOfExistingDoc(userId) && isUserIdImmutable();
-      allow delete: if isOwnerOfExistingDoc(userId);
+      allow read, write: if isOwner(userId);
     }
 
     /**
@@ -113,14 +107,10 @@ service cloud.firestore {
      * @path /users/{userId}/tasks/{taskId}
      * @allow (list) The owning user listing all tasks they have submitted.
      * @deny (create) A user trying to submit a task on behalf of another user.
-     * @principle Restricts all access to a user's own data tree, enforcing strict ownership.
+     * @principle This path is deprecated in favor of the global /tasks collection.
      */
     match /users/{userId}/tasks/{taskId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId) && hasCorrectUserId(userId);
-      allow update: if isOwnerOfExistingDoc(userId) && isUserIdImmutable();
-      allow delete: if isOwnerOfExistingDoc(userId);
+      allow read, write: if false; // Deprecated, use global /tasks collection
     }
 
     /**
@@ -131,16 +121,27 @@ service cloud.firestore {
      * @principle Restricts read access to the user's own data tree. Write access is admin-only.
      */
     match /users/{userId}/activityLogs/{logId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow get, list: if isOwner(userId);
+      allow create, update, delete: if isAdmin();
     }
 
     // ----------------------------------------------------------------------
-    // Global Game Data Collections (Public Read, Admin Write)
+    // Global Game Data Collections (Public Read, Admin/Specific Write)
     // ----------------------------------------------------------------------
+    
+    /**
+     * @description Stores all task submissions. Readable by anyone, creatable by any signed-in user.
+     * @path /tasks/{taskId}
+     * @allow (list, get) Any client can read the list of tasks for display.
+     * @allow (create) Any signed-in user can submit a task.
+     * @deny (update, delete) Only admins can modify or delete tasks.
+     * @principle Supports a public feed of submissions while protecting data integrity.
+     */
+    match /tasks/{taskId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && hasCorrectUserId(request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
 
     /**
      * @description Stores global faction information.
@@ -150,11 +151,8 @@ service cloud.firestore {
      * @principle Data is public for client use, but mutable only by administrators.
      */
     match /factions/{factionId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
@@ -165,11 +163,8 @@ service cloud.firestore {
      * @principle Data is public for client use, but mutable only by administrators.
      */
     match /races/{raceId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
@@ -180,11 +175,8 @@ service cloud.firestore {
      * @principle Data is public for client use, but mutable only by administrators.
      */
     match /taskTypes/{taskTypeId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
@@ -195,11 +187,8 @@ service cloud.firestore {
      * @principle Data is public for client use, but mutable only by administrators.
      */
     match /items/{itemId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
@@ -210,11 +199,8 @@ service cloud.firestore {
      * @principle Data is public for client use, but mutable only by administrators.
      */
     match /itemTypes/{itemTypeId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
@@ -225,11 +211,8 @@ service cloud.firestore {
      * @principle Data is public for client use, but mutable only by administrators.
      */
     match /equipment/{equipmentId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
@@ -240,11 +223,8 @@ service cloud.firestore {
      * @principle Data is public for client use, but mutable only by administrators.
      */
     match /combatEncounters/{combatEncounterId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
@@ -255,11 +235,8 @@ service cloud.firestore {
      * @principle Data is public for client use, but mutable only by administrators.
      */
     match /combatEncounters/{combatEncounterId}/combatLogs/{combatLogId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
@@ -270,11 +247,8 @@ service cloud.firestore {
      * @principle Data is public for client use, but mutable only by administrators.
      */
     match /titles/{titleId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
@@ -285,11 +259,8 @@ service cloud.firestore {
      * @principle Data is public for client use, but mutable only by administrators.
      */
     match /characterTitles/{characterTitleId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
@@ -300,11 +271,8 @@ service cloud.firestore {
      * @principle Data is public for client use, but mutable only by administrators.
      */
     match /skills/{skillId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     // ----------------------------------------------------------------------
@@ -314,18 +282,14 @@ service cloud.firestore {
     /**
      * @description Manages user administrative roles. The existence of a document grants admin privileges.
      * @path /roles_admin/{userId}
-     * @allow (create, delete) An existing admin granting or revoking admin rights for another user.
+     * @allow (get) Any signed-in user checking their own admin status.
      * @deny (list) A non-admin attempting to list all administrators.
      * @principle Implements Database-as-Access-Control (DBAC) for managing roles.
      */
     match /roles_admin/{userId} {
       allow get: if isSignedIn();
       allow list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
   }
 }
-
-    

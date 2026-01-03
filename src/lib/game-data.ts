@@ -39,3 +39,28 @@ export const FACTIONS = {
     color: 'hsl(47.9 95.8% 53.1%)', // Yellow
   },
 };
+
+export const TASK_TYPES = {
+    general: {
+        id: 'general',
+        name: '一般圖文任務',
+        description: '完成後獲得榮譽點+1，遊戲貨幣+10。',
+        honorPoints: 1,
+        currency: 10,
+    },
+    main: {
+        id: 'main',
+        name: '主線圖文任務',
+        description: '完成後獲得榮譽點+3，貨幣+20。每個角色僅限提交一次。',
+        honorPoints: 3,
+        currency: 20,
+    },
+    premium: {
+        id: 'premium',
+        name: '精緻圖文任務',
+        description: '完成後獲得榮譽點+10，貨幣+40。代表高品質或特別創作。',
+        honorPoints: 10,
+        currency: 40,
+    },
+}
+
