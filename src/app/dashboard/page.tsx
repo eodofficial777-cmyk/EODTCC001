@@ -91,7 +91,7 @@ export default function DashboardPage() {
                 </>
               ) : (
                 <>
-                  {faction && <Badge variant="secondary">陣營：{faction.name}</Badge>}
+                  {faction && <Badge style={{ backgroundColor: faction.color, color: 'white' }}>{faction.name}</Badge>}
                   {race && <Badge variant="secondary">種族：{race.name}</Badge>}
                 </>
               )}

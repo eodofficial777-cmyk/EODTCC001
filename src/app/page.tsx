@@ -44,7 +44,7 @@ import {
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { RACES } from '@/lib/game-data';
+import { RACES, FACTIONS } from '@/lib/game-data';
 
 const registerSchema = z.object({
   account: z.string().min(1, '登入帳號為必填'),
@@ -329,9 +329,9 @@ export default function AuthPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="yelu">夜鷺</SelectItem>
-                              <SelectItem value="association">協會</SelectItem>
-                              <SelectItem value="wanderer">流浪者</SelectItem>
+                              {Object.values(FACTIONS).map((faction) => (
+                                <SelectItem key={faction.id} value={faction.id}>{faction.name}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -344,16 +344,16 @@ export default function AuthPage() {
                       render={({ field }) => (
                         <FormItem className="grid gap-2">
                           <FormLabel>種族</FormLabel>
-                           <Select onValueChange={field.onChange} defaultValue={field.value}>
+                           <Select onValuechange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="選擇種族" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
-                              <SelectItem value="corruptor">侵蝕者</SelectItem>
-                              <SelectItem value="esper">超能者</SelectItem>
-                              <SelectItem value="human">純人類</SelectItem>
+                             <SelectContent>
+                              {Object.values(RACES).map((race) => (
+                                <SelectItem key={race.id} value={race.id}>{race.name}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                           <FormMessage />

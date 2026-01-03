@@ -30,9 +30,8 @@ import { UserNav } from './user-nav';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useDoc } from '@/firebase';
-import { useUser } from '@/firebase';
-import { doc, getFirestore } from 'firebase/firestore';
-import { useMemo } from 'react';
+import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: '角色資訊' },
@@ -51,9 +50,9 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const { user } = useUser();
-  const firestore = getFirestore();
+  const firestore = useFirestore();
 
-  const adminRef = useMemo(
+  const adminRef = useMemoFirebase(
     () => (user ? doc(firestore, `roles_admin/${user.uid}`) : null),
     [user, firestore]
   );

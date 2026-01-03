@@ -26,15 +26,16 @@ export const FACTIONS = {
   yelu: {
     id: 'yelu',
     name: '夜鷺',
+    color: 'hsl(var(--destructive))',
   },
   association: {
     id: 'association',
     name: '協會',
+    color: 'hsl(221.2 83.2% 53.3%)', // Blue
   },
   wanderer: {
     id: 'wanderer',
     name: '流浪者',
+    color: 'hsl(47.9 95.8% 53.1%)', // Yellow
   },
 };
-
-    

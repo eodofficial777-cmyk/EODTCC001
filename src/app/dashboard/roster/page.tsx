@@ -24,14 +24,15 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { ListOrdered, Search } from 'lucide-react';
+import { FACTIONS, RACES } from '@/lib/game-data';
 
 const rosterData = [
-  { id: 1, name: '角色A', faction: '涅槃', race: '人類', honorPoints: 1250 },
-  { id: 2, name: '角色B', faction: '樂園', race: '獸人', honorPoints: 1100 },
-  { id: 3, name: '角色C', faction: '涅槃', race: '精靈', honorPoints: 980 },
-  { id: 4, name: '角色D', faction: '中立', race: '改造人', honorPoints: 850 },
-  { id: 5, name: '角色E', faction: '樂園', race: '人類', honorPoints: 1300 },
-  { id: 6, name: '角色F', faction: '涅槃', race: '獸人', honorPoints: 720 },
+  { id: 1, name: '角色A', faction: 'yelu', race: 'human', honorPoints: 1250 },
+  { id: 2, name: '角色B', faction: 'association', race: 'esper', honorPoints: 1100 },
+  { id: 3, name: '角色C', faction: 'yelu', race: 'corruptor', honorPoints: 980 },
+  { id: 4, name: '角色D', faction: 'wanderer', race: 'human', honorPoints: 850 },
+  { id: 5, name: '角色E', faction: 'association', race: 'esper', honorPoints: 1300 },
+  { id: 6, name: '角色F', faction: 'yelu', race: 'corruptor', honorPoints: 720 },
 ];
 
 export default function RosterPage() {
@@ -53,9 +54,7 @@ export default function RosterPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">所有陣營</SelectItem>
-              <SelectItem value="nirvana">涅槃</SelectItem>
-              <SelectItem value="paradise">樂園</SelectItem>
-              <SelectItem value="neutral">中立</SelectItem>
+              {Object.values(FACTIONS).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select>
@@ -64,10 +63,7 @@ export default function RosterPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">所有種族</SelectItem>
-              <SelectItem value="human">人類</SelectItem>
-              <SelectItem value="beast">獸人</SelectItem>
-              <SelectItem value="elf">精靈</SelectItem>
-              <SelectItem value="cyborg">改造人</SelectItem>
+              {Object.values(RACES).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Button variant="outline" className="w-full sm:w-auto">
@@ -90,20 +86,24 @@ export default function RosterPage() {
             <TableBody>
               {rosterData
                 .sort((a, b) => b.honorPoints - a.honorPoints)
-                .map((character) => (
-                  <TableRow key={character.id}>
-                    <TableCell className="font-medium">{character.name}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{character.faction}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{character.race}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {character.honorPoints.toLocaleString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                .map((character) => {
+                  const faction = FACTIONS[character.faction as keyof typeof FACTIONS];
+                  const race = RACES[character.race as keyof typeof RACES];
+                  return (
+                    <TableRow key={character.id}>
+                      <TableCell className="font-medium">{character.name}</TableCell>
+                      <TableCell>
+                        <Badge style={{ backgroundColor: faction?.color, color: 'white' }}>{faction?.name}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{race?.name}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {character.honorPoints.toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
             </TableBody>
           </Table>
         </div>

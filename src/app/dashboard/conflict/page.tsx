@@ -18,16 +18,19 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { useIsClient } from '@/hooks/use-is-client';
+import { FACTIONS } from '@/lib/game-data';
 
 const factionData = [
-  { name: '涅槃', score: 45000, players: 45 },
-  { name: '樂園', score: 42500, players: 42 },
+  { id: 'yelu', name: FACTIONS.yelu.name, score: 45000, players: 45, color: FACTIONS.yelu.color },
+  { id: 'association', name: FACTIONS.association.name, score: 42500, players: 42, color: FACTIONS.association.color },
+  // Assuming wanderers don't participate in conflict score
 ];
 
 const processedData = factionData.map((faction) => ({
   name: faction.name,
   總分: faction.score,
   人均貢獻: Math.round(faction.score / faction.players),
+  fill: faction.color,
 }));
 
 export default function ConflictPage() {
@@ -40,9 +43,9 @@ export default function ConflictPage() {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       {factionData.map((faction) => (
-        <Card key={faction.name}>
+        <Card key={faction.name} style={{ borderTop: `4px solid ${faction.color}` }}>
           <CardHeader>
-            <CardTitle className="font-headline text-primary">{faction.name}</CardTitle>
+            <CardTitle className="font-headline" style={{ color: faction.color }}>{faction.name}</CardTitle>
             <CardDescription>當前賽季表現</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -91,7 +94,7 @@ export default function ConflictPage() {
                     }}
                   />
                   <Legend />
-                  <Bar yAxisId="left" dataKey="總分" fill="hsl(var(--secondary-foreground))" />
+                  <Bar yAxisId="left" dataKey="總分" />
                   <Bar yAxisId="right" dataKey="人均貢獻" fill="hsl(var(--primary))" />
                 </BarChart>
               </ResponsiveContainer>

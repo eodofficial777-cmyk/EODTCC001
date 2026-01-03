@@ -12,34 +12,75 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { CreditCard, LogOut, Settings, User } from 'lucide-react';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { CreditCard, LogOut, Settings, User, Gem, Shield } from 'lucide-react';
+import { useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import { FACTIONS, RACES } from '@/lib/game-data';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export function UserNav() {
-    const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar');
+  const { user, isUserLoading } = useUser();
+  const firestore = useFirestore();
+
+  const userDocRef = useMemoFirebase(
+    () => (user ? doc(firestore, `users/${user.uid}`) : null),
+    [user, firestore]
+  );
+  const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
+
+  const faction = userData?.factionId ? FACTIONS[userData.factionId as keyof typeof FACTIONS] : null;
+
+  const isLoading = isUserLoading || isUserDataLoading;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-full justify-start gap-2 px-2">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={userAvatar?.imageUrl} alt="@shadcn" data-ai-hint={userAvatar?.imageHint} />
-            <AvatarFallback>SC</AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col items-start">
-            <span className="text-sm font-medium">角色名稱</span>
-            <span className="text-xs text-muted-foreground">陣營</span>
+        <Button variant="ghost" className="relative h-auto w-full justify-start gap-2 px-2 py-1.5">
+          {isLoading ? (
+            <Skeleton className="h-10 w-10 rounded-full" />
+          ) : (
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={userData?.avatarUrl} alt={userData?.roleName ?? ''} />
+              <AvatarFallback>{userData?.roleName?.charAt(0) ?? 'U'}</AvatarFallback>
+            </Avatar>
+          )}
+          <div className="flex flex-col items-start truncate">
+            {isLoading ? (
+              <>
+                <Skeleton className="h-4 w-20 mb-1" />
+                <Skeleton className="h-3 w-16" />
+              </>
+            ) : (
+              <>
+                <span className="text-sm font-medium truncate">{userData?.roleName}</span>
+                <span className="text-xs text-muted-foreground">{faction?.name}</span>
+              </>
+            )}
           </div>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
+      <DropdownMenuContent className="w-64" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">角色名稱</p>
+            <p className="text-sm font-medium leading-none">{userData?.roleName}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              user@example.com
+              {user?.email}
             </p>
           </div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <div className="grid grid-cols-2 gap-1 p-1">
+           <div className="flex flex-col items-center justify-center p-2 rounded-md bg-muted/50">
+              <Shield className="h-5 w-5 text-primary mb-1"/>
+              <p className="text-xs text-muted-foreground">榮譽點</p>
+              <p className="font-mono font-bold text-sm">{userData?.honorPoints?.toLocaleString() ?? 0}</p>
+           </div>
+            <div className="flex flex-col items-center justify-center p-2 rounded-md bg-muted/50">
+              <Gem className="h-5 w-5 text-primary mb-1"/>
+              <p className="text-xs text-muted-foreground">貨幣</p>
+              <p className="font-mono font-bold text-sm">{userData?.currency?.toLocaleString() ?? 0}</p>
+           </div>
+        </div>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem>
