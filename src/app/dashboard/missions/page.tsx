@@ -98,6 +98,8 @@ function MissionSubmitForm({
     name: 'taskTypeId',
   });
   const selectedTaskType = taskTypes.find(t => t.id === selectedTaskTypeId);
+  
+  const userSubmittedTaskIds = userData?.tasks || [];
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!user || !userData) {
@@ -110,15 +112,12 @@ function MissionSubmitForm({
     }
 
     const taskTypeInfo = taskTypes.find(t => t.id === values.taskTypeId);
-
-    if (taskTypeInfo?.singleSubmission) {
-        const submittedTaskTypes = userData.tasks?.map((t: string) => t.split('_')[0]); // simplified logic
-        if (submittedTaskTypes?.includes(taskTypeInfo.id)) {
-            form.setError('taskTypeId', { message: '您已經提交過此類型的任務。' });
-            return;
-        }
+    
+    // Check if user already submitted a single-submission task
+    if (taskTypeInfo?.singleSubmission && userSubmittedTaskIds.includes(taskTypeInfo.id)) {
+        form.setError('taskTypeId', { message: '您已經提交過此類型的任務。' });
+        return;
     }
-
     
     if (isWanderer && selectedTaskType && !values.factionContribution) {
         form.setError('factionContribution', {
@@ -184,9 +183,13 @@ function MissionSubmitForm({
                     </FormControl>
                     <SelectContent>
                       {taskTypes.map((task) => (
-                        <SelectItem key={task.id} value={task.id} disabled={task.singleSubmission && userData?.tasks?.includes(task.id)}>
+                        <SelectItem 
+                            key={task.id} 
+                            value={task.id} 
+                            disabled={task.singleSubmission && userSubmittedTaskIds.includes(task.id)}
+                        >
                           {task.name} (+{task.honorPoints}榮譽, +{task.currency}貨幣)
-                          {task.singleSubmission && userData?.tasks?.includes(task.id) && ' (已完成)'}
+                          {task.singleSubmission && userSubmittedTaskIds.includes(task.id) && ' (已完成)'}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -322,7 +325,7 @@ function AllSubmissionsFeed({ tasks, isLoading, onRefresh, taskTypes }: { tasks:
   );
 }
 
-function UserSubmissionsHistory({ userId, taskTypes }: { userId: string, taskTypes: TaskType[] }) {
+function UserSubmissionsHistory({ userId, taskTypes, refreshTrigger }: { userId: string, taskTypes: TaskType[], refreshTrigger: number }) {
     const { toast } = useToast();
     const [userTasks, setUserTasks] = React.useState<any[] | null>(null);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -350,7 +353,7 @@ function UserSubmissionsHistory({ userId, taskTypes }: { userId: string, taskTyp
       };
 
       loadUserTasks();
-    }, [userId, toast]);
+    }, [userId, toast, refreshTrigger]);
     
     const getTaskName = (taskTypeId: string) => {
         return taskTypes.find(t => t.id === taskTypeId)?.name || taskTypeId;
@@ -425,10 +428,11 @@ export default function MissionsPage() {
     () => (user ? doc(firestore, `users/${user.uid}`) : null),
     [user, firestore]
   );
-  const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
+  const { data: userData, isLoading: isUserDataLoading, refetch: refetchUserData } = useDoc(userDocRef);
 
   const [tasks, setTasks] = React.useState<any[] | null>(null);
   const [tasksLoading, setTasksLoading] = React.useState(true);
+  const [refreshTrigger, setRefreshTrigger] = React.useState(0);
   
   const taskTypesQuery = useMemoFirebase(
     () => (firestore ? collection(firestore, 'taskTypes') : null),
@@ -438,6 +442,13 @@ export default function MissionsPage() {
 
   const { toast } = useToast();
 
+  const handleTaskSubmitted = () => {
+    // Trigger a refresh of both all tasks and user-specific data
+    loadTasks();
+    refetchUserData();
+    setRefreshTrigger(t => t + 1);
+  };
+  
   const loadTasks = React.useCallback(async () => {
     setTasksLoading(true);
     try {
@@ -479,7 +490,7 @@ export default function MissionsPage() {
             </CardContent>
           </Card>
         ) : user && userData && taskTypes ? (
-          <MissionSubmitForm user={user} userData={userData} taskTypes={safeTaskTypes} onTaskSubmitted={loadTasks} />
+          <MissionSubmitForm user={user} userData={userData} taskTypes={safeTaskTypes} onTaskSubmitted={handleTaskSubmitted} />
         ) : (
           <Card>
             <CardHeader>
@@ -495,7 +506,7 @@ export default function MissionsPage() {
          <AllSubmissionsFeed tasks={tasks} isLoading={tasksLoading} onRefresh={loadTasks} taskTypes={safeTaskTypes} />
       </div>
        <div className="lg:col-span-3">
-         {user && <UserSubmissionsHistory userId={user.uid} taskTypes={safeTaskTypes} />}
+         {user && <UserSubmissionsHistory userId={user.uid} taskTypes={safeTaskTypes} refreshTrigger={refreshTrigger} />}
        </div>
     </div>
   );
