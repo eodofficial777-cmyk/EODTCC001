@@ -1183,6 +1183,12 @@ const skillEffectTypes: { value: SkillEffectType; label: string }[] = [
     { value: 'probabilistic_damage', label: '機率傷害' },
 ];
 
+function formatSkillEffects(effects: SkillEffect[]): string {
+    if (!effects || effects.length === 0) return '無';
+    return effects.map(e => skillEffectTypes.find(t => t.value === e.effectType)?.label || e.effectType).join(', ');
+}
+
+
 function SkillEditor({
     skill,
     onSave,
@@ -1334,7 +1340,7 @@ function SkillManagement() {
         setActiveFactionTab(value);
         setEditingSkill(null);
         // Reset race tab to default when faction changes
-        setActiveRaceTab('corruptor'); 
+        setActiveRaceTab(Object.keys(RACES)[0]); 
     };
     
     const handleRaceTabChange = (value: string) => {
@@ -1400,15 +1406,15 @@ function SkillManagement() {
 
             <div className="border rounded-md mt-4">
                 <Table>
-                    <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>名稱</TableHead><TableHead>冷卻</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>名稱</TableHead><TableHead>效果</TableHead><TableHead>冷卻</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
                     <TableBody>
                         {isLoading ? (
                             <TableRow><TableCell colSpan={4}><Skeleton className="h-8 w-full"/></TableCell></TableRow>
                         ) : currentSkills.length > 0 ? (
                             currentSkills.map(skill => (
                                 <TableRow key={skill.id}>
-                                    <TableCell>{skill.id}</TableCell>
                                     <TableCell>{skill.name}</TableCell>
+                                    <TableCell className="text-xs truncate max-w-xs">{formatSkillEffects(skill.effects)}</TableCell>
                                     <TableCell>{skill.cooldown}</TableCell>
                                     <TableCell>
                                         <Button variant="ghost" size="icon" onClick={() => setEditingSkill(skill)}><Edit className="h-4 w-4"/></Button>
@@ -1538,5 +1544,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
-    
