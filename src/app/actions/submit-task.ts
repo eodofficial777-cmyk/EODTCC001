@@ -6,7 +6,8 @@ import {
   writeBatch,
   serverTimestamp,
   increment,
-  runTransaction
+  runTransaction,
+  collection
 } from 'firebase/firestore/lite';
 import { initializeApp, getApps } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
@@ -127,4 +128,3 @@ export async function submitTask(payload: SubmitTaskPayload) {
     return { error: error.message || '任務提交失敗，請稍後再試。' };
   }
 }
-
