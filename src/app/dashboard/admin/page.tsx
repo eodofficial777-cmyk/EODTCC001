@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -19,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/app/actions/seed-database';
 import { useState, useEffect } from 'react';
-import { getAllUsers } from '@/app/actions/get-all-users';
+import { getAdminData } from '@/app/actions/get-admin-data';
 import { updateUser } from '@/app/actions/update-user';
 import {
   Table,
@@ -45,7 +44,6 @@ import Image from 'next/image';
 import type { User, TaskType } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getTaskTypes } from '@/app/actions/get-task-types';
 import { updateTaskType } from '@/app/actions/update-task-type';
 import {
   Dialog,
@@ -71,7 +69,7 @@ function AccountApproval() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await getAllUsers();
+      const result = await getAdminData();
       if (result.error) {
         throw new Error(result.error);
       }
@@ -355,7 +353,7 @@ function TaskManagement() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await getTaskTypes();
+      const result = await getAdminData();
       if (result.error) throw new Error(result.error);
       setTaskTypes(result.taskTypes || []);
     } catch (error: any) {
