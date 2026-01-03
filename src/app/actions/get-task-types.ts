@@ -2,10 +2,20 @@
 'use server';
 
 import { getFirestore } from 'firebase-admin/firestore';
-import { adminApp } from './get-all-users'; // Import the initialized adminApp
+import { initializeApp, getApps, App } from 'firebase-admin/app';
+import { firebaseConfig } from '@/firebase/config';
 import type { TaskType } from '@/lib/types';
 
-// No longer initialize here, use the imported instance
+// Use a singleton pattern to initialize Firebase Admin
+let adminApp: App;
+if (!getApps().length) {
+  adminApp = initializeApp({
+    projectId: firebaseConfig.projectId,
+  });
+} else {
+  adminApp = getApps()[0];
+}
+
 const db = getFirestore(adminApp);
 
 export async function getTaskTypes(): Promise<{ taskTypes?: TaskType[]; error?: string }> {

@@ -6,7 +6,8 @@ import { firebaseConfig } from '@/firebase/config';
 import type { User } from '@/lib/types';
 
 // Use a singleton pattern to initialize Firebase Admin
-export let adminApp: App;
+// Do not export adminApp from a 'use server' file
+let adminApp: App;
 if (!getApps().length) {
   adminApp = initializeApp({
     projectId: firebaseConfig.projectId,
