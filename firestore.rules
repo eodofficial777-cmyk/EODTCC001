@@ -304,7 +304,7 @@ service cloud.firestore {
      * @principle Implements Database-as-Access-Control (DBAC) for managing roles.
      */
     match /roles_admin/{userId} {
-      allow get: if isAdmin();
+      allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();
       allow create: if isAdmin();
       allow update: if isAdmin();
