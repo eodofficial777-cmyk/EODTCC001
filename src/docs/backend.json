@@ -651,12 +651,35 @@
         "raceId": {
           "type": "string",
           "description": "Reference to the Race that can use the skill, can be null for all race skills.(Relationship: Race 1:N Skill)"
+        },
+        "cooldown": {
+            "type": "number",
+            "description": "The number of turns before the skill can be used again."
+        },
+        "effects": {
+            "type": "array",
+            "description": "Structured description of the skill's effects.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "effectType": { 
+                        "type": "string", 
+                        "enum": ["hp_recovery", "direct_damage", "atk_buff", "def_buff", "hp_cost", "probabilistic_damage"] 
+                    },
+                    "value": { "type": "number" },
+                    "probability": { "type": "number", "minimum": 0, "maximum": 100 },
+                    "duration": { "type": "number" }
+                },
+                "required": ["effectType"]
+            }
         }
       },
       "required": [
         "id",
         "name",
-        "description"
+        "description",
+        "cooldown",
+        "effects"
       ]
     },
     "ActivityLog": {
@@ -694,6 +717,41 @@
         "description",
         "change"
       ]
+    },
+    "CraftRecipe": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "CraftRecipe",
+        "type": "object",
+        "description": "Defines a crafting recipe for combining items.",
+        "properties": {
+            "id": {
+                "type": "string",
+                "description": "Unique identifier for the recipe."
+            },
+            "baseItemId": {
+                "type": "string",
+                "description": "The ID of the base item (usually equipment)."
+            },
+            "materialItemId": {
+                "type": "string",
+                "description": "The ID of the material item (usually a special item)."
+            },
+            "resultItemId": {
+                "type": "string",
+                "description": "The ID of the resulting crafted item."
+            },
+             "isPublished": {
+                "type": "boolean",
+                "description": "If true, the recipe will appear in the crafting reference list."
+            }
+        },
+        "required": [
+            "id",
+            "baseItemId",
+            "materialItemId",
+            "resultItemId",
+            "isPublished"
+        ]
     }
   },
   "auth": {
@@ -872,6 +930,22 @@
           ]
         }
       },
+       {
+        "path": "/craftRecipes/{recipeId}",
+        "definition": {
+          "entityName": "CraftRecipe",
+          "schema": {
+            "$ref": "#/backend/entities/CraftRecipe"
+          },
+          "description": "Stores crafting recipe information.",
+          "params": [
+            {
+              "name": "recipeId",
+              "description": "The unique identifier of the crafting recipe."
+            }
+          ]
+        }
+      },
       {
         "path": "/combatEncounters/{combatEncounterId}",
         "definition": {
@@ -976,3 +1050,5 @@
     "reasoning": "This Firestore structure prioritizes security, scalability, and debuggability, following the core design principles and strategy mandates. It emphasizes authorization independence, clarity of intent, and avoids custom claims (DBAC). The structure is designed to support secure `list` operations (QAPs) and maintain data integrity. \n\n**Authorization Independence:**\nTo ensure authorization independence, the structure denormalizes authorization context where necessary. For example, if `Character` access depended on `Faction` attributes, those attributes would be copied into every `Character` document.\n\n**Structural Segregation:**\nThe design segregates data based on security requirements. User-specific data is stored under `/users/{userId}`, while global data like `Factions` and `Races` reside in root-level collections. This simplifies security rules by ensuring that each collection has a homogeneous security posture. The global `tasks` collection is introduced for easy querying of all submissions by admins and for the public feed.\n\n**Access Modeling:**\n*   **Private Data:** User-owned data (e.g., Characters, ActivityLogs) is stored under `/users/{userId}` to leverage path-based ownership. This allows simple and efficient security rules based on `request.auth.uid`.\n*   **Collaborative Data:** The global `/tasks` collection is readable by all but can only be created by authenticated users, supporting a public submission feed.\n*   **Global Roles (DBAC):** Admin roles are managed through the existence of documents in dedicated collections (e.g., `/roles_admin/{uid}`).\n\n**QAPs Support:**\nThe structure supports secure `list` operations (QAPs) by:\n\n*   Segregating data with different access needs into separate collections. For instance, admin-only data is stored separately from user-owned data.\n*   Using path-based ownership for user-specific data, which allows listing only resources owned by the authenticated user.\n\n**Invariants:**\nThe structure supports data integrity through the use of ownership, timestamps, and denormalized data. Security rules can enforce constraints on these fields to maintain data consistency."
   }
 }
+
+    

@@ -1,6 +1,7 @@
 
 
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -81,3 +82,24 @@ export interface ActivityLog {
   description: string;
   change: string;
 }
+
+export type SkillEffectType = 'hp_recovery' | 'direct_damage' | 'atk_buff' | 'def_buff' | 'hp_cost' | 'probabilistic_damage';
+
+export type SkillEffect = {
+    effectType: SkillEffectType;
+    value?: number;
+    probability?: number;
+    duration?: number;
+}
+
+export interface Skill {
+    id: string;
+    name: string;
+    description: string;
+    cooldown: number;
+    factionId?: string;
+    raceId?: string;
+    effects: SkillEffect[];
+}
+
+    

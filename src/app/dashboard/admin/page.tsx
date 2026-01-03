@@ -37,11 +37,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe } from '@/lib/types';
+import type { User, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -72,6 +72,7 @@ import { Terminal } from 'lucide-react';
 import { updateItem } from '@/app/actions/update-item';
 import { resetSeason } from '@/app/actions/reset-season';
 import { updateCraftRecipe } from '@/app/actions/update-craft-recipe';
+import { updateSkill } from '@/app/actions/update-skill';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -1173,6 +1174,266 @@ function CraftingManagement() {
   )
 }
 
+const skillEffectTypes: { value: SkillEffectType; label: string }[] = [
+    { value: 'hp_recovery', label: '恢復HP' },
+    { value: 'direct_damage', label: '造成直接傷害' },
+    { value: 'atk_buff', label: '增加攻擊倍率(%)' },
+    { value: 'def_buff', label: '增加防禦倍率(%)' },
+    { value: 'hp_cost', label: '扣除HP' },
+    { value: 'probabilistic_damage', label: '機率傷害' },
+];
+
+function SkillEditor({
+    skill,
+    onSave,
+    onCancel,
+    isSaving,
+    owner,
+}: {
+    skill: Partial<Skill>;
+    onSave: (skill: Partial<Skill>) => void;
+    onCancel: () => void;
+    isSaving: boolean;
+    owner: { type: 'faction' | 'race'; id: string };
+}) {
+    const [editedSkill, setEditedSkill] = useState<Partial<Skill>>({
+        ...skill,
+        factionId: owner.type === 'faction' ? owner.id : skill.factionId,
+        raceId: owner.type === 'race' ? owner.id : skill.raceId,
+        effects: skill.effects || [],
+    });
+
+    const handleEffectChange = (index: number, field: keyof SkillEffect, value: any) => {
+        const newEffects = [...(editedSkill.effects || [])];
+        const effect = { ...newEffects[index], [field]: value };
+
+        // Reset irrelevant fields when effectType changes
+        if (field === 'effectType') {
+            if (value !== 'probabilistic_damage') {
+                delete effect.probability;
+            }
+            if (value !== 'atk_buff' && value !== 'def_buff') {
+                delete effect.duration;
+            }
+            if (value === 'probabilistic_damage' && !effect.probability) {
+                effect.probability = 100;
+            }
+        }
+
+        newEffects[index] = effect;
+        setEditedSkill({ ...editedSkill, effects: newEffects });
+    };
+
+    const addEffect = () => {
+        const newEffect: SkillEffect = { effectType: 'hp_recovery' };
+        setEditedSkill({ ...editedSkill, effects: [...(editedSkill.effects || []), newEffect] });
+    };
+
+    const removeEffect = (index: number) => {
+        setEditedSkill({ ...editedSkill, effects: editedSkill.effects?.filter((_, i) => i !== index) });
+    };
+    
+    const handleSave = () => {
+        if (!editedSkill.id || !editedSkill.name) {
+            toast({ variant: 'destructive', title: '錯誤', description: '技能 ID 和名稱為必填項目。'});
+            return;
+        }
+        onSave(editedSkill);
+    };
+
+    return (
+        <Card className="mt-4 bg-muted/30">
+            <CardHeader>
+                <CardTitle>{skill.id ? '編輯技能' : '新增技能'}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label>ID (英文，不可重複)</Label>
+                        <Input value={editedSkill.id || ''} onChange={e => setEditedSkill({ ...editedSkill, id: e.target.value })} disabled={!!skill.id} placeholder="skill-001" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>名稱</Label>
+                        <Input value={editedSkill.name || ''} onChange={e => setEditedSkill({ ...editedSkill, name: e.target.value })} placeholder="技能名稱" />
+                    </div>
+                    <div className="md:col-span-2 space-y-2">
+                        <Label>描述</Label>
+                        <Input value={editedSkill.description || ''} onChange={e => setEditedSkill({ ...editedSkill, description: e.target.value })} placeholder="技能效果說明" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>冷卻回合</Label>
+                        <Input type="number" value={editedSkill.cooldown || 0} onChange={e => setEditedSkill({ ...editedSkill, cooldown: parseInt(e.target.value) || 0 })} />
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <Label>效果</Label>
+                        <Button size="sm" variant="outline" onClick={addEffect}><Plus className="mr-2 h-4 w-4" />新增效果</Button>
+                    </div>
+                    {(editedSkill.effects || []).map((effect, index) => (
+                        <div key={index} className="p-3 border rounded-md bg-background/50 space-y-3 relative">
+                            <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeEffect(index)}><X className="h-4 w-4" /></Button>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <Select value={effect.effectType} onValueChange={(v) => handleEffectChange(index, 'effectType', v)}>
+                                    <SelectTrigger><SelectValue placeholder="效果類型" /></SelectTrigger>
+                                    <SelectContent>
+                                        {skillEffectTypes.map(type => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                {effect.effectType === 'probabilistic_damage' && (
+                                    <Input type="number" placeholder="機率 (0-100)%" value={effect.probability || ''} onChange={e => handleEffectChange(index, 'probability', parseInt(e.target.value))} />
+                                )}
+                            </div>
+                            <Input type="number" placeholder="數值" value={effect.value || ''} onChange={e => handleEffectChange(index, 'value', parseInt(e.target.value))} />
+                            {(effect.effectType === 'atk_buff' || effect.effectType === 'def_buff') && (
+                                <Input type="number" placeholder="持續回合數 (選填)" value={effect.duration || ''} onChange={e => handleEffectChange(index, 'duration', parseInt(e.target.value))} />
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+            <CardFooter className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={onCancel}>取消</Button>
+                <Button onClick={handleSave} disabled={isSaving}>{isSaving ? "儲存中..." : "儲存"}</Button>
+            </CardFooter>
+        </Card>
+    );
+}
+
+
+function SkillManagement() {
+    const { toast } = useToast();
+    const [skills, setSkills] = useState<Skill[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [editingSkill, setEditingSkill] = useState<Partial<Skill> | null>(null);
+    const [activePrimaryTab, setActivePrimaryTab] = useState<'faction' | 'race'>('faction');
+    const [activeSecondaryTab, setActiveSecondaryTab] = useState<string>('yelu');
+
+    const fetchAdminData = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const result = await getAdminData();
+            if (result.error) throw new Error(result.error);
+            setSkills(result.skills || []);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    useEffect(() => {
+        fetchAdminData();
+    }, []);
+
+    const handlePrimaryTabChange = (value: string) => {
+        const tab = value as 'faction' | 'race';
+        setActivePrimaryTab(tab);
+        setEditingSkill(null);
+        setActiveSecondaryTab(tab === 'faction' ? 'yelu' : 'corruptor');
+    };
+    
+    const handleSecondaryTabChange = (value: string) => {
+        setActiveSecondaryTab(value);
+        setEditingSkill(null);
+    };
+
+    const handleSave = async (skillData: Partial<Skill>) => {
+        setIsSaving(true);
+        try {
+            const result = await updateSkill(skillData as Skill);
+            if (result.error) throw new Error(result.error);
+            toast({ title: '成功', description: '技能已儲存。' });
+            setEditingSkill(null);
+            fetchAdminData();
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: '儲存失敗', description: e.message });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const currentSkills = useMemo(() => {
+        return skills.filter(skill => {
+            if (activePrimaryTab === 'faction') return skill.factionId === activeSecondaryTab;
+            return skill.raceId === activeSecondaryTab;
+        });
+    }, [skills, activePrimaryTab, activeSecondaryTab]);
+    
+    const secondaryTabs = activePrimaryTab === 'faction' ? FACTIONS : RACES;
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <div>
+                    <h3 className="text-lg font-semibold">技能管理</h3>
+                    <p className="text-muted-foreground mt-1 text-sm">管理不同陣營和種族的可用技能。</p>
+                </div>
+                 <Button onClick={() => setEditingSkill({ cooldown: 0, effects: [] })} disabled={!!editingSkill}>新增技能</Button>
+            </div>
+            
+            <Tabs value={activePrimaryTab} onValueChange={handlePrimaryTabChange}>
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="faction">陣營技能</TabsTrigger>
+                    <TabsTrigger value="race">種族技能</TabsTrigger>
+                </TabsList>
+            </Tabs>
+
+            <Tabs value={activeSecondaryTab} onValueChange={handleSecondaryTabChange} className="mt-4">
+                <TabsList className="grid w-full grid-cols-3">
+                    {Object.values(secondaryTabs).map(tab => (
+                        <TabsTrigger key={tab.id} value={tab.id}>{tab.name}</TabsTrigger>
+                    ))}
+                </TabsList>
+            </Tabs>
+            
+            {editingSkill && (
+                <SkillEditor
+                    skill={editingSkill}
+                    onSave={handleSave}
+                    onCancel={() => setEditingSkill(null)}
+                    isSaving={isSaving}
+                    owner={{type: activePrimaryTab, id: activeSecondaryTab}}
+                />
+            )}
+
+            <div className="border rounded-md mt-4">
+                <Table>
+                    <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>名稱</TableHead><TableHead>冷卻</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                        {isLoading ? (
+                            <TableRow><TableCell colSpan={4}><Skeleton className="h-8 w-full"/></TableCell></TableRow>
+                        ) : currentSkills.length > 0 ? (
+                            currentSkills.map(skill => (
+                                <TableRow key={skill.id}>
+                                    <TableCell>{skill.id}</TableCell>
+                                    <TableCell>{skill.name}</TableCell>
+                                    <TableCell>{skill.cooldown}</TableCell>
+                                    <TableCell>
+                                        <Button variant="ghost" size="icon" onClick={() => setEditingSkill(skill)}><Edit className="h-4 w-4"/></Button>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader><AlertDialogTitle>確認刪除</AlertDialogTitle><AlertDialogDescription>您確定要刪除「{skill.name}」嗎？</AlertDialogDescription></AlertDialogHeader>
+                                                <AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={() => handleSave({...skill, _delete: true})}>刪除</AlertDialogAction></AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow><TableCell colSpan={4} className="h-24 text-center">此分類尚無技能</TableCell></TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+        </div>
+    );
+}
 
 export default function AdminPage() {
   const { toast } = useToast();
@@ -1247,10 +1508,7 @@ export default function AdminPage() {
                 <ConflictManagement />
               </TabsContent>
                <TabsContent value="skills">
-                 <h3 className="text-lg font-semibold">技能管理</h3>
-                <p className="text-muted-foreground mt-2">
-                  管理不同陣營和種族的可用技能。
-                </p>
+                 <SkillManagement />
               </TabsContent>
                <TabsContent value="titles">
                  <h3 className="text-lg font-semibold">稱號管理</h3>
@@ -1283,3 +1541,5 @@ export default function AdminPage() {
     </div>
   );
 }
+
+    
