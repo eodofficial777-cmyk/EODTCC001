@@ -8,7 +8,7 @@ import {
   increment,
   runTransaction,
   collection
-} from 'firebase/firestore/lite';
+} from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import { TASK_TYPES } from '@/lib/game-data';
