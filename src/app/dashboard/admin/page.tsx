@@ -115,7 +115,7 @@ function AccountApproval() {
         title: '成功',
         description: `已更新使用者 ${userToUpdate.roleName} 的資料。`,
       });
-    } catch (error: any) => {
+    } catch (error: any) {
       toast({
         variant: 'destructive',
         title: '更新失敗',
@@ -638,5 +638,3 @@ export default function AdminPage() {
     </Card>
   );
 }
-
-    
