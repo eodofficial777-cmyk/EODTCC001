@@ -67,7 +67,8 @@ export async function getRosterData(): Promise<{
 
     const usersQuery = query(
       collection(db, 'users'),
-      where('approved', '==', true)
+      where('approved', '==', true),
+      orderBy('honorPoints', 'desc')
     );
 
     const usersSnapshot = await getDocs(usersQuery);
@@ -81,9 +82,6 @@ export async function getRosterData(): Promise<{
           data.registrationDate?.toDate().toISOString() || new Date().toISOString(),
       } as User;
     });
-
-    // Manual sort in code to avoid composite index
-    allUsers.sort((a, b) => b.honorPoints - a.honorPoints);
 
     const rosterByFaction: Record<string, User[]> = {};
 
