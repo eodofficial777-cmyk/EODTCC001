@@ -21,7 +21,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { Shield, Gem, Heart, Sword, Brain, Zap, Dna, User as UserIcon } from 'lucide-react';
+import { Shield, Gem, ScrollText, Package } from 'lucide-react';
 import { useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { FACTIONS, RACES } from '@/lib/game-data';
@@ -40,32 +40,14 @@ export default function DashboardPage() {
   const faction = userData?.factionId ? FACTIONS[userData.factionId as keyof typeof FACTIONS] : null;
   const race = userData?.raceId ? RACES[userData.raceId as keyof typeof RACES] : null;
 
-  const stats = [
-    { name: 'HP', value: userData?.attributes?.hp ?? 0, icon: Heart },
-    { name: '攻擊力', value: userData?.attributes?.atk ?? 0, icon: Sword },
-    { name: '防禦力', value: userData?.attributes?.def ?? 0, icon: UserIcon },
-    { name: '智力', value: userData?.attributes?.intel ?? 0, icon: Brain },
-    { name: '敏捷', value: userData?.attributes?.agi ?? 0, icon: Zap },
-  ];
-
-  const resources = [
-    { name: '榮譽點', value: userData?.honorPoints?.toLocaleString() ?? '0', icon: Shield },
-    { name: '貨幣', value: userData?.currency?.toLocaleString() ?? '0', icon: Gem },
-  ];
-
-  const recentMissions = [
-    { id: 'M001', name: '首篇故事', date: '2024-07-20', status: '已批准', points: 100 },
-    { id: 'M002', name: '陣營插畫', date: '2024-07-22', status: '審核中', points: 0 },
-    { id: 'M003', name: '角色二創', date: '2024-07-25', status: '已批准', points: 50 },
+  const recentLogs = [
+    { id: 'L001', description: '提交「首篇故事」任務', change: '+100 榮譽點', date: '2024-07-20' },
+    { id: 'L002', description: '管理員發放週末獎勵', change: '+500 貨幣', date: '2024-07-22' },
+    { id: 'L003', description: '獲得稱號「初入荒漠」', change: '稱號', date: '2024-07-25' },
+    { id: 'L004', description: '從商店購買「回復藥水」', change: '-100 貨幣', date: '2024-07-26' },
   ];
   
-  const equipment = [
-    { slot: "武器", name: "初始長劍"},
-    { slot: "盾牌", name: "無"},
-    { slot: "頭部", name: "無"},
-    { slot: "身體", name: "布衣"},
-    { slot: "飾品", name: "新兵臂章"},
-  ];
+  const inventory = userData?.items ?? [];
 
   const isLoading = isUserLoading || isUserDataLoading;
 
@@ -122,96 +104,100 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-
+        
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline">資源</CardTitle>
+            <CardTitle className="font-headline">背包</CardTitle>
+             <CardDescription>您目前持有的物品</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {resources.map((res) => (
-              <div key={res.name} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <res.icon className="h-6 w-6 text-primary" />
-                  <span className="font-medium">{res.name}</span>
-                </div>
-                {isLoading ? <Skeleton className="h-7 w-20" /> : <span className="text-xl font-bold font-mono">{res.value}</span>}
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
               </div>
-            ))}
+            ) : inventory.length > 0 ? (
+              <ul className="space-y-2 text-sm">
+                {inventory.map((item, index) => (
+                  <li key={index} className="flex items-center justify-between bg-card-foreground/5 p-2 rounded-md">
+                    <span>{item}</span> 
+                    <Badge variant="outline">道具</Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-center text-muted-foreground py-4">
+                <Package className="mx-auto h-8 w-8 mb-2" />
+                <p>背包是空的</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
       <div className="lg:col-span-2 space-y-6">
-        <div className="grid gap-6 sm:grid-cols-2">
-           <Card>
-            <CardHeader>
-              <CardTitle className="font-headline">屬性</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
-              {stats.map((stat) => (
-                <div key={stat.name} className="flex items-center gap-3 bg-card-foreground/5 p-3 rounded-lg">
-                  <stat.icon className="h-6 w-6 text-accent-foreground/70" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">{stat.name}</p>
-                     {isLoading ? <Skeleton className="h-8 w-12 mt-1" /> : <p className="text-2xl font-bold font-mono">{stat.value}</p>}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline">裝備</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3">
-                {equipment.map(item => (
-                  <li key={item.slot} className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">{item.slot}:</span>
-                    <span className="font-medium">{item.name}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        </div>
         <Card>
           <CardHeader>
-            <CardTitle className="font*headline">近期任務</CardTitle>
-            <CardDescription>您最近提交的任務及其狀態</CardDescription>
+            <CardTitle className="font-headline">資源</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-4">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-card-foreground/5">
+                <div className="flex items-center gap-3">
+                  <Shield className="h-7 w-7 text-primary" />
+                  <span className="font-medium text-lg">榮譽點</span>
+                </div>
+                {isLoading ? <Skeleton className="h-7 w-24" /> : <span className="text-2xl font-bold font-mono">{userData?.honorPoints?.toLocaleString() ?? '0'}</span>}
+              </div>
+               <div className="flex items-center justify-between p-4 rounded-lg bg-card-foreground/5">
+                <div className="flex items-center gap-3">
+                  <Gem className="h-7 w-7 text-primary" />
+                  <span className="font-medium text-lg">貨幣</span>
+                </div>
+                {isLoading ? <Skeleton className="h-7 w-24" /> : <span className="text-2xl font-bold font-mono">{userData?.currency?.toLocaleString() ?? '0'}</span>}
+              </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline">紀錄</CardTitle>
+            <CardDescription>您最近的活動與獲得獎勵</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>任務名稱</TableHead>
-                  <TableHead>提交日期</TableHead>
-                  <TableHead>狀態</TableHead>
-                  <TableHead className="text-right">榮譽點</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentMissions.map((mission) => (
-                  <TableRow key={mission.id}>
-                    <TableCell className="font-medium">{mission.name}</TableCell>
-                    <TableCell>{mission.date}</TableCell>
-                    <TableCell>
-                       <Badge
-                        variant={mission.status === '已批准' ? 'default' : 'secondary'}
-                        className={mission.status === '已批准' ? 'bg-green-600/20 text-green-400 border-green-600/30' : 'bg-amber-600/20 text-amber-400 border-amber-600/30'}
-                      >
-                        {mission.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-mono">+{mission.points}</TableCell>
+             {isLoading ? (
+               <div className="space-y-2">
+                 <Skeleton className="h-10 w-full" />
+                 <Skeleton className="h-10 w-full" />
+                 <Skeleton className="h-10 w-full" />
+               </div>
+             ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>日期</TableHead>
+                    <TableHead>描述</TableHead>
+                    <TableHead className="text-right">變更</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {recentLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="text-muted-foreground">{log.date}</TableCell>
+                      <TableCell>{log.description}</TableCell>
+                      <TableCell className="text-right font-mono">{log.change}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+             )}
           </CardContent>
            <CardFooter>
             <Button asChild className="w-full">
-              <Link href="/dashboard/missions">提交新任務</Link>
+              <Link href="/dashboard/missions">
+                <ScrollText className="mr-2"/>
+                查看所有紀錄
+              </Link>
             </Button>
           </CardFooter>
         </Card>

@@ -35,7 +35,7 @@ import { doc, getFirestore } from 'firebase/firestore';
 import { useMemo } from 'react';
 
 const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: '儀表板' },
+  { href: '/dashboard', icon: LayoutDashboard, label: '角色資訊' },
   { href: '/dashboard/roster', icon: Users, label: '角色名冊' },
   { href: '/dashboard/missions', icon: ClipboardList, label: '任務提交' },
   { href: '/dashboard/conflict', icon: Swords, label: '陣營對抗' },
@@ -59,6 +59,13 @@ export default function DashboardLayout({
   );
   const { data: adminData } = useDoc(adminRef);
   const isAdmin = !!adminData;
+
+  const getPageTitle = () => {
+    const currentItem = navItems.find((item) => item.href === pathname);
+    if (currentItem) return currentItem.label;
+    if (pathname.startsWith('/dashboard/roster/')) return '角色檔案';
+    return '儀表板';
+  }
 
   return (
     <SidebarProvider>
@@ -97,8 +104,7 @@ export default function DashboardLayout({
             <SidebarTrigger className="md:hidden" />
             <div className="flex-1">
               <h1 className="text-lg font-semibold md:text-xl font-headline">
-                {navItems.find((item) => item.href === pathname)?.label ||
-                  '儀表板'}
+                {getPageTitle()}
               </h1>
             </div>
           </header>

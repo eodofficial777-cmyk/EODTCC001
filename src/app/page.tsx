@@ -144,8 +144,6 @@ export default function AuthPage() {
           hp: selectedRace.hp,
           atk: selectedRace.atk,
           def: selectedRace.def,
-          intel: 0,
-          agi: 0,
         },
       });
 
@@ -419,5 +417,3 @@ export default function AuthPage() {
     </div>
   );
 }
-
-    
