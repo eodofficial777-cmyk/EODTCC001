@@ -1,17 +1,34 @@
+
 'use server';
 
-import { getFirestore } from 'firebase-admin/firestore';
-import { initializeApp, getApps } from 'firebase-admin/app';
+import { getFirestore, doc, updateDoc } from 'firebase/firestore';
+import { initializeApp, getApps, App } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
 
-// Helper to initialize Firebase Admin SDK
+const ADMIN_EMAIL = 'admin@eodtcc.com';
+const ADMIN_PASSWORD = 'password';
+
+let app: App;
 if (!getApps().length) {
-  initializeApp({
-    projectId: firebaseConfig.projectId,
-  });
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApps()[0];
 }
 
-const db = getFirestore();
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+async function ensureAdminAuth() {
+  if (auth.currentUser?.email !== ADMIN_EMAIL) {
+    try {
+      await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
+    } catch (error) {
+      console.error('Admin sign-in failed during user update:', error);
+      throw new Error('管理員登入失敗，無法更新使用者。');
+    }
+  }
+}
 
 interface UserUpdatePayload {
     approved?: boolean;
@@ -26,9 +43,9 @@ export async function updateUser(userId: string, payload: UserUpdatePayload) {
   }
 
   try {
-    const userRef = db.collection('users').doc(userId);
+    await ensureAdminAuth();
+    const userRef = doc(db, 'users', userId);
     
-    // Sanitize payload to only include allowed fields
     const updateData: { [key: string]: any } = {};
     if (payload.approved !== undefined) {
       updateData.approved = payload.approved;
@@ -44,7 +61,7 @@ export async function updateUser(userId: string, payload: UserUpdatePayload) {
         return { error: '沒有提供任何更新資料' };
     }
 
-    await userRef.update(updateData);
+    await updateDoc(userRef, updateData);
 
     return { success: true };
   } catch (error: any) {
