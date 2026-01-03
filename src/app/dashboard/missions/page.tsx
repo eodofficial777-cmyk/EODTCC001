@@ -56,12 +56,13 @@ import {
   limit,
   where,
 } from 'firebase/firestore';
-import { FACTIONS, TASK_TYPES } from '@/lib/game-data';
+import { FACTIONS } from '@/lib/game-data';
 import { submitTask } from '@/app/actions/submit-task';
 import { getTasks } from '@/app/actions/get-tasks';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { RefreshCw } from 'lucide-react';
+import type { TaskType } from '@/lib/types';
 
 
 const formSchema = z.object({
@@ -77,10 +78,12 @@ const formSchema = z.object({
 function MissionSubmitForm({
   user,
   userData,
+  taskTypes,
   onTaskSubmitted,
 }: {
   user: any;
   userData: any;
+  taskTypes: TaskType[];
   onTaskSubmitted: () => void;
 }) {
   const { toast } = useToast();
@@ -94,10 +97,11 @@ function MissionSubmitForm({
   
   const isSubmitting = form.formState.isSubmitting;
   const isWanderer = userData?.factionId === 'wanderer';
-  const selectedTaskType = useWatch({
+  const selectedTaskTypeId = useWatch({
     control: form.control,
     name: 'taskTypeId',
   });
+  const selectedTaskType = taskTypes.find(t => t.id === selectedTaskTypeId);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!user || !userData) {
@@ -109,14 +113,13 @@ function MissionSubmitForm({
       return;
     }
 
-    if (
-      values.taskTypeId === 'main' &&
-      userData.submittedMainQuest
-    ) {
-      form.setError('taskTypeId', {
-        message: '您已經提交過主線任務。',
-      });
-      return;
+    const taskTypeInfo = taskTypes.find(t => t.id === values.taskTypeId);
+
+    if (taskTypeInfo?.singleSubmission && userData.tasks?.includes(taskTypeInfo.id)) {
+        form.setError('taskTypeId', {
+            message: '您已經提交過此類型的任務。'
+        });
+        return;
     }
     
     if (isWanderer && selectedTaskType && !values.factionContribution) {
@@ -140,7 +143,7 @@ function MissionSubmitForm({
 
       toast({
         title: '提交成功！',
-        description: '您的任務已提交，獎勵已發放。',
+        description: '您的任務已提交。',
       });
       form.reset({
         submissionUrl: 'https://www.plurk.com/',
@@ -182,14 +185,15 @@ function MissionSubmitForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.values(TASK_TYPES).map((task) => (
-                        <SelectItem key={task.id} value={task.id} disabled={task.id === 'main' && userData?.submittedMainQuest}>
+                      {taskTypes.map((task) => (
+                        <SelectItem key={task.id} value={task.id} disabled={task.singleSubmission && userData?.tasks?.includes(task.id)}>
                           {task.name} (+{task.honorPoints}榮譽, +{task.currency}貨幣)
-                          {task.id === 'main' && userData?.submittedMainQuest && ' (已完成)'}
+                          {task.singleSubmission && userData?.tasks?.includes(task.id) && ' (已完成)'}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {selectedTaskType && <p className="text-xs text-muted-foreground pt-1">{selectedTaskType.description}</p>}
                   <FormMessage />
                 </FormItem>
               )}
@@ -268,12 +272,16 @@ function MissionSubmitForm({
   );
 }
 
-function AllSubmissionsFeed({ tasks, isLoading, onRefresh }: { tasks: any[] | null; isLoading: boolean; onRefresh: () => void; }) {
+function AllSubmissionsFeed({ tasks, isLoading, onRefresh, taskTypes }: { tasks: any[] | null; isLoading: boolean; onRefresh: () => void; taskTypes: TaskType[] }) {
   
   const getFactionBadge = (factionId: string) => {
     const faction = FACTIONS[factionId as keyof typeof FACTIONS];
     if (!faction) return null;
     return <Badge style={{ backgroundColor: faction.color, color: 'white' }}>{faction.name}</Badge>
+  }
+  
+  const getTaskName = (taskTypeId: string) => {
+    return taskTypes.find(t => t.id === taskTypeId)?.name || taskTypeId;
   }
 
   return (
@@ -300,7 +308,7 @@ function AllSubmissionsFeed({ tasks, isLoading, onRefresh }: { tasks: any[] | nu
                      </Link>
                    </p>
                    <p className="text-muted-foreground">
-                      {task.userName} 提交了「{TASK_TYPES[task.taskTypeId as keyof typeof TASK_TYPES]?.name}」
+                      {task.userName} 提交了「{getTaskName(task.taskTypeId)}」
                    </p>
                 </div>
                 {getFactionBadge(task.userFactionId)}
@@ -316,7 +324,7 @@ function AllSubmissionsFeed({ tasks, isLoading, onRefresh }: { tasks: any[] | nu
   );
 }
 
-function UserSubmissionsHistory({ userId }: { userId: string }) {
+function UserSubmissionsHistory({ userId, taskTypes }: { userId: string, taskTypes: TaskType[] }) {
     const firestore = useFirestore();
     const userTasksQuery = useMemoFirebase(
       () =>
@@ -326,6 +334,10 @@ function UserSubmissionsHistory({ userId }: { userId: string }) {
       [firestore, userId]
     );
     const { data: userTasks, isLoading } = useCollection(userTasksQuery);
+    
+    const getTaskName = (taskTypeId: string) => {
+        return taskTypes.find(t => t.id === taskTypeId)?.name || taskTypeId;
+    }
 
     const getStatusBadge = (status: string) => {
         switch(status) {
@@ -365,7 +377,7 @@ function UserSubmissionsHistory({ userId }: { userId: string }) {
                            {task.title}
                         </Link>
                       </TableCell>
-                      <TableCell>{TASK_TYPES[task.taskTypeId as keyof typeof TASK_TYPES]?.name}</TableCell>
+                      <TableCell>{getTaskName(task.taskTypeId)}</TableCell>
                       <TableCell className="font-mono">
                         +{task.honorPointsAwarded} HP / +{task.currencyAwarded} C
                       </TableCell>
@@ -400,6 +412,13 @@ export default function MissionsPage() {
 
   const [tasks, setTasks] = React.useState<any[] | null>(null);
   const [tasksLoading, setTasksLoading] = React.useState(true);
+  
+  const taskTypesQuery = useMemoFirebase(
+    () => (firestore ? collection(firestore, 'taskTypes') : null),
+    [firestore]
+  );
+  const { data: taskTypes, isLoading: areTaskTypesLoading } = useCollection<TaskType>(taskTypesQuery);
+
   const { toast } = useToast();
 
   const loadTasks = React.useCallback(async () => {
@@ -426,7 +445,8 @@ export default function MissionsPage() {
     loadTasks();
   }, [loadTasks]);
 
-  const isLoading = isUserLoading || isUserDataLoading;
+  const isLoading = isUserLoading || isUserDataLoading || areTaskTypesLoading;
+  const safeTaskTypes = taskTypes || [];
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -441,7 +461,7 @@ export default function MissionsPage() {
             </CardContent>
           </Card>
         ) : user && userData ? (
-          <MissionSubmitForm user={user} userData={userData} onTaskSubmitted={loadTasks} />
+          <MissionSubmitForm user={user} userData={userData} taskTypes={safeTaskTypes} onTaskSubmitted={loadTasks} />
         ) : (
           <Card>
             <CardHeader>
@@ -454,10 +474,10 @@ export default function MissionsPage() {
         )}
       </div>
       <div className="lg:col-span-2">
-         <AllSubmissionsFeed tasks={tasks} isLoading={tasksLoading} onRefresh={loadTasks} />
+         <AllSubmissionsFeed tasks={tasks} isLoading={tasksLoading} onRefresh={loadTasks} taskTypes={safeTaskTypes} />
       </div>
        <div className="lg:col-span-3">
-         {user && <UserSubmissionsHistory userId={user.uid} />}
+         {user && <UserSubmissionsHistory userId={user.uid} taskTypes={safeTaskTypes} />}
        </div>
     </div>
   );

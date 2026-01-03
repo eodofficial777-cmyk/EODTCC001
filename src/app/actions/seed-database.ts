@@ -74,6 +74,19 @@ export async function seedDatabase() {
       });
     }
 
+    // 6. Seed Titles
+    const titles = [
+        { id: 'title-1', name: '初入荒漠', description: '完成新手教學', isHidden: false },
+        { id: 'title-2', name: '夜鷺之友', description: '完成夜鷺陣營任務', isHidden: false },
+        { id: 'title-3', name: '協會之星', description: '完成協會陣營任務', isHidden: false },
+        { id: 'title-4', name: '荒漠英雄', description: '完成主線劇情', isHidden: true },
+    ];
+    for (const title of titles) {
+        const titleRef = db.collection('titles').doc(title.id);
+        batch.set(titleRef, title);
+    }
+
+
     // Create an empty tasks collection by adding and immediately deleting a document
     // This ensures the collection exists for list queries.
     const tempTaskRef = db.collection('tasks').doc('init');

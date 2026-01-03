@@ -281,11 +281,15 @@ function TaskTypeEditor({
   onSave,
   onCancel,
   isSaving,
+  items,
+  titles,
 }: {
   taskType: Partial<TaskType>;
   onSave: (task: Partial<TaskType>) => void;
   onCancel: () => void;
   isSaving: boolean;
+  items: any[];
+  titles: any[];
 }) {
   const [editedTask, setEditedTask] = useState(taskType);
 
@@ -339,13 +343,33 @@ function TaskTypeEditor({
             <Label htmlFor="task-currency">貨幣</Label>
             <Input id="task-currency" type="number" value={editedTask.currency || 0} onChange={e => setEditedTask({...editedTask, currency: parseInt(e.target.value) || 0 })} />
         </div>
-         <div className="space-y-2">
+        <div className="space-y-2">
             <Label htmlFor="task-title">稱號獎勵 (選填)</Label>
-            <Input id="task-title" value={editedTask.titleAwarded || ''} onChange={e => setEditedTask({...editedTask, titleAwarded: e.target.value })} placeholder="例如：荒漠英雄"/>
+            <Select onValueChange={(value) => setEditedTask({ ...editedTask, titleAwarded: value === 'none' ? undefined : value })} value={editedTask.titleAwarded || 'none'}>
+                <SelectTrigger id="task-title">
+                    <SelectValue placeholder="選擇稱號獎勵" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="none">無</SelectItem>
+                    {titles.map(title => (
+                        <SelectItem key={title.id} value={title.id}>{title.name}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         </div>
         <div className="space-y-2">
             <Label htmlFor="task-item">物品獎勵 (選填)</Label>
-            <Input id="task-item" value={editedTask.itemAwarded || ''} onChange={e => setEditedTask({...editedTask, itemAwarded: e.target.value })} placeholder="例如：item_id_123"/>
+            <Select onValueChange={(value) => setEditedTask({ ...editedTask, itemAwarded: value === 'none' ? undefined : value })} value={editedTask.itemAwarded || 'none'}>
+                <SelectTrigger id="task-item">
+                    <SelectValue placeholder="選擇物品獎勵" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="none">無</SelectItem>
+                     {items.map(item => (
+                        <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         </div>
         <div className="flex items-center space-x-2">
             <Checkbox 
@@ -380,28 +404,34 @@ function TaskTypeEditor({
 function TaskManagement() {
   const { toast } = useToast();
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
+  const [items, setItems] = useState<any[]>([]);
+  const [titles, setTitles] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [editingTask, setEditingTask] = useState<Partial<TaskType> | null>(null);
 
-  const fetchTaskTypes = async () => {
+  const fetchAdminData = async () => {
     setIsLoading(true);
     setError(null);
     try {
       const result = await getAdminData();
       if (result.error) throw new Error(result.error);
       setTaskTypes(result.taskTypes || []);
+      setItems(result.items || []);
+      setTitles(result.titles || []);
     } catch (error: any) {
       setError(error.message);
       setTaskTypes([]);
+      setItems([]);
+      setTitles([]);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTaskTypes();
+    fetchAdminData();
   }, []);
   
   const handleSave = async (taskData: Partial<TaskType>) => {
@@ -411,7 +441,7 @@ function TaskManagement() {
         if (result.error) throw new Error(result.error);
         toast({ title: '成功', description: '任務類型已儲存。' });
         setEditingTask(null);
-        fetchTaskTypes(); // Refresh list
+        fetchAdminData(); // Refresh list
     } catch (error: any) {
         toast({ variant: 'destructive', title: '儲存失敗', description: error.message });
     } finally {
@@ -452,6 +482,8 @@ function TaskManagement() {
                 onSave={handleSave}
                 onCancel={() => setEditingTask(null)}
                 isSaving={isSaving}
+                items={items}
+                titles={titles}
             />
         )}
         
@@ -471,12 +503,12 @@ function TaskManagement() {
                  {isLoading ? (
                   Array.from({ length: 3 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
+                      <TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell>
                     </TableRow>
                   ))
                 ) : taskTypes.length === 0 ? (
                     <TableRow>
-                        <TableCell colSpan={7} className="text-center h-24">尚未建立任何任務類型</TableCell>
+                        <TableCell colSpan={6} className="text-center h-24">尚未建立任何任務類型</TableCell>
                     </TableRow>
                 ) : (
                     taskTypes.map(task => (

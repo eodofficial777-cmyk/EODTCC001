@@ -46,15 +46,17 @@ async function ensureAdminAuth() {
   }
 }
 
-export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: TaskType[]; error?: string }> {
+export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: TaskType[]; items?: any[], titles?: any[], error?: string }> {
   try {
     await ensureAdminAuth();
 
-    // Fetch both users and taskTypes
+    // Fetch all required data
     const usersPromise = getDocs(query(collection(db, 'users'), orderBy('registrationDate', 'desc')));
     const taskTypesPromise = getDocs(collection(db, 'taskTypes'));
+    const itemsPromise = getDocs(collection(db, 'items'));
+    const titlesPromise = getDocs(collection(db, 'titles'));
 
-    const [usersSnapshot, taskTypesSnapshot] = await Promise.all([usersPromise, taskTypesPromise]);
+    const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise]);
 
     // Process users
     const users = usersSnapshot.docs.map(doc => {
@@ -72,7 +74,19 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
       id: doc.id,
     } as TaskType));
 
-    return { users, taskTypes };
+    // Process items
+    const items = itemsSnapshot.docs.map(doc => ({
+      ...doc.data(),
+      id: doc.id,
+    }));
+
+    // Process titles
+    const titles = titlesSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id,
+    }));
+
+    return { users, taskTypes, items, titles };
   } catch (error: any) {
     console.error('Error fetching admin data:', error);
     let errorMessage = '無法獲取管理員資料。';
