@@ -72,7 +72,7 @@ const registerSchema = z.object({
 });
 
 const loginSchema = z.object({
-  email: z.string().email('請輸入有效的電子郵件'),
+  account: z.string().min(1, '帳號為必填'),
   password: z.string().min(1, '密碼為必填'),
 });
 
@@ -97,7 +97,7 @@ export default function AuthPage() {
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: '',
+      account: '',
       password: '',
     },
   });
@@ -146,8 +146,9 @@ export default function AuthPage() {
   };
 
   const onLoginSubmit = async (values: z.infer<typeof loginSchema>) => {
+    const email = `${values.account}@eodtcc.com`;
     try {
-      await signInWithEmailAndPassword(auth, values.email, values.password);
+      await signInWithEmailAndPassword(auth, email, values.password);
       toast({
         title: '登入成功',
         description: '正在將您導向儀表板...',
@@ -156,7 +157,7 @@ export default function AuthPage() {
     } catch (error: any) {
       console.error('登入失敗:', error);
       let description = '請檢查您的帳號或密碼。';
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
          description = '帳號或密碼錯誤。';
       } else if (error.code === 'auth/user-disabled') {
          description = '此帳戶已被停用或尚未審核通過。';
@@ -197,14 +198,13 @@ export default function AuthPage() {
                 >
                   <FormField
                     control={loginForm.control}
-                    name="email"
+                    name="account"
                     render={({ field }) => (
                       <FormItem className="grid gap-2">
-                        <FormLabel>電子郵件</FormLabel>
+                        <FormLabel>帳號</FormLabel>
                         <FormControl>
                           <Input
-                            type="email"
-                            placeholder="m@example.com"
+                            placeholder="您的登入帳號"
                             {...field}
                           />
                         </FormControl>
@@ -259,12 +259,7 @@ export default function AuthPage() {
                       <FormItem className="grid gap-2">
                         <FormLabel>登入帳號</FormLabel>
                         <FormControl>
-                           <div className="flex items-center">
-                            <Input placeholder="帳號" {...field} className="rounded-r-none border-r-0" />
-                            <span className="flex h-10 items-center rounded-r-md border border-l-0 border-input bg-muted px-3 text-sm text-muted-foreground">
-                              @eodtcc.com
-                            </span>
-                          </div>
+                           <Input placeholder="帳號" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -399,5 +394,3 @@ export default function AuthPage() {
     </div>
   );
 }
-
-    
