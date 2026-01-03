@@ -2,10 +2,67 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 開發期間暫時完全開放權限
-    // 警告：這不安全，僅供開發使用。
+
+    // Helper function to check for admin role
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+
+    // Helper function to check if user is the owner of the document
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Users can read their own profile, admins can read/write any profile
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId); // Users can update their own profile
+      allow create: if request.auth != null; // Any authenticated user can create a user doc (during registration)
+    }
+    
+    match /users/{userId}/{document=**} {
+       allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    // Admins have full access to the admin roles collection
+    match /roles_admin/{userId} {
+      allow read, write: if isAdmin();
+      // Allow users to check if they are an admin
+      allow get: if isOwner(userId);
+    }
+    
+    // Public collections readable by anyone
+    match /factions/{factionId} {
+       allow read: if true;
+       allow write: if isAdmin();
+    }
+    
+    match /races/{raceId} {
+       allow read: if true;
+       allow write: if isAdmin();
+    }
+    
+    match /taskTypes/{taskTypeId} {
+       allow read: if true;
+       allow write: if isAdmin();
+    }
+    
+    match /items/{itemId} {
+       allow read: if true;
+       allow write: if isAdmin();
+    }
+
+    // Tasks can be created by any authenticated user, and read by anyone.
+    // Only admins can update/delete them.
+    match /tasks/{taskId} {
+        allow read: if true;
+        allow create: if request.auth != null;
+        allow update, delete: if isAdmin();
+    }
+    
+    // Default deny for any other path, unless admin
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
     }
   }
 }
