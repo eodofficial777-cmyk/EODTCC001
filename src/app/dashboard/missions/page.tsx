@@ -98,6 +98,7 @@ function MissionSubmitForm({
   const userSubmittedTaskIds = userData?.tasks || [];
 
   const taskCategories = React.useMemo(() => {
+    if (!taskTypes) return [];
     const categories = new Set(taskTypes.map(t => t.category));
     return Array.from(categories);
   }, [taskTypes]);
@@ -108,7 +109,7 @@ function MissionSubmitForm({
   });
   
   const filteredTasks = React.useMemo(() => {
-      if (!selectedCategory) return [];
+      if (!selectedCategory || !taskTypes) return [];
       return taskTypes.filter(t => t.category === selectedCategory);
   }, [selectedCategory, taskTypes]);
 
@@ -120,7 +121,9 @@ function MissionSubmitForm({
   const selectedTaskType = taskTypes.find(t => t.id === selectedTaskTypeId);
 
   React.useEffect(() => {
+    if (form.getValues('taskCategory')) {
       form.setValue('taskTypeId', '');
+    }
   }, [selectedCategory, form]);
 
 
@@ -220,7 +223,7 @@ function MissionSubmitForm({
                     <FormMessage />
                   </FormItem>
                 )}
-              </FormField>
+              />
               <FormField
                 control={form.control}
                 name="taskTypeId"
@@ -250,7 +253,7 @@ function MissionSubmitForm({
                     <FormMessage />
                   </FormItem>
                 )}
-              </FormField>
+              />
             </div>
             {isWanderer && selectedTaskType && (
               <FormField
@@ -288,7 +291,7 @@ function MissionSubmitForm({
                     <FormMessage />
                   </FormItem>
                 )}
-              </FormField>
+              />
             )}
             <FormField
               control={form.control}
@@ -302,7 +305,7 @@ function MissionSubmitForm({
                   <FormMessage />
                 </FormItem>
               )}
-            </FormField>
+            />
             <FormField
               control={form.control}
               name="submissionUrl"
@@ -315,7 +318,7 @@ function MissionSubmitForm({
                   <FormMessage />
                 </FormItem>
               )}
-            </FormField>
+            />
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? '提交中...' : '提交審核'}
             </Button>
@@ -409,6 +412,7 @@ function UserSubmissionsHistory({ userId, taskTypes, refreshTrigger }: { userId:
     }, [userId, toast, refreshTrigger]);
     
     const getTaskName = (taskTypeId: string) => {
+        if (!taskTypes) return taskTypeId;
         return taskTypes.find(t => t.id === taskTypeId)?.name || taskTypeId;
     }
 
@@ -559,7 +563,7 @@ export default function MissionsPage() {
          <AllSubmissionsFeed tasks={tasks} isLoading={tasksLoading} onRefresh={loadTasks} taskTypes={safeTaskTypes} />
       </div>
        <div className="lg:col-span-3">
-         {user && <UserSubmissionsHistory userId={user.uid} taskTypes={safeTaskTypes} refreshTrigger={refreshTrigger} />}
+         {user && taskTypes && <UserSubmissionsHistory userId={user.uid} taskTypes={safeTaskTypes} refreshTrigger={refreshTrigger} />}
        </div>
     </div>
   );
