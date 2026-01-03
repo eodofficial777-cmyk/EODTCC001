@@ -1,6 +1,6 @@
 'use server';
 
-import { getFirestore, collection, getDocs, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
