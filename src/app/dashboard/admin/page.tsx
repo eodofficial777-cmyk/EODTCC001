@@ -7,6 +7,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from '@/components/ui/card';
 import {
   Tabs,
@@ -496,7 +497,7 @@ export default function AdminPage() {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="accounts">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:w-max lg:grid-flow-col">
+           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:w-max lg:grid-flow-col">
             <TabsTrigger value="accounts">帳號審核</TabsTrigger>
             <TabsTrigger value="missions">任務管理</TabsTrigger>
             <TabsTrigger value="battle">共鬥管理</TabsTrigger>
@@ -577,5 +578,3 @@ export default function AdminPage() {
     </Card>
   );
 }
-
-    
