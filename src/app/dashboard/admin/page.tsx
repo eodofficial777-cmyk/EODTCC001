@@ -1194,12 +1194,12 @@ function SkillEditor({
     onSave: (skill: Partial<Skill>) => void;
     onCancel: () => void;
     isSaving: boolean;
-    owner: { type: 'faction' | 'race'; id: string };
+    owner: { factionId: string; raceId: string };
 }) {
     const [editedSkill, setEditedSkill] = useState<Partial<Skill>>({
         ...skill,
-        factionId: owner.type === 'faction' ? owner.id : skill.factionId,
-        raceId: owner.type === 'race' ? owner.id : skill.raceId,
+        factionId: owner.factionId,
+        raceId: owner.raceId,
         effects: skill.effects || [],
     });
 
@@ -1309,8 +1309,8 @@ function SkillManagement() {
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [editingSkill, setEditingSkill] = useState<Partial<Skill> | null>(null);
-    const [activePrimaryTab, setActivePrimaryTab] = useState<'faction' | 'race'>('faction');
-    const [activeSecondaryTab, setActiveSecondaryTab] = useState<string>('yelu');
+    const [activeFactionTab, setActiveFactionTab] = useState<string>('yelu');
+    const [activeRaceTab, setActiveRaceTab] = useState<string>('corruptor');
 
     const fetchAdminData = async () => {
         setIsLoading(true);
@@ -1330,15 +1330,15 @@ function SkillManagement() {
         fetchAdminData();
     }, []);
 
-    const handlePrimaryTabChange = (value: string) => {
-        const tab = value as 'faction' | 'race';
-        setActivePrimaryTab(tab);
+    const handleFactionTabChange = (value: string) => {
+        setActiveFactionTab(value);
         setEditingSkill(null);
-        setActiveSecondaryTab(tab === 'faction' ? 'yelu' : 'corruptor');
+        // Reset race tab to default when faction changes
+        setActiveRaceTab('corruptor'); 
     };
     
-    const handleSecondaryTabChange = (value: string) => {
-        setActiveSecondaryTab(value);
+    const handleRaceTabChange = (value: string) => {
+        setActiveRaceTab(value);
         setEditingSkill(null);
     };
 
@@ -1358,13 +1358,9 @@ function SkillManagement() {
     };
 
     const currentSkills = useMemo(() => {
-        return skills.filter(skill => {
-            if (activePrimaryTab === 'faction') return skill.factionId === activeSecondaryTab;
-            return skill.raceId === activeSecondaryTab;
-        });
-    }, [skills, activePrimaryTab, activeSecondaryTab]);
+        return skills.filter(skill => skill.factionId === activeFactionTab && skill.raceId === activeRaceTab);
+    }, [skills, activeFactionTab, activeRaceTab]);
     
-    const secondaryTabs = activePrimaryTab === 'faction' ? FACTIONS : RACES;
 
     return (
         <div>
@@ -1376,16 +1372,17 @@ function SkillManagement() {
                  <Button onClick={() => setEditingSkill({ cooldown: 0, effects: [] })} disabled={!!editingSkill}>新增技能</Button>
             </div>
             
-            <Tabs value={activePrimaryTab} onValueChange={handlePrimaryTabChange}>
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="faction">陣營技能</TabsTrigger>
-                    <TabsTrigger value="race">種族技能</TabsTrigger>
+            <Tabs value={activeFactionTab} onValueChange={handleFactionTabChange}>
+                <TabsList className="grid w-full grid-cols-3">
+                     {Object.values(FACTIONS).map(tab => (
+                        <TabsTrigger key={tab.id} value={tab.id}>{tab.name}</TabsTrigger>
+                    ))}
                 </TabsList>
             </Tabs>
 
-            <Tabs value={activeSecondaryTab} onValueChange={handleSecondaryTabChange} className="mt-4">
+            <Tabs value={activeRaceTab} onValueChange={handleRaceTabChange} className="mt-4">
                 <TabsList className="grid w-full grid-cols-3">
-                    {Object.values(secondaryTabs).map(tab => (
+                    {Object.values(RACES).map(tab => (
                         <TabsTrigger key={tab.id} value={tab.id}>{tab.name}</TabsTrigger>
                     ))}
                 </TabsList>
@@ -1397,7 +1394,7 @@ function SkillManagement() {
                     onSave={handleSave}
                     onCancel={() => setEditingSkill(null)}
                     isSaving={isSaving}
-                    owner={{type: activePrimaryTab, id: activeSecondaryTab}}
+                    owner={{factionId: activeFactionTab, raceId: activeRaceTab}}
                 />
             )}
 
