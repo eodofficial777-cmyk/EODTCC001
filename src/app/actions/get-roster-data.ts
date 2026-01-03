@@ -28,7 +28,10 @@ const auth = getAuth(app);
 
 // In-memory cache for development purposes. In production, this could be a file or a cache service.
 let rosterCache: {
-  data: Record<string, User[]>;
+  data: {
+    allUsers: User[];
+    rosterByFaction: Record<string, User[]>;
+  };
   timestamp: number;
 } | null = null;
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
@@ -45,6 +48,7 @@ async function ensureAdminAuth() {
 }
 
 export async function getRosterData(): Promise<{
+  allUsers?: User[];
   rosterByFaction?: Record<string, User[]>;
   error?: string;
   cacheTimestamp?: string;
@@ -54,11 +58,11 @@ export async function getRosterData(): Promise<{
   todayStart.setHours(0, 0, 0, 0);
   const todayStartTimestamp = todayStart.getTime();
 
-  // In this simulated version, we check if the cache timestamp is from before today.
   if (rosterCache && rosterCache.timestamp >= todayStartTimestamp) {
-    return { 
-        rosterByFaction: rosterCache.data,
-        cacheTimestamp: new Date(rosterCache.timestamp).toLocaleString(),
+    return {
+      allUsers: rosterCache.data.allUsers,
+      rosterByFaction: rosterCache.data.rosterByFaction,
+      cacheTimestamp: new Date(rosterCache.timestamp).toLocaleString(),
     };
   }
 
@@ -79,31 +83,32 @@ export async function getRosterData(): Promise<{
         ...data,
         id: doc.id,
         registrationDate:
-          data.registrationDate?.toDate().toISOString() || new Date().toISOString(),
+          data.registrationDate?.toDate().toISOString() ||
+          new Date().toISOString(),
       } as User;
     });
 
     const rosterByFaction: Record<string, User[]> = {};
-
     for (const factionId in FACTIONS) {
-        rosterByFaction[factionId] = [];
+      rosterByFaction[factionId] = [];
     }
 
-    allUsers.forEach(user => {
-        if (rosterByFaction[user.factionId]) {
-            rosterByFaction[user.factionId].push(user);
-        }
+    allUsers.forEach((user) => {
+      if (rosterByFaction[user.factionId]) {
+        rosterByFaction[user.factionId].push(user);
+      }
     });
 
     // Update the cache
     rosterCache = {
-      data: rosterByFaction,
+      data: { allUsers, rosterByFaction },
       timestamp: now,
     };
 
-    return { 
-        rosterByFaction,
-        cacheTimestamp: new Date(now).toLocaleString(),
+    return {
+      allUsers,
+      rosterByFaction,
+      cacheTimestamp: new Date(now).toLocaleString(),
     };
   } catch (error: any) {
     console.error('Error fetching roster data:', error);

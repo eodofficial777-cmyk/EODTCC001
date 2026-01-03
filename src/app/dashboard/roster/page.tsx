@@ -77,7 +77,27 @@ function CharacterCard({ user }: { user: User }) {
   );
 }
 
+function CharacterGrid({ users }: { users: User[] | undefined }) {
+  if (!users || users.length === 0) {
+    return (
+      <div className="text-center py-16 text-muted-foreground">
+        <p>該分類目前沒有任何角色。</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      {users.map((user) => (
+        <CharacterCard key={user.id} user={user} />
+      ))}
+    </div>
+  );
+}
+
+
 export default function RosterPage() {
+  const [allUsers, setAllUsers] = useState<User[] | null>(null);
   const [rosterData, setRosterData] = useState<Record<string, User[]> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +109,7 @@ export default function RosterPage() {
     try {
       const result = await getRosterData();
       if (result.error) throw new Error(result.error);
+      setAllUsers(result.allUsers || []);
       setRosterData(result.rosterByFaction || {});
       setCacheTimestamp(result.cacheTimestamp || null);
     } catch (e: any) {
@@ -102,7 +123,10 @@ export default function RosterPage() {
     fetchRoster();
   }, []);
 
-  const factionTabs = Object.values(FACTIONS);
+  const factionTabs = [
+    { id: 'all', name: '全體' },
+    ...Object.values(FACTIONS)
+  ];
 
   return (
     <div className="w-full">
@@ -130,8 +154,8 @@ export default function RosterPage() {
         )}
 
         {!error && (
-        <Tabs defaultValue={factionTabs[0].id}>
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="all">
+          <TabsList className="grid w-full grid-cols-4">
             {factionTabs.map((faction) => (
               <TabsTrigger key={faction.id} value={faction.id}>
                 {faction.name}
@@ -139,27 +163,24 @@ export default function RosterPage() {
             ))}
           </TabsList>
 
-          {factionTabs.map((faction) => (
-            <TabsContent key={faction.id} value={faction.id} className="mt-6">
-              {isLoading ? (
-                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {Array.from({ length: 8 }).map((_, i) => (
-                        <Skeleton key={i} className="aspect-square w-full" />
-                    ))}
-                 </div>
-              ) : rosterData && rosterData[faction.id]?.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {rosterData[faction.id].map((user) => (
-                    <CharacterCard key={user.id} user={user} />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-16 text-muted-foreground">
-                  <p>該陣營目前沒有任何角色。</p>
-                </div>
-              )}
-            </TabsContent>
-          ))}
+          {isLoading ? (
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                    <Skeleton key={i} className="aspect-square w-full" />
+                ))}
+            </div>
+          ) : (
+            <>
+              <TabsContent value="all" className="mt-6">
+                <CharacterGrid users={allUsers || []} />
+              </TabsContent>
+              {Object.values(FACTIONS).map((faction) => (
+                <TabsContent key={faction.id} value={faction.id} className="mt-6">
+                  <CharacterGrid users={rosterData?.[faction.id]} />
+                </TabsContent>
+              ))}
+            </>
+          )}
         </Tabs>
         )}
     </div>
