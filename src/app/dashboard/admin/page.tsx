@@ -6,7 +6,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from '@/components/ui/card';
 import {
   Tabs,
@@ -44,6 +43,7 @@ import Image from 'next/image';
 import type { User, TaskType } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { updateTaskType } from '@/app/actions/update-task-type';
 import {
   Dialog,
@@ -289,7 +289,6 @@ function TaskTypeEditor({
   const [editedTask, setEditedTask] = useState(taskType);
 
   const handleSave = () => {
-    // Basic validation
     if (!editedTask.name || !editedTask.id) {
         alert('ID 和名稱為必填項目');
         return;
@@ -302,14 +301,30 @@ function TaskTypeEditor({
       <CardHeader>
         <CardTitle>{taskType.id ? '編輯任務類型' : '新增任務類型'}</CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
-            <Label htmlFor="task-id">ID</Label>
+            <Label htmlFor="task-id">ID (英文，不可重複)</Label>
             <Input id="task-id" value={editedTask.id || ''} onChange={e => setEditedTask({...editedTask, id: e.target.value })} disabled={!!taskType.id} placeholder="例如：main, general, premium"/>
         </div>
         <div className="space-y-2">
             <Label htmlFor="task-name">名稱</Label>
             <Input id="task-name" value={editedTask.name || ''} onChange={e => setEditedTask({...editedTask, name: e.target.value })} placeholder="例如：主線任務"/>
+        </div>
+        <div className="space-y-2">
+             <Label htmlFor="task-category">類型</Label>
+             <Select
+                value={editedTask.category}
+                onValueChange={(value) => setEditedTask({ ...editedTask, category: value })}
+             >
+                <SelectTrigger id="task-category">
+                    <SelectValue placeholder="選擇任務分類"/>
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="main">主線</SelectItem>
+                    <SelectItem value="side">支線</SelectItem>
+                    <SelectItem value="general">一般</SelectItem>
+                </SelectContent>
+             </Select>
         </div>
         <div className="md:col-span-2 space-y-2">
             <Label htmlFor="task-desc">描述</Label>
@@ -330,6 +345,26 @@ function TaskTypeEditor({
         <div className="space-y-2">
             <Label htmlFor="task-item">物品獎勵 (選填)</Label>
             <Input id="task-item" value={editedTask.itemAwarded || ''} onChange={e => setEditedTask({...editedTask, itemAwarded: e.target.value })} placeholder="例如：item_id_123"/>
+        </div>
+        <div className="flex items-center space-x-2">
+            <Checkbox 
+                id="requires-approval" 
+                checked={editedTask.requiresApproval} 
+                onCheckedChange={checked => setEditedTask({...editedTask, requiresApproval: !!checked})}
+            />
+            <Label htmlFor="requires-approval" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                任務須經審核
+            </Label>
+        </div>
+        <div className="flex items-center space-x-2">
+            <Checkbox 
+                id="single-submission" 
+                checked={editedTask.singleSubmission}
+                onCheckedChange={checked => setEditedTask({...editedTask, singleSubmission: !!checked})}
+            />
+            <Label htmlFor="single-submission" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                任務只能繳交一次
+            </Label>
         </div>
       </CardContent>
       <CardFooter className="flex justify-end gap-2">
@@ -425,10 +460,9 @@ function TaskManagement() {
                     <TableRow>
                         <TableHead>ID</TableHead>
                         <TableHead>名稱</TableHead>
+                        <TableHead>類型</TableHead>
                         <TableHead>榮譽</TableHead>
                         <TableHead>貨幣</TableHead>
-                        <TableHead>稱號</TableHead>
-                        <TableHead>物品</TableHead>
                         <TableHead>操作</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -448,10 +482,9 @@ function TaskManagement() {
                         <TableRow key={task.id}>
                             <TableCell className="font-mono">{task.id}</TableCell>
                             <TableCell className="font-medium">{task.name}</TableCell>
+                            <TableCell>{task.category}</TableCell>
                             <TableCell>{task.honorPoints}</TableCell>
                             <TableCell>{task.currency}</TableCell>
-                            <TableCell>{task.titleAwarded || '無'}</TableCell>
-                            <TableCell>{task.itemAwarded || '無'}</TableCell>
                             <TableCell className="space-x-2">
                                 <Button variant="ghost" size="icon" onClick={() => setEditingTask(task)}>
                                     <Edit className="h-4 w-4"/>
@@ -523,7 +556,7 @@ export default function AdminPage() {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="accounts">
-           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:w-max lg:grid-flow-col">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:w-max lg:grid-flow-col">
             <TabsTrigger value="accounts">帳號審核</TabsTrigger>
             <TabsTrigger value="missions">任務管理</TabsTrigger>
             <TabsTrigger value="battle">共鬥管理</TabsTrigger>

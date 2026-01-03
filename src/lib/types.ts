@@ -27,11 +27,12 @@ export interface User {
 export interface TaskType {
   id: string;
   name: string;
+  category: 'main' | 'side' | 'general';
   description: string;
   honorPoints: number;
   currency: number;
   titleAwarded?: string;
   itemAwarded?: string;
+  requiresApproval?: boolean;
+  singleSubmission?: boolean;
 }
-
-    
