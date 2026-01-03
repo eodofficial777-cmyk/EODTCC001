@@ -552,6 +552,42 @@ function TaskManagement() {
   );
 }
 
+const itemTypeTranslations: { [key: string]: string } = {
+  equipment: '裝備',
+  consumable: '戰鬥道具',
+  special: '特殊道具',
+};
+
+function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
+    if ('attribute' in effect) { // AttributeEffect
+        const op = effect.operator === 'd' ? `d${effect.value}` : `${effect.operator} ${effect.value}`;
+        return `${effect.attribute.toUpperCase()} ${op}`;
+    }
+    // TriggeredEffect
+    let desc = `${effect.probability}%機率`;
+    switch(effect.effectType) {
+        case 'hp_recovery':
+            desc += `恢復 ${effect.value} HP`;
+            break;
+        case 'damage_enemy':
+            desc += `造成 ${effect.value} 點傷害`;
+            break;
+        case 'atk_buff':
+            desc += `提升攻擊力 ${effect.value}%`;
+            break;
+        case 'def_buff':
+            desc += `提升防禦力 ${effect.value}%`;
+            break;
+        case 'hp_cost':
+            desc += `消耗 ${effect.value} HP`;
+            break;
+    }
+    if (effect.duration) {
+        desc += `，持續 ${effect.duration} 回合`;
+    }
+    return desc;
+}
+
 function ItemEditor({
   item,
   onSave,
@@ -579,36 +615,6 @@ function ItemEditor({
     onSave(editedItem);
   };
   
-  const itemTypes = [
-      { id: 'equipment', name: '裝備' },
-      { id: 'consumable', name: '戰鬥道具' },
-      { id: 'special', name: '特殊道具' },
-  ];
-
-  const handleEffectChange = (index: number, field: string, value: any) => {
-    const newEffects = [...(editedItem.effects || [])];
-    const effectToUpdate = { ...newEffects[index], [field]: value };
-    
-    // For triggered effects, convert probability to a number
-    if ('probability' in effectToUpdate && typeof effectToUpdate.probability === 'string') {
-        effectToUpdate.probability = parseFloat(effectToUpdate.probability) || 0;
-    }
-
-    newEffects[index] = effectToUpdate;
-    setEditedItem({ ...editedItem, effects: newEffects });
-  };
-
-  const addEffect = () => {
-    const newEffect: AttributeEffect = { attribute: 'atk', operator: '+', value: 0 };
-    setEditedItem({ ...editedItem, effects: [...(editedItem.effects || []), newEffect] });
-  };
-
-  const removeEffect = (index: number) => {
-    const newEffects = [...(editedItem.effects || [])];
-    newEffects.splice(index, 1);
-    setEditedItem({ ...editedItem, effects: newEffects });
-  };
-  
   const isEquipment = editedItem.itemTypeId === 'equipment';
   const isConsumable = editedItem.itemTypeId === 'consumable';
 
@@ -618,7 +624,7 @@ function ItemEditor({
       <CardHeader>
         <CardTitle>{item.id ? '編輯道具' : '新增道具'}</CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Basic Info */}
         <div className="space-y-2">
           <Label htmlFor="item-id">ID (英文，不可重複)</Label>
@@ -643,8 +649,8 @@ function ItemEditor({
           <Select value={editedItem.itemTypeId} onValueChange={(value) => setEditedItem({ ...editedItem, itemTypeId: value as Item['itemTypeId'] })}>
             <SelectTrigger id="item-type"><SelectValue placeholder="選擇類型" /></SelectTrigger>
             <SelectContent>
-              {itemTypes.map(t => (
-                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              {Object.entries(itemTypeTranslations).map(([id, name]) => (
+                <SelectItem key={id} value={id}>{name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -681,16 +687,16 @@ function ItemEditor({
         <div className="md:col-span-2 space-y-4">
             <div className="flex justify-between items-center">
                 <Label>效果</Label>
-                { (isEquipment || isConsumable) && <Button size="sm" variant="outline" onClick={addEffect}><Plus className="mr-2 h-4 w-4"/>新增效果</Button>}
+                { (isEquipment || isConsumable) && <Button size="sm" variant="outline" onClick={() => setEditedItem(prev => ({ ...prev, effects: [...(prev.effects || []), isEquipment ? { attribute: 'atk', operator: '+', value: 0 } : { trigger: 'on_use', probability: 100, effectType: 'hp_recovery', value: 0 }] }))}><Plus className="mr-2 h-4 w-4"/>新增效果</Button>}
             </div>
 
             { (editedItem.effects || []).map((effect, index) => (
                 <div key={index} className="p-3 border rounded-md bg-background/50 space-y-4 relative">
-                    <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeEffect(index)}><X className="h-4 w-4"/></Button>
+                    <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => setEditedItem(prev => ({ ...prev, effects: prev.effects?.filter((_, i) => i !== index) }))}><X className="h-4 w-4"/></Button>
                    
                     {isEquipment && 'attribute' in effect && (
                         <div className="grid grid-cols-3 gap-2">
-                            <Select value={effect.attribute} onValueChange={v => handleEffectChange(index, 'attribute', v)}>
+                            <Select value={effect.attribute} onValueChange={v => setEditedItem(prev => ({...prev, effects: prev.effects?.map((e, i) => i === index ? {...e, attribute: v} : e)}))}>
                                 <SelectTrigger><SelectValue/></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="atk">ATK</SelectItem>
@@ -698,7 +704,7 @@ function ItemEditor({
                                     <SelectItem value="hp">HP</SelectItem>
                                 </SelectContent>
                             </Select>
-                             <Select value={effect.operator} onValueChange={v => handleEffectChange(index, 'operator', v)}>
+                             <Select value={effect.operator} onValueChange={v => setEditedItem(prev => ({...prev, effects: prev.effects?.map((e, i) => i === index ? {...e, operator: v} : e)}))}>
                                 <SelectTrigger><SelectValue/></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="+">+</SelectItem>
@@ -706,14 +712,14 @@ function ItemEditor({
                                     <SelectItem value="d">d (骰)</SelectItem>
                                 </SelectContent>
                             </Select>
-                            <Input type="number" value={effect.value} onChange={e => handleEffectChange(index, 'value', parseFloat(e.target.value) || 0)} />
+                            <Input type="number" value={effect.value} onChange={e => setEditedItem(prev => ({...prev, effects: prev.effects?.map((ef, i) => i === index ? {...ef, value: parseFloat(e.target.value) || 0} : ef)}))} />
                         </div>
                     )}
 
-                    {isConsumable && (
+                    {isConsumable && 'trigger' in effect && (
                         <div className="space-y-3">
                            <div className="grid grid-cols-3 gap-2">
-                             <Select value={(effect as TriggeredEffect).effectType} onValueChange={v => handleEffectChange(index, 'effectType', v)}>
+                             <Select value={effect.effectType} onValueChange={v => setEditedItem(prev => ({...prev, effects: prev.effects?.map((e, i) => i === index ? {...e, effectType: v} : e)}))}>
                                 <SelectTrigger><SelectValue placeholder="效果類型"/></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="hp_recovery">恢復HP</SelectItem>
@@ -723,10 +729,10 @@ function ItemEditor({
                                     <SelectItem value="hp_cost">扣除HP</SelectItem>
                                 </SelectContent>
                             </Select>
-                             <Input type="number" placeholder="數值" value={(effect as TriggeredEffect).value} onChange={e => handleEffectChange(index, 'value', parseFloat(e.target.value) || 0)} />
-                             <Input type="number" placeholder="機率 (0-100)%" value={(effect as TriggeredEffect).probability} onChange={e => handleEffectChange(index, 'probability', e.target.value)} />
+                             <Input type="number" placeholder="數值" value={effect.value} onChange={e => setEditedItem(prev => ({...prev, effects: prev.effects?.map((ef, i) => i === index ? {...ef, value: parseFloat(e.target.value) || 0} : ef)}))} />
+                             <Input type="number" placeholder="機率 (0-100)%" value={effect.probability} onChange={e => setEditedItem(prev => ({...prev, effects: prev.effects?.map((ef, i) => i === index ? {...ef, probability: parseFloat(e.target.value) || 0} : ef)}))} />
                            </div>
-                           <Input type="number" placeholder="持續回合數 (選填)" value={(effect as TriggeredEffect).duration} onChange={e => handleEffectChange(index, 'duration', parseInt(e.target.value) || undefined)} />
+                           <Input type="number" placeholder="持續回合數 (選填)" value={effect.duration} onChange={e => setEditedItem(prev => ({...prev, effects: prev.effects?.map((ef, i) => i === index ? {...ef, duration: parseInt(e.target.value) || undefined} : ef)}))} />
                         </div>
                     )}
                 </div>
@@ -827,7 +833,10 @@ function StoreManagement() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>名稱</TableHead>
+                            <TableHead>類型</TableHead>
                             <TableHead>陣營</TableHead>
+                            <TableHead>種族</TableHead>
+                            <TableHead>效果</TableHead>
                             <TableHead>價格</TableHead>
                             <TableHead>狀態</TableHead>
                             <TableHead>操作</TableHead>
@@ -836,15 +845,18 @@ function StoreManagement() {
                     <TableBody>
                         {isLoading ? (
                             Array.from({ length: 4 }).map((_, i) => (
-                                <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+                                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
                             ))
                         ) : items.length === 0 ? (
-                            <TableRow><TableCell colSpan={5} className="text-center h-24">尚未建立任何道具</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={8} className="text-center h-24">尚未建立任何道具</TableCell></TableRow>
                         ) : (
                             items.map(item => (
                                 <TableRow key={item.id}>
                                     <TableCell className="font-medium">{item.name}</TableCell>
+                                    <TableCell>{itemTypeTranslations[item.itemTypeId] || '未知'}</TableCell>
                                     <TableCell>{FACTIONS[item.factionId as keyof typeof FACTIONS]?.name || 'N/A'}</TableCell>
+                                    <TableCell>{item.raceId === 'all' ? '通用' : RACES[item.raceId as keyof typeof RACES]?.name || '未知'}</TableCell>
+                                    <TableCell className="text-xs max-w-[200px] truncate">{item.effects?.map(formatEffect).join(', ') || '無'}</TableCell>
                                     <TableCell>{item.price}</TableCell>
                                     <TableCell>
                                         <span className={item.isPublished ? 'text-green-500' : 'text-red-500'}>
