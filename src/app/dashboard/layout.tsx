@@ -52,12 +52,12 @@ export default function DashboardLayout({
   const { user } = useUser();
   const firestore = useFirestore();
 
-  const adminRef = useMemoFirebase(
-    () => (user ? doc(firestore, `roles_admin/${user.uid}`) : null),
+  const userDocRef = useMemoFirebase(
+    () => (user ? doc(firestore, `users/${user.uid}`) : null),
     [user, firestore]
   );
-  const { data: adminData } = useDoc(adminRef);
-  const isAdmin = !!adminData;
+  const { data: userData } = useDoc(userDocRef);
+  const isAdmin = userData?.isAdmin === true;
 
   const getPageTitle = () => {
     const currentItem = navItems.find((item) => item.href === pathname);
