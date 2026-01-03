@@ -62,17 +62,27 @@ export default function StorePage() {
   
   const userFactionId = userData?.factionId;
 
-  const itemsQuery = useMemoFirebase(
-    () =>
-      firestore && userFactionId && userFactionId !== 'wanderer'
-        ? query(
-            collection(firestore, 'items'),
-            where('factionId', '==', userFactionId),
-            where('isPublished', '==', true)
-          )
-        : null,
-    [firestore, userFactionId]
-  );
+  const itemsQuery = useMemoFirebase(() => {
+    if (!firestore || !userFactionId) {
+      return null;
+    }
+    
+    // Wanderers can see all published items.
+    if (userFactionId === 'wanderer') {
+      return query(
+        collection(firestore, 'items'),
+        where('isPublished', '==', true)
+      );
+    }
+
+    // Other factions see their own items.
+    return query(
+      collection(firestore, 'items'),
+      where('factionId', '==', userFactionId),
+      where('isPublished', '==', true)
+    );
+  }, [firestore, userFactionId]);
+
 
   const { data: items, isLoading: areItemsLoading } = useCollection<Item>(itemsQuery);
 
@@ -95,10 +105,10 @@ export default function StorePage() {
         </Card>
       ))}
 
-      {!isLoading && (userFactionId === 'wanderer' || !items || items.length === 0) && (
+      {!isLoading && (!items || items.length === 0) && (
           <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4 text-center text-muted-foreground py-16">
               <h3 className="text-xl font-semibold">商店目前沒有商品</h3>
-              <p>{userFactionId === 'wanderer' ? '流浪者沒有專屬商店。' : '您所屬的陣營目前沒有任何上架的商品。'}</p>
+              <p>您所屬的陣營目前沒有任何上架的商品。</p>
           </div>
       )}
 
