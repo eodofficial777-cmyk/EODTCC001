@@ -30,18 +30,32 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import { getRosterData } from '@/app/actions/get-roster-data';
 import type { User } from '@/lib/types';
-import { RefreshCw, Terminal, Crown, Shield, User as UserIcon } from 'lucide-react';
+import { RefreshCw, Terminal, Crown, Shield, User as UserIcon, WandSparkles, Bird, Users } from 'lucide-react';
 
 function CharacterCard({ user }: { user: User }) {
   const race = RACES[user.raceId as keyof typeof RACES];
   const title = user.titles?.[0] || '無';
+  const faction = FACTIONS[user.factionId as keyof typeof FACTIONS];
+
+  const FactionIcon = () => {
+    switch (user.factionId) {
+      case 'yelu':
+        return <Bird className="h-4 w-4" style={{ color: faction?.color }} />;
+      case 'association':
+        return <Users className="h-4 w-4" style={{ color: faction?.color }} />;
+      case 'wanderer':
+        return <WandSparkles className="h-4 w-4" style={{ color: faction?.color }} />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <Card className="overflow-hidden">
       <div className="flex">
         <Dialog>
           <DialogTrigger asChild>
-            <div className="relative aspect-square w-24 sm:w-32 flex-shrink-0 cursor-pointer">
+            <div className="relative aspect-square w-32 flex-shrink-0 cursor-pointer">
               <Image
                 src={user.avatarUrl}
                 alt={user.roleName}
@@ -64,9 +78,15 @@ function CharacterCard({ user }: { user: User }) {
             </div>
           </DialogContent>
         </Dialog>
-        <CardContent className="flex flex-col justify-center p-4">
-          <h3 className="text-lg font-bold font-headline truncate">{user.roleName}</h3>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-2">
+        <CardContent className="flex flex-1 flex-col justify-center p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold font-headline truncate">{user.roleName}</h3>
+            <div className="flex items-center gap-1 text-xs" style={{ color: faction?.color }}>
+              <FactionIcon />
+              <span>{faction?.name}</span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-2">
             <div className="flex items-center gap-1"><UserIcon className="h-3 w-3" /><span>{race?.name || user.raceId}</span></div>
             <div className="flex items-center gap-1"><Crown className="h-3 w-3" /><span>{title}</span></div>
           </div>
@@ -97,7 +117,7 @@ function CharacterGrid({ users }: { users: User[] | undefined }) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
       {users.map((user) => (
         <CharacterCard key={user.id} user={user} />
       ))}
@@ -139,66 +159,64 @@ export default function RosterPage() {
 
   return (
     <div className="w-full">
-      <CardHeader className="px-0 pt-0">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <CardTitle className="font-headline">角色名冊</CardTitle>
-            <CardDescription>
-              搜尋和篩選所有已批准的角色。資料於每日凌晨 0 點更新。
-            </CardDescription>
-            {cacheTimestamp && !isLoading && <p className="text-xs text-muted-foreground mt-1">當前資料版本：{cacheTimestamp}</p>}
-          </div>
-          <Button onClick={fetchRoster} variant="ghost" size="icon" disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <CardTitle className="font-headline">角色名冊</CardTitle>
+          <CardDescription>
+            搜尋和篩選所有已批准的角色。資料於每日凌晨 0 點更新。
+          </CardDescription>
+          {cacheTimestamp && !isLoading && <p className="text-xs text-muted-foreground mt-1">當前資料版本：{cacheTimestamp}</p>}
         </div>
-       
-        {error && (
-            <Alert variant="destructive" className="mb-4">
-                <Terminal className="h-4 w-4" />
-                <AlertTitle>讀取失敗</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-            </Alert>
-        )}
+        <Button onClick={fetchRoster} variant="ghost" size="icon" disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+     
+      {error && (
+          <Alert variant="destructive" className="mb-4">
+              <Terminal className="h-4 w-4" />
+              <AlertTitle>讀取失敗</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+          </Alert>
+      )}
 
-        {!error && (
-        <Tabs defaultValue="all">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
-            {factionTabs.map((faction) => (
-              <TabsTrigger key={faction.id} value={faction.id}>
-                {faction.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      {!error && (
+      <Tabs defaultValue="all" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+          {factionTabs.map((faction) => (
+            <TabsTrigger key={faction.id} value={faction.id}>
+              {faction.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-          {isLoading ? (
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                {Array.from({ length: 9 }).map((_, i) => (
-                  <div key={i} className="flex gap-4 p-4 border rounded-lg">
-                    <Skeleton className="h-24 w-24 rounded-lg" />
-                    <div className="space-y-2 flex-1">
-                      <Skeleton className="h-5 w-3/4" />
-                      <Skeleton className="h-4 w-1/2" />
-                      <Skeleton className="h-4 w-1/3" />
-                    </div>
+        {isLoading ? (
+          <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex gap-4 p-4 border rounded-lg">
+                  <Skeleton className="h-24 w-24 rounded-lg" />
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-4 w-1/3" />
                   </div>
-                ))}
-            </div>
-          ) : (
-            <>
-              <TabsContent value="all" className="mt-6">
-                <CharacterGrid users={allUsers || []} />
-              </TabsContent>
-              {Object.values(FACTIONS).map((faction) => (
-                <TabsContent key={faction.id} value={faction.id} className="mt-6">
-                  <CharacterGrid users={rosterData?.[faction.id]} />
-                </TabsContent>
+                </div>
               ))}
-            </>
-          )}
-        </Tabs>
+          </div>
+        ) : (
+          <>
+            <TabsContent value="all" className="mt-6">
+              <CharacterGrid users={allUsers || []} />
+            </TabsContent>
+            {Object.values(FACTIONS).map((faction) => (
+              <TabsContent key={faction.id} value={faction.id} className="mt-6">
+                <CharacterGrid users={rosterData?.[faction.id]} />
+              </TabsContent>
+            ))}
+          </>
         )}
-      </CardHeader>
+      </Tabs>
+      )}
   </div>
   );
 }
