@@ -110,15 +110,12 @@ export async function submitTask(payload: SubmitTaskPayload) {
         userTasks.push(newTaskRef.id);
     }
 
+    // ALL players, including Wanderers, always get their personal honor points.
     const userUpdateData: { [key: string]: any } = {
         tasks: userTasks,
         currency: increment(currencyToAward),
+        honorPoints: increment(honorToAward),
     };
-    
-    const isWandererContributing = userFactionId === 'wanderer' && factionContribution && factionContribution !== 'none';
-    if (!isWandererContributing) {
-        userUpdateData.honorPoints = increment(honorToAward);
-    }
     
     if (taskType.titleAwarded) {
         userUpdateData.titles = arrayUnion(taskType.titleAwarded);
@@ -132,7 +129,9 @@ export async function submitTask(payload: SubmitTaskPayload) {
     // 3. Update war season score (only if not requiring approval and honor is awarded)
     if (honorToAward > 0) {
         let factionToUpdateId = userFactionId;
-        // If the user is a wanderer, the score goes to their chosen faction
+        const isWandererContributing = userFactionId === 'wanderer' && factionContribution && factionContribution !== 'none';
+
+        // If the user is a wanderer and chose a faction, the score goes to their chosen faction
         if (isWandererContributing) {
             factionToUpdateId = factionContribution!;
         }
@@ -141,10 +140,8 @@ export async function submitTask(payload: SubmitTaskPayload) {
             const seasonUpdate: { [key: string]: FieldValue } = {
                 [`${factionToUpdateId}.rawScore`]: increment(honorToAward)
             };
-            // Only add to active players if they are not a wanderer
-            if (userFactionId !== 'wanderer') {
-                 seasonUpdate[`${factionToUpdateId}.activePlayers`] = arrayUnion(userId);
-            }
+            // Active players are now defined as anyone contributing to the faction's score
+            seasonUpdate[`${factionToUpdateId}.activePlayers`] = arrayUnion(userId);
             batch.update(seasonRef, seasonUpdate);
         }
     }

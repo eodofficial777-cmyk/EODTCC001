@@ -136,7 +136,7 @@ function MissionSubmitForm({
 
     if (isWanderer && selectedTaskType && !values.factionContribution) {
       form.setError('factionContribution', {
-        message: '身為流浪者，請選擇要貢獻的陣營。',
+        message: '身為流浪者，請選擇要貢獻的對象。',
       });
       return;
     }
@@ -273,13 +273,13 @@ function MissionSubmitForm({
                           <FormControl>
                             <RadioGroupItem value="yelu" />
                           </FormControl>
-                          <FormLabel className="font-normal">協助 夜鷺</FormLabel>
+                          <FormLabel className="font-normal">貢獻給 夜鷺</FormLabel>
                         </FormItem>
                         <FormItem className="flex items-center space-x-3 space-y-0">
                           <FormControl>
                             <RadioGroupItem value="association" />
                           </FormControl>
-                          <FormLabel className="font-normal">協助 協會</FormLabel>
+                          <FormLabel className="font-normal">貢獻給 協會</FormLabel>
                         </FormItem>
                         <FormItem className="flex items-center space-x-3 space-y-0">
                           <FormControl>
@@ -537,7 +537,7 @@ export default function MissionsPage() {
     () => (user ? doc(firestore, `users/${user.uid}`) : null),
     [user, firestore]
   );
-  const { data: userData, isLoading: isUserDataLoading, refetch: refetchUserData } = useDoc(userDocRef);
+  const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
 
   const [tasks, setTasks] = React.useState<any[] | null>(null);
   const [tasksLoading, setTasksLoading] = React.useState(true);
@@ -553,7 +553,6 @@ export default function MissionsPage() {
 
   const handleTaskSubmitted = () => {
     loadTasks();
-    refetchUserData();
     setRefreshTrigger(t => t + 1);
   };
 
