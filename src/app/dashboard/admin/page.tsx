@@ -6,6 +6,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from '@/components/ui/card';
 import {
   Tabs,
@@ -114,7 +115,7 @@ function AccountApproval() {
         title: '成功',
         description: `已更新使用者 ${userToUpdate.roleName} 的資料。`,
       });
-    } catch (error: any) {
+    } catch (error: any) => {
       toast({
         variant: 'destructive',
         title: '更新失敗',
@@ -314,7 +315,7 @@ function TaskTypeEditor({
              <Label htmlFor="task-category">類型</Label>
              <Select
                 value={editedTask.category}
-                onValueChange={(value) => setEditedTask({ ...editedTask, category: value })}
+                onValueChange={(value) => setEditedTask({ ...editedTask, category: value as TaskType['category'] })}
              >
                 <SelectTrigger id="task-category">
                     <SelectValue placeholder="選擇任務分類"/>
@@ -637,3 +638,5 @@ export default function AdminPage() {
     </Card>
   );
 }
+
+    
