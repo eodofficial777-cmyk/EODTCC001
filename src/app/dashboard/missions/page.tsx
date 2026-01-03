@@ -272,13 +272,17 @@ function AllSubmissionsFeed() {
         : null,
     [firestore]
   );
-  const { data: tasks, isLoading } = useCollection(tasksQuery);
+  const { data: tasks, isLoading, error } = useCollection(tasksQuery);
   
   const getFactionBadge = (factionId: string) => {
     const faction = FACTIONS[factionId as keyof typeof FACTIONS];
     if (!faction) return null;
     return <Badge style={{ backgroundColor: faction.color, color: 'white' }}>{faction.name}</Badge>
   }
+
+  // Handle case where collection doesn't exist yet, which throws a permission error initially.
+  // We can treat this as an empty, non-loading state.
+  const displayTasks = (!isLoading && !error) ? tasks : [];
 
   return (
     <Card>
@@ -290,7 +294,7 @@ function AllSubmissionsFeed() {
         <ScrollArea className="h-96">
           <div className="space-y-4">
             {isLoading && Array.from({length: 5}).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-            {tasks && tasks.map((task) => (
+            {displayTasks && displayTasks.map((task) => (
               <div key={task.id} className="flex items-center justify-between text-sm">
                 <div>
                    <p className="font-medium">
@@ -305,7 +309,7 @@ function AllSubmissionsFeed() {
                 {getFactionBadge(task.userFactionId)}
               </div>
             ))}
-             {!isLoading && tasks?.length === 0 && (
+             {!isLoading && displayTasks?.length === 0 && (
                 <p className="text-center text-muted-foreground py-4">目前沒有人提交任務。</p>
             )}
           </div>
