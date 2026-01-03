@@ -10,9 +10,20 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Trophy } from 'lucide-react';
 import { getConflictData, ConflictData } from '@/app/actions/get-conflict-data';
+import { getArchivedSeasons, ArchivedSeason } from '@/app/actions/get-archived-seasons';
 import { FACTIONS } from '@/lib/game-data';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+
 
 function FactionDisplay({ factionData, totalScore }: { factionData: any; totalScore: number }) {
     if (!factionData) return null;
@@ -37,6 +48,7 @@ function FactionDisplay({ factionData, totalScore }: { factionData: any; totalSc
 
 export default function ConflictPage() {
   const [data, setData] = useState<ConflictData | null>(null);
+  const [archivedSeasons, setArchivedSeasons] = useState<ArchivedSeason[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,9 +56,16 @@ export default function ConflictPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await getConflictData();
-      if (result.error) throw new Error(result.error);
-      setData(result.data || null);
+      const [conflictResult, archiveResult] = await Promise.all([
+        getConflictData(),
+        getArchivedSeasons()
+      ]);
+      
+      if (conflictResult.error) throw new Error(conflictResult.error);
+      if (archiveResult.error) throw new Error(archiveResult.error);
+
+      setData(conflictResult.data || null);
+      setArchivedSeasons(archiveResult.seasons || []);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -63,9 +82,21 @@ export default function ConflictPage() {
   const totalWeightedScore = (yelu?.weightedScore ?? 0) + (association?.weightedScore ?? 0);
   const yeluPercentage = totalWeightedScore > 0 ? (yelu?.weightedScore ?? 0) / totalWeightedScore * 100 : 50;
 
+  const getWinnerBadge = (season: ArchivedSeason) => {
+    const yeluScore = season.yelu?.rawScore ?? 0;
+    const associationScore = season.association?.rawScore ?? 0;
+    if (yeluScore > associationScore) {
+      return <Badge style={{ backgroundColor: FACTIONS.yelu.color, color: 'white' }}>夜鷺</Badge>;
+    }
+    if (associationScore > yeluScore) {
+      return <Badge style={{ backgroundColor: FACTIONS.association.color, color: 'white' }}>協會</Badge>;
+    }
+    return <Badge variant="secondary">平手</Badge>;
+  }
+
   return (
     <div className="w-full">
-      <Card className="bg-card/50">
+      <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="font-headline text-3xl">陣營發展情形</CardTitle>
@@ -117,8 +148,35 @@ export default function ConflictPage() {
 
             <div>
                 <h4 className="font-headline text-xl mb-4 text-center">過往賽季紀錄</h4>
-                <div className="text-center text-muted-foreground py-4">
-                  沒有過往賽季紀錄
+                <div className="border rounded-md">
+                {isLoading ? <Skeleton className="h-48 w-full"/> : 
+                 archivedSeasons && archivedSeasons.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>賽季結束日期</TableHead>
+                        <TableHead>夜鷺分數</TableHead>
+                        <TableHead>協會分數</TableHead>
+                        <TableHead className="text-center">當季贏家</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {archivedSeasons.map(season => (
+                        <TableRow key={season.id}>
+                          <TableCell>{new Date(season.archivedAt).toLocaleDateString()}</TableCell>
+                          <TableCell>{season.yelu?.rawScore.toLocaleString() ?? 0}</TableCell>
+                          <TableCell>{season.association?.rawScore.toLocaleString() ?? 0}</TableCell>
+                          <TableCell className="text-center">{getWinnerBadge(season)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center text-muted-foreground py-12">
+                    <Trophy className="mx-auto h-8 w-8 mb-2" />
+                    沒有過往賽季紀錄
+                  </div>
+                )}
                 </div>
             </div>
         </CardContent>
