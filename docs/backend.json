@@ -337,7 +337,7 @@
         },
         "titleAwarded": {
           "type": "string",
-          "description": "The title awarded for completing this task type (optional)."
+          "description": "The title ID awarded for completing this task type (optional)."
         },
         "itemAwarded": {
           "type": "string",
@@ -386,9 +386,14 @@
           "type": "string",
           "description": "A description of the item."
         },
+        "imageUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the item's image."
+        },
         "itemTypeId": {
           "type": "string",
-          "description": "Reference to the ItemType of the item. (Relationship: ItemType 1:N Item)"
+          "description": "Reference to the ItemType of the item."
         },
         "price": {
           "type": "number",
@@ -396,7 +401,19 @@
         },
         "factionId": {
           "type": "string",
-          "description": "Reference to the Faction that this item belongs to. (Relationship: Faction 1:N Item)"
+          "description": "Reference to the Faction that this item belongs to. Required for store items."
+        },
+        "raceId": {
+            "type": "string",
+            "description": "Race restriction for the item. Can be 'all' for no restriction."
+        },
+        "effects": {
+            "type": "string",
+            "description": "Text description of the item's effects (e.g., 'ATK +5', 'Heals 50 HP')."
+        },
+        "isPublished": {
+            "type": "boolean",
+            "description": "If true, the item will appear in the faction store."
         }
       },
       "required": [
@@ -405,7 +422,9 @@
         "description",
         "itemTypeId",
         "price",
-        "factionId"
+        "factionId",
+        "raceId",
+        "isPublished"
       ]
     },
     "ItemType": {

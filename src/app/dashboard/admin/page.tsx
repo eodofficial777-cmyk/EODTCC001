@@ -41,7 +41,7 @@ import { RefreshCw, Trash2, Edit } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, TaskType } from '@/lib/types';
+import type { User, TaskType, Item } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -58,6 +58,7 @@ import {
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Terminal } from 'lucide-react';
+import { updateItem } from '@/app/actions/update-item';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -309,11 +310,11 @@ function TaskTypeEditor({
       <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
             <Label htmlFor="task-id">ID (英文，不可重複)</Label>
-            <Input id="task-id" value={editedTask.id || ''} onChange={e => setEditedTask({...editedTask, id: e.target.value })} disabled={!!taskType.id} placeholder="例如：main, general, premium"/>
+            <Input id="task-id" value={editedTask.id || ''} onChange={e => setEditedTask({...editedTask, id: e.target.value })} disabled={!!taskType.id} placeholder="例如：main, general-1"/>
         </div>
         <div className="space-y-2">
             <Label htmlFor="task-name">名稱</Label>
-            <Input id="task-name" value={editedTask.name || ''} onChange={e => setEditedTask({...editedTask, name: e.target.value })} placeholder="例如：主線任務"/>
+            <Input id="task-name" value={editedTask.name || ''} onChange={e => setEditedTask({...editedTask, name: e.target.value })} placeholder="例如：主線任務、夜鷺主線一"/>
         </div>
         <div className="space-y-2">
              <Label htmlFor="task-category">類型</Label>
@@ -399,7 +400,6 @@ function TaskTypeEditor({
     </Card>
   );
 }
-
 
 function TaskManagement() {
   const { toast } = useToast();
@@ -549,7 +549,242 @@ function TaskManagement() {
             </Table>
         </div>
     </div>
-  )
+  );
+}
+
+function ItemEditor({
+  item,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  item: Partial<Item>;
+  onSave: (item: Partial<Item>) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [editedItem, setEditedItem] = useState(item);
+
+  const handleSave = () => {
+    if (!editedItem.name || !editedItem.id) {
+      alert('ID 和名稱為必填項目');
+      return;
+    }
+    onSave(editedItem);
+  };
+  
+  const itemTypes = [
+      { id: 'equipment', name: '裝備' },
+      { id: 'consumable', name: '戰鬥道具' },
+      { id: 'special', name: '特殊道具' },
+  ];
+
+  return (
+    <Card className="mt-4 bg-muted/30">
+      <CardHeader>
+        <CardTitle>{item.id ? '編輯道具' : '新增道具'}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-2">
+          <Label htmlFor="item-id">ID (英文，不可重複)</Label>
+          <Input id="item-id" value={editedItem.id || ''} onChange={e => setEditedItem({ ...editedItem, id: e.target.value })} disabled={!!item.id} placeholder="例如：potion-1" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="item-name">名稱</Label>
+          <Input id="item-name" value={editedItem.name || ''} onChange={e => setEditedItem({ ...editedItem, name: e.target.value })} placeholder="例如：回復藥水" />
+        </div>
+        <div className="md:col-span-2 space-y-2">
+            <Label htmlFor="item-imageUrl">圖片網址</Label>
+            <Input id="item-imageUrl" value={editedItem.imageUrl || ''} onChange={e => setEditedItem({...editedItem, imageUrl: e.target.value })} placeholder="https://images.plurk.com/..."/>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="item-price">價格</Label>
+          <Input id="item-price" type="number" value={editedItem.price || 0} onChange={e => setEditedItem({ ...editedItem, price: parseInt(e.target.value) || 0 })} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="item-faction">陣營</Label>
+          <Select value={editedItem.factionId} onValueChange={(value) => setEditedItem({ ...editedItem, factionId: value })}>
+            <SelectTrigger id="item-faction"><SelectValue placeholder="選擇陣營" /></SelectTrigger>
+            <SelectContent>
+              {Object.values(FACTIONS).filter(f => f.id !== 'wanderer').map(f => (
+                <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="item-race">種族限制</Label>
+          <Select value={editedItem.raceId} onValueChange={(value) => setEditedItem({ ...editedItem, raceId: value })}>
+            <SelectTrigger id="item-race"><SelectValue placeholder="選擇種族" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">通用</SelectItem>
+              {Object.values(RACES).map(r => (
+                <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="item-type">類型</Label>
+          <Select value={editedItem.itemTypeId} onValueChange={(value) => setEditedItem({ ...editedItem, itemTypeId: value })}>
+            <SelectTrigger id="item-type"><SelectValue placeholder="選擇類型" /></SelectTrigger>
+            <SelectContent>
+              {itemTypes.map(t => (
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+         <div className="md:col-span-2 space-y-2">
+            <Label htmlFor="item-desc">描述</Label>
+            <Input id="item-desc" value={editedItem.description || ''} onChange={e => setEditedItem({...editedItem, description: e.target.value })} placeholder="道具的說明文字"/>
+        </div>
+        <div className="md:col-span-2 space-y-2">
+            <Label htmlFor="item-effects">效果</Label>
+            <Input id="item-effects" value={editedItem.effects || ''} onChange={e => setEditedItem({...editedItem, effects: e.target.value })} placeholder="ATK +5, DEF +3 / 恢復 50 HP / 無"/>
+        </div>
+        <div className="flex items-center space-x-2">
+            <Checkbox id="item-published" checked={editedItem.isPublished} onCheckedChange={checked => setEditedItem({...editedItem, isPublished: !!checked})}/>
+            <Label htmlFor="item-published" className="text-sm font-medium">上架於陣營商店</Label>
+        </div>
+      </CardContent>
+      <CardFooter className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onCancel}>取消</Button>
+        <Button onClick={handleSave} disabled={isSaving}>{isSaving ? "儲存中..." : "儲存"}</Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
+function StoreManagement() {
+    const { toast } = useToast();
+    const [items, setItems] = useState<Item[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [editingItem, setEditingItem] = useState<Partial<Item> | null>(null);
+
+    const fetchAdminData = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const result = await getAdminData();
+            if (result.error) throw new Error(result.error);
+            setItems(result.items || []);
+        } catch (error: any) {
+            setError(error.message);
+            setItems([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAdminData();
+    }, []);
+
+    const handleSave = async (itemData: Partial<Item>) => {
+        setIsSaving(true);
+        try {
+            const result = await updateItem(itemData as Item);
+            if (result.error) throw new Error(result.error);
+            toast({ title: '成功', description: '道具已儲存。' });
+            setEditingItem(null);
+            fetchAdminData(); // Refresh list
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: '儲存失敗', description: error.message });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    if (error) {
+        return (
+            <Alert variant="destructive">
+                <Terminal className="h-4 w-4" />
+                <AlertTitle>讀取失敗</AlertTitle>
+                <AlertDescription>
+                    無法從後端讀取道具列表。
+                    <pre className="mt-2 text-xs bg-black/20 p-2 rounded-md font-mono">{error}</pre>
+                </AlertDescription>
+            </Alert>
+        );
+    }
+    
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <div>
+                    <h3 className="text-lg font-semibold">商店道具管理</h3>
+                    <p className="text-muted-foreground mt-1 text-sm">新增、編輯和上下架商店中的商品。</p>
+                </div>
+                <Button onClick={() => setEditingItem({ isPublished: true })} disabled={!!editingItem}>新增道具</Button>
+            </div>
+
+            {editingItem && (
+                <ItemEditor 
+                    item={editingItem}
+                    onSave={handleSave}
+                    onCancel={() => setEditingItem(null)}
+                    isSaving={isSaving}
+                />
+            )}
+
+            <div className="border rounded-md mt-4">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>名稱</TableHead>
+                            <TableHead>陣營</TableHead>
+                            <TableHead>價格</TableHead>
+                            <TableHead>狀態</TableHead>
+                            <TableHead>操作</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {isLoading ? (
+                            Array.from({ length: 4 }).map((_, i) => (
+                                <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+                            ))
+                        ) : items.length === 0 ? (
+                            <TableRow><TableCell colSpan={5} className="text-center h-24">尚未建立任何道具</TableCell></TableRow>
+                        ) : (
+                            items.map(item => (
+                                <TableRow key={item.id}>
+                                    <TableCell className="font-medium">{item.name}</TableCell>
+                                    <TableCell>{FACTIONS[item.factionId as keyof typeof FACTIONS]?.name || 'N/A'}</TableCell>
+                                    <TableCell>{item.price}</TableCell>
+                                    <TableCell>
+                                        <span className={item.isPublished ? 'text-green-500' : 'text-red-500'}>
+                                            {item.isPublished ? '已上架' : '未上架'}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="space-x-2">
+                                        <Button variant="ghost" size="icon" onClick={() => setEditingItem(item)}><Edit className="h-4 w-4"/></Button>
+                                        <Dialog>
+                                            <DialogTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                                            </DialogTrigger>
+                                            <DialogContent>
+                                                <DialogHeader>
+                                                    <DialogTitle>確認刪除</DialogTitle>
+                                                    <DialogDescription>您確定要刪除「{item.name}」嗎？</DialogDescription>
+                                                </DialogHeader>
+                                                <DialogFooter>
+                                                    <DialogClose asChild><Button variant="outline">取消</Button></DialogClose>
+                                                    <Button variant="destructive" onClick={() => handleSave({...item, _delete: true})}>刪除</Button>
+                                                </DialogFooter>
+                                            </DialogContent>
+                                        </Dialog>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+        </div>
+    );
 }
 
 
@@ -588,13 +823,13 @@ export default function AdminPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="accounts">
+        <Tabs defaultValue="accounts" className="w-full">
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:w-max lg:grid-flow-col">
             <TabsTrigger value="accounts">帳號審核</TabsTrigger>
             <TabsTrigger value="missions">任務管理</TabsTrigger>
+            <TabsTrigger value="store">商店道具</TabsTrigger>
             <TabsTrigger value="battle">共鬥管理</TabsTrigger>
             <TabsTrigger value="conflict">陣營對抗</TabsTrigger>
-            <TabsTrigger value="store">商店道具</TabsTrigger>
             <TabsTrigger value="crafting">裝備合成</TabsTrigger>
             <TabsTrigger value="skills">技能管理</TabsTrigger>
             <TabsTrigger value="titles">稱號管理</TabsTrigger>
@@ -609,6 +844,9 @@ export default function AdminPage() {
             <TabsContent value="missions">
               <TaskManagement />
             </TabsContent>
+            <TabsContent value="store">
+               <StoreManagement />
+            </TabsContent>
             <TabsContent value="battle">
                <h3 className="text-lg font-semibold">共鬥管理</h3>
               <p className="text-muted-foreground mt-2">
@@ -621,12 +859,6 @@ export default function AdminPage() {
                 重置陣營積分以開啟新賽季，並存檔當前賽季的結果。
               </p>
                <Button variant="destructive" className="mt-4">重置賽季積分</Button>
-            </TabsContent>
-            <TabsContent value="store">
-               <h3 className="text-lg font-semibold">商店道具管理</h3>
-              <p className="text-muted-foreground mt-2">
-                新增、編輯和上下架商店中的商品。
-              </p>
             </TabsContent>
              <TabsContent value="crafting">
                <h3 className="text-lg font-semibold">裝備合成管理</h3>

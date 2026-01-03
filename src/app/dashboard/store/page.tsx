@@ -1,3 +1,5 @@
+'use client';
+
 import Image from 'next/image';
 import {
   Card,
@@ -9,40 +11,92 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Gem } from 'lucide-react';
-
-const storeItems = [
-  { id: 'item-1', name: '回復藥水', price: 100, imageId: 'store-item-1', description: '恢復少量HP。', category: '道具' },
-  { id: 'item-2', name: '遠古之劍', price: 5000, imageId: 'store-item-2', description: '一把鋒利的舊時代武器。', category: '裝備' },
-  { id: 'item-3', name: '神秘護符', price: 2500, imageId: 'store-item-3', description: '據說能帶來好運。', category: '飾品' },
-  { id: 'item-4', name: '皮製護甲', price: 1200, imageId: 'store-item-4', description: '提供基礎的防護。', category: '裝備' },
-];
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
+import type { Item } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useDoc } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
 export default function StorePage() {
+  const { user, isUserLoading } = useUser();
+  const firestore = useFirestore();
+
+  const userDocRef = useMemoFirebase(
+    () => (user ? doc(firestore, `users/${user.uid}`) : null),
+    [user, firestore]
+  );
+  const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
+  
+  const userFactionId = userData?.factionId;
+
+  const itemsQuery = useMemoFirebase(
+    () =>
+      firestore && userFactionId
+        ? query(
+            collection(firestore, 'items'),
+            where('factionId', '==', userFactionId),
+            where('isPublished', '==', true)
+          )
+        : null,
+    [firestore, userFactionId]
+  );
+
+  const { data: items, isLoading: areItemsLoading } = useCollection<Item>(itemsQuery);
+
+  const isLoading = isUserLoading || isUserDataLoading || areItemsLoading;
+
   return (
     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {storeItems.map((item) => {
-        const itemImage = PlaceHolderImages.find((p) => p.id === item.imageId);
-        return (
+      {isLoading && Array.from({ length: 4 }).map((_, i) => (
+        <Card key={i}>
+            <CardHeader>
+                <Skeleton className="h-40 w-full mb-4"/>
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+            </CardHeader>
+            <CardContent className="flex-grow"></CardContent>
+            <CardFooter className="flex justify-between items-center">
+                <Skeleton className="h-8 w-20" />
+                <Skeleton className="h-10 w-24" />
+            </CardFooter>
+        </Card>
+      ))}
+
+      {!isLoading && items && items.length === 0 && (
+          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4 text-center text-muted-foreground py-16">
+              <h3 className="text-xl font-semibold">商店目前沒有商品</h3>
+              <p>您所屬的陣營目前沒有任何上架的商品。</p>
+          </div>
+      )}
+
+      {!isLoading && items && items.map((item) => (
           <Card key={item.id} className="flex flex-col">
             <CardHeader>
               <div className="relative h-40 w-full mb-4">
-                {itemImage && (
+                {item.imageUrl ? (
                   <Image
-                    src={itemImage.imageUrl}
+                    src={item.imageUrl}
                     alt={item.name}
-                    data-ai-hint={itemImage.imageHint}
                     fill
                     className="object-cover rounded-md"
                   />
+                ) : (
+                    <div className="w-full h-full bg-muted rounded-md flex items-center justify-center">
+                        <span className="text-muted-foreground text-sm">沒有圖片</span>
+                    </div>
                 )}
-                 <Badge className="absolute top-2 right-2">{item.category}</Badge>
+                 {item.itemTypeId && <Badge className="absolute top-2 right-2">{item.itemTypeId}</Badge>}
               </div>
               <CardTitle className="font-headline">{item.name}</CardTitle>
               <CardDescription>{item.description}</CardDescription>
             </CardHeader>
-            <CardContent className="flex-grow"></CardContent>
+            <CardContent className="flex-grow">
+               <p className="text-sm text-primary-foreground/80 bg-primary/20 p-2 rounded-md">
+                <span className="font-semibold">效果：</span>{item.effects}
+               </p>
+            </CardContent>
             <CardFooter className="flex justify-between items-center">
               <div className="flex items-center gap-1 font-mono text-lg font-bold text-primary">
                 <Gem className="h-4 w-4" />
@@ -51,8 +105,8 @@ export default function StorePage() {
               <Button>購買</Button>
             </CardFooter>
           </Card>
-        );
-      })}
+        )
+      )}
     </div>
   );
 }

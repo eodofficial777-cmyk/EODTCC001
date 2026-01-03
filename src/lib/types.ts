@@ -36,3 +36,16 @@ export interface TaskType {
   requiresApproval?: boolean;
   singleSubmission?: boolean;
 }
+
+export interface Item {
+    id: string;
+    name: string;
+    description: string;
+    effects: string;
+    imageUrl: string;
+    price: number;
+    itemTypeId: string;
+    factionId: string;
+    raceId: string;
+    isPublished: boolean;
+}
