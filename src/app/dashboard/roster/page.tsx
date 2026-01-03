@@ -117,7 +117,7 @@ function CharacterGrid({ users }: { users: User[] | undefined }) {
   }
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
       {users.map((user) => (
         <CharacterCard key={user.id} user={user} />
       ))}
@@ -191,8 +191,8 @@ export default function RosterPage() {
         </TabsList>
 
         {isLoading ? (
-          <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {Array.from({ length: 8 }).map((_, i) => (
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {Array.from({ length: 9 }).map((_, i) => (
                 <div key={i} className="flex gap-4 p-4 border rounded-lg">
                   <Skeleton className="h-24 w-24 rounded-lg" />
                   <div className="space-y-2 flex-1">
