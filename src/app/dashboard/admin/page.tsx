@@ -317,20 +317,8 @@ function TaskTypeEditor({
             <Input id="task-name" value={editedTask.name || ''} onChange={e => setEditedTask({...editedTask, name: e.target.value })} placeholder="例如：主線任務、夜鷺主線一"/>
         </div>
         <div className="space-y-2">
-             <Label htmlFor="task-category">類型</Label>
-             <Select
-                value={editedTask.category}
-                onValueChange={(value) => setEditedTask({ ...editedTask, category: value as TaskType['category'] })}
-             >
-                <SelectTrigger id="task-category">
-                    <SelectValue placeholder="選擇任務分類"/>
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="main">主線</SelectItem>
-                    <SelectItem value="side">支線</SelectItem>
-                    <SelectItem value="general">一般</SelectItem>
-                </SelectContent>
-             </Select>
+             <Label htmlFor="task-category">類型 (自定義分類)</Label>
+             <Input id="task-category" value={editedTask.category || ''} onChange={e => setEditedTask({...editedTask, category: e.target.value })} placeholder="例如: 主線, 支線, 活動"/>
         </div>
         <div className="md:col-span-2 space-y-2">
             <Label htmlFor="task-desc">描述</Label>

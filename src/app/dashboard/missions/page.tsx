@@ -62,7 +62,8 @@ import type { TaskType } from '@/lib/types';
 
 
 const formSchema = z.object({
-  taskTypeId: z.string({ required_error: '請選擇一個任務類型' }),
+  taskCategory: z.string({ required_error: '請選擇一個任務類型' }),
+  taskTypeId: z.string({ required_error: '請選擇一個任務' }),
   submissionUrl: z
     .string()
     .url('請輸入有效的網址')
@@ -93,13 +94,35 @@ function MissionSubmitForm({
   
   const isSubmitting = form.formState.isSubmitting;
   const isWanderer = userData?.factionId === 'wanderer';
+
+  const userSubmittedTaskIds = userData?.tasks || [];
+
+  const taskCategories = React.useMemo(() => {
+    const categories = new Set(taskTypes.map(t => t.category));
+    return Array.from(categories);
+  }, [taskTypes]);
+
+  const selectedCategory = useWatch({
+    control: form.control,
+    name: 'taskCategory',
+  });
+  
+  const filteredTasks = React.useMemo(() => {
+      if (!selectedCategory) return [];
+      return taskTypes.filter(t => t.category === selectedCategory);
+  }, [selectedCategory, taskTypes]);
+
   const selectedTaskTypeId = useWatch({
     control: form.control,
     name: 'taskTypeId',
   });
+
   const selectedTaskType = taskTypes.find(t => t.id === selectedTaskTypeId);
-  
-  const userSubmittedTaskIds = userData?.tasks || [];
+
+  React.useEffect(() => {
+      form.setValue('taskTypeId', '');
+  }, [selectedCategory, form]);
+
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!user || !userData) {
@@ -131,7 +154,10 @@ function MissionSubmitForm({
         userId: user.uid,
         userName: userData.roleName,
         userFactionId: userData.factionId,
-        ...values,
+        taskTypeId: values.taskTypeId,
+        submissionUrl: values.submissionUrl,
+        title: values.title,
+        factionContribution: values.factionContribution,
       });
 
       if (result.error) {
@@ -145,6 +171,7 @@ function MissionSubmitForm({
       form.reset({
         submissionUrl: 'https://www.plurk.com/',
         title: '',
+        taskCategory: '',
         taskTypeId: '',
         factionContribution: undefined
       });
@@ -169,36 +196,62 @@ function MissionSubmitForm({
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="taskTypeId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>任務類型</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="選擇任務類型" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {taskTypes.map((task) => (
-                        <SelectItem 
-                            key={task.id} 
-                            value={task.id} 
-                            disabled={task.singleSubmission && userSubmittedTaskIds.includes(task.id)}
-                        >
-                          {task.name} (+{task.honorPoints}榮譽, +{task.currency}貨幣)
-                          {task.singleSubmission && userSubmittedTaskIds.includes(task.id) && ' (已完成)'}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedTaskType && <p className="text-xs text-muted-foreground pt-1">{selectedTaskType.description}</p>}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="taskCategory"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>任務類型</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="選擇任務類型" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {taskCategories.map((category) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="taskTypeId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>任務名稱</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={!selectedCategory}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="選擇任務" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {filteredTasks.map((task) => (
+                          <SelectItem 
+                              key={task.id} 
+                              value={task.id} 
+                              disabled={task.singleSubmission && userSubmittedTaskIds.includes(task.id)}
+                          >
+                            {task.name}
+                            {task.singleSubmission && userSubmittedTaskIds.includes(task.id) && ' (已完成)'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedTaskType && <p className="text-xs text-muted-foreground pt-1">{selectedTaskType.description}</p>}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             {isWanderer && selectedTaskType && (
               <FormField
                 control={form.control}
@@ -236,7 +289,6 @@ function MissionSubmitForm({
                   </FormItem>
                 )}
               />
-            )}
             <FormField
               control={form.control}
               name="title"
