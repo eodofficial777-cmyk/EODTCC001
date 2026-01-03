@@ -39,16 +39,9 @@ import { FACTIONS, RACES } from '@/lib/game-data';
 import { RefreshCw } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
+import Image from 'next/image';
+import type { User } from '@/lib/types';
 
-interface User {
-  id: string;
-  roleName: string;
-  plurkInfo: string;
-  registrationDate: string;
-  approved: boolean;
-  factionId: string;
-  raceId: string;
-}
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -70,6 +63,7 @@ function AccountApproval() {
         title: '錯誤',
         description: `讀取使用者列表失敗: ${error.message}`,
       });
+       setUsers([]); // Clear users on error
     } finally {
       setIsLoading(false);
     }
@@ -113,7 +107,7 @@ function AccountApproval() {
         title: '更新失敗',
         description: error.message,
       });
-      // Optional: Revert state on failure
+      // Optional: Revert state on failure by re-fetching
       fetchUsers();
     } finally {
       setIsUpdating((prev) => ({ ...prev, [userId]: false }));
@@ -134,12 +128,14 @@ function AccountApproval() {
         </Button>
       </div>
 
-      <div className="border rounded-md">
+      <div className="border rounded-md overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>大頭貼</TableHead>
               <TableHead>角色名稱</TableHead>
               <TableHead>噗浪</TableHead>
+              <TableHead>角色卡</TableHead>
               <TableHead>註冊日期</TableHead>
               <TableHead>狀態</TableHead>
               <TableHead>陣營</TableHead>
@@ -151,22 +147,38 @@ function AccountApproval() {
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={7}>
-                    <Skeleton className="h-8 w-full" />
+                  <TableCell colSpan={9}>
+                    <Skeleton className="h-10 w-full" />
                   </TableCell>
                 </TableRow>
               ))
             ) : users.length === 0 ? (
                 <TableRow>
-                    <TableCell colSpan={7} className="text-center h-24">沒有待審核或已註冊的使用者</TableCell>
+                    <TableCell colSpan={9} className="text-center h-24">沒有待審核或已註冊的使用者</TableCell>
                 </TableRow>
             ) : (
               users.map((user) => (
                 <TableRow key={user.id}>
+                  <TableCell>
+                    {user.avatarUrl && (
+                      <Image 
+                        src={user.avatarUrl}
+                        alt={user.roleName}
+                        width={40}
+                        height={40}
+                        className="rounded-full object-cover"
+                      />
+                    )}
+                  </TableCell>
                   <TableCell className="font-medium">{user.roleName}</TableCell>
                   <TableCell>
                     <Link href={user.plurkInfo} target="_blank" className="text-primary hover:underline">
                       前往
+                    </Link>
+                  </TableCell>
+                   <TableCell>
+                    <Link href={user.characterSheetUrl} target="_blank" className="text-primary hover:underline">
+                      查看
                     </Link>
                   </TableCell>
                   <TableCell>
@@ -274,7 +286,7 @@ export default function AdminPage() {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="accounts">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10">
+           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10">
             <TabsTrigger value="accounts">帳號審核</TabsTrigger>
             <TabsTrigger value="missions">任務管理</TabsTrigger>
             <TabsTrigger value="battle">共鬥管理</TabsTrigger>
