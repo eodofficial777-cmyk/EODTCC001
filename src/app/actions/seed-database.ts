@@ -1,15 +1,15 @@
 
 'use server';
 
-import { getFirestore, writeBatch } from 'firebase-admin/firestore';
-import { initializeApp, getApps } from 'firebase-admin/app';
+// Using require for firebase-admin to avoid Turbopack issues with CJS/ESM modules in Server Actions.
+const admin = require('firebase-admin');
 import { firebaseConfig } from '@/firebase/config';
 import { FACTIONS, RACES, TASK_TYPES } from '@/lib/game-data';
 
 // Helper to initialize Firebase Admin SDK
 // This should be outside the action function to be initialized only once per server instance.
-if (!getApps().length) {
-  initializeApp({
+if (!admin.apps.length) {
+  admin.initializeApp({
     // Use projectId from the client-side config
     // You might need to set up service account credentials in your environment
     // for this to work in a real deployed environment.
@@ -17,11 +17,11 @@ if (!getApps().length) {
   });
 }
 
-const db = getFirestore();
+const db = admin.firestore();
 
 export async function seedDatabase() {
   try {
-    const batch = writeBatch(db);
+    const batch = db.batch();
 
     // 1. Seed Factions
     for (const faction of Object.values(FACTIONS)) {
