@@ -157,7 +157,7 @@ function MissionSubmitForm({
         taskTypeId: values.taskTypeId,
         submissionUrl: values.submissionUrl,
         title: values.title,
-        factionContribution: values.factionContribution,
+        factionContribution: values.factionContribution as any,
       });
 
       if (result.error) {
@@ -220,7 +220,7 @@ function MissionSubmitForm({
                     <FormMessage />
                   </FormItem>
                 )}
-              />
+              </FormField>
               <FormField
                 control={form.control}
                 name="taskTypeId"
@@ -250,7 +250,7 @@ function MissionSubmitForm({
                     <FormMessage />
                   </FormItem>
                 )}
-              />
+              </FormField>
             </div>
             {isWanderer && selectedTaskType && (
               <FormField
@@ -288,7 +288,8 @@ function MissionSubmitForm({
                     <FormMessage />
                   </FormItem>
                 )}
-              />
+              </FormField>
+            )}
             <FormField
               control={form.control}
               name="title"
@@ -301,7 +302,7 @@ function MissionSubmitForm({
                   <FormMessage />
                 </FormItem>
               )}
-            />
+            </FormField>
             <FormField
               control={form.control}
               name="submissionUrl"
@@ -314,7 +315,7 @@ function MissionSubmitForm({
                   <FormMessage />
                 </FormItem>
               )}
-            />
+            </FormField>
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? '提交中...' : '提交審核'}
             </Button>
