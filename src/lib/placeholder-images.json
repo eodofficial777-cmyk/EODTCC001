@@ -1,3 +1,46 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "character-portrait-1",
+      "description": "A stoic fantasy character portrait",
+      "imageUrl": "https://images.unsplash.com/photo-1692827357168-e31c24bfe39f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxmYW50YXN5JTIwcG9ydHJhaXR8ZW58MHx8fHwxNzY3Mzc3MjI1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "fantasy portrait"
+    },
+    {
+      "id": "user-avatar",
+      "description": "User avatar",
+      "imageUrl": "https://images.unsplash.com/photo-1710974481447-fb001ad9ad5a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxwZXJzb24lMjBmYWNlfGVufDB8fHx8MTc2NzM0NjY5N3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person face"
+    },
+    {
+      "id": "store-item-1",
+      "description": "A glowing potion",
+      "imageUrl": "https://images.unsplash.com/photo-1610270066297-7b06341d2b8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxwb3Rpb24lMjBib3R0bGV8ZW58MHx8fHwxNzY3NDM1ODc2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "potion bottle"
+    },
+    {
+      "id": "store-item-2",
+      "description": "An ancient sword",
+      "imageUrl": "https://images.unsplash.com/photo-1670960092690-0c06ab55e15f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8ZmFudGFzeSUyMHN3b3JkfGVufDB8fHx8MTc2NzM2NzQ0M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "fantasy sword"
+    },
+    {
+      "id": "store-item-3",
+      "description": "A mysterious artifact",
+      "imageUrl": "https://images.unsplash.com/photo-1738226699317-eddd93bc2785?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxhbmNpZW50JTIwYXJ0aWZhY3R8ZW58MHx8fHwxNzY3NDIyMDU4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "ancient artifact"
+    },
+    {
+      "id": "store-item-4",
+      "description": "A set of leather armor",
+      "imageUrl": "https://images.unsplash.com/photo-1715100749063-11809e0ad6ce?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxsZWF0aGVyJTIwYXJtb3J8ZW58MHx8fHwxNzY3MzY3NDEwfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "leather armor"
+    },
+    {
+      "id": "faction-beast",
+      "description": "A fearsome beast for the faction conflict",
+      "imageUrl": "https://images.unsplash.com/photo-1763054766315-e9216ab5e223?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxmYW50YXN5JTIwbW9uc3RlcnxlbnwwfHx8fDE3Njc0MzU4NzZ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "fantasy monster"
+    }
+  ]
 }
