@@ -18,6 +18,22 @@
           "type": "string",
           "description": "User's Plurk information (e.g., username, profile URL)."
         },
+        "characterSheetUrl": {
+          "type": "string",
+          "description": "URL to the character sheet image."
+        },
+        "avatarUrl": {
+          "type": "string",
+          "description": "URL to the user's avatar image."
+        },
+        "factionId": {
+          "type": "string",
+          "description": "The ID of the faction the user belongs to."
+        },
+        "raceId": {
+          "type": "string",
+          "description": "The ID of the race of the user's character."
+        },
         "registrationDate": {
           "type": "string",
           "description": "Date and time the user registered.",
@@ -26,6 +42,42 @@
         "approved": {
           "type": "boolean",
           "description": "Indicates whether the user's account has been approved by an administrator."
+        },
+        "honorPoints": {
+          "type": "number",
+          "description": "The character's honor points."
+        },
+        "currency": {
+          "type": "number",
+          "description": "The character's currency."
+        },
+        "titles": {
+          "type": "array",
+          "description": "An array of titles the character has earned.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "equipment": {
+          "type": "array",
+          "description": "An array of equipment IDs the character has equipped.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "items": {
+          "type": "array",
+          "description": "An array of item IDs the character possesses.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tasks": {
+          "type": "array",
+          "description": "An array of task IDs the character has submitted.",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
@@ -33,7 +85,11 @@
         "roleName",
         "plurkInfo",
         "registrationDate",
-        "approved"
+        "approved",
+        "honorPoints",
+        "currency",
+        "factionId",
+        "raceId"
       ]
     },
     "Character": {

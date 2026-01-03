@@ -64,7 +64,7 @@ const registerSchema = z.object({
     ),
   avatar: z
     .string()
-    // .url('請輸入有效的網址')
+    .url('請輸入有效的網址')
     .startsWith(
       'https://images.plurk.com/',
       '大頭貼必須以 https://images.plurk.com/ 開頭'
@@ -122,6 +122,12 @@ export default function AuthPage() {
         raceId: values.race,
         registrationDate: serverTimestamp(),
         approved: false,
+        honorPoints: 0,
+        currency: 0,
+        titles: ['初入荒漠'],
+        equipment: [],
+        items: [],
+        tasks: [],
       });
 
       toast({
