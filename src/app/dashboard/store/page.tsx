@@ -12,12 +12,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Gem, Users } from 'lucide-react';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
+import { collection, query, where, doc } from 'firebase/firestore';
 import type { Item, AttributeEffect, TriggeredEffect } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useDoc } from '@/firebase';
-import { doc } from 'firebase/firestore';
 import { RACES } from '@/lib/game-data';
 import { useToast } from '@/hooks/use-toast';
 import { buyItem } from '@/app/actions/buy-item';
@@ -70,7 +68,7 @@ export default function StorePage() {
     () => (user ? doc(firestore, `users/${user.uid}`) : null),
     [user, firestore]
   );
-  const { data: userData, isLoading: isUserDataLoading, refetch: refetchUserData } = useDoc(userDocRef);
+  const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
   
   const userFactionId = userData?.factionId;
 
@@ -107,7 +105,7 @@ export default function StorePage() {
         throw new Error(result.error);
       }
       toast({ title: '購買成功！', description: `「${item.name}」已加入您的背包。`});
-      refetchUserData(); // Refresh user data to show new currency and items
+      // The useDoc hook will automatically update userData, no manual refetch is needed.
     } catch(error: any) {
       toast({ variant: 'destructive', title: '購買失敗', description: error.message });
     } finally {
