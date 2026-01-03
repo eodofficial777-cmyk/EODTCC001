@@ -5,7 +5,7 @@ import { getFirestore, collection, getDocs, orderBy, query, where } from 'fireba
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, Task, TaskType, CraftRecipe, Skill } from '@/lib/types';
+import type { User, Task, TaskType, CraftRecipe, Skill, Title } from '@/lib/types';
 
 // IMPORTANT: Use a dedicated admin service account credentials in a real production app.
 // For this development environment, we will sign in as a pre-defined admin user.
@@ -58,10 +58,10 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
     const titlesPromise = getDocs(collection(db, 'titles'));
     const craftRecipesPromise = getDocs(collection(db, 'craftRecipes'));
     const skillsPromise = getDocs(collection(db, 'skills'));
-    const pendingTasksPromise = getDocs(query(collection(db, 'tasks'), where('status', '==', 'pending'), orderBy('submissionDate', 'asc')));
+    const pendingTasksPromise = getDocs(query(collection(db, 'tasks'), where('status', '==', 'pending')));
 
 
-    const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot, craftRecipesSnapshot, skillsSnapshot, pendingTasksSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise, craftRecipesPromise, skillsPromise, pendingTasksPromise]);
+    const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot, craftRecipesSnapshot, skillsSnapshot, pendingTasksSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise, craftRecipesPromise, skillsPromise, pendingTasksSnapshot]);
 
     // Process users
     const users = usersSnapshot.docs.map(doc => {
@@ -89,7 +89,7 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
     const titles = titlesSnapshot.docs.map(doc => ({
         ...doc.data(),
         id: doc.id,
-    }));
+    } as Title));
     
     // Process craft recipes
     const craftRecipes = craftRecipesSnapshot.docs.map(doc => ({
@@ -104,7 +104,7 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
     } as Skill));
 
     // Process pending tasks
-    const pendingTasks = pendingTasksSnapshot.docs.map(doc => {
+    let pendingTasks = pendingTasksSnapshot.docs.map(doc => {
        const data = doc.data();
         return {
             ...data,
@@ -112,6 +112,9 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
             submissionDate: data.submissionDate?.toDate().toISOString() || new Date().toISOString(),
         } as Task;
     });
+
+    // Manually sort tasks after fetching to avoid composite index requirement
+    pendingTasks.sort((a, b) => new Date(a.submissionDate).getTime() - new Date(b.submissionDate).getTime());
 
 
     return { users, taskTypes, items, titles, craftRecipes, skills, pendingTasks };
@@ -124,5 +127,3 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
     return { error: errorMessage };
   }
 }
-
-    
