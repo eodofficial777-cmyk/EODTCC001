@@ -19,7 +19,7 @@ import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FACTIONS } from '@/lib/game-data';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { CombatEncounter } from '@/lib/types';
+import type { CombatEncounter, User } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const PreparationCountdown = ({ preparationEndTime, battleName }: { preparationEndTime: Date, battleName: string }) => {
@@ -105,7 +105,7 @@ export default function BattlegroundPage() {
   const firestore = useFirestore();
   
   const userDocRef = useMemoFirebase(() => (user ? doc(firestore, `users/${user.uid}`) : null), [user, firestore]);
-  const { data: userData } = useDoc(userDocRef);
+  const { data: userData } = useDoc<User>(userDocRef);
 
   const latestBattleQuery = useMemoFirebase(
     () => (firestore ? query(collection(firestore, 'combatEncounters'), orderBy('startTime', 'desc'), limit(1)) : null),
@@ -116,12 +116,21 @@ export default function BattlegroundPage() {
 
   const [supportedFaction, setSupportedFaction] = useState<'yelu' | 'association' | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
-  
+  const [battleHP, setBattleHP] = useState(userData?.attributes.hp || 0);
+
   const isWanderer = userData?.factionId === 'wanderer';
   const playerFaction = isWanderer ? supportedFaction : userData?.factionId;
   
   const combatStatus = currentBattle?.status;
   const preparationEndTime = currentBattle?.preparationEndTime?.toDate();
+  const hasFallen = battleHP <= 0;
+
+  // Reset HP when a new battle starts
+  useEffect(() => {
+    if (combatStatus === 'active' && userData?.attributes.hp) {
+      setBattleHP(userData.attributes.hp);
+    }
+  }, [combatStatus, userData?.attributes.hp]);
 
   const handleSupportFaction = (factionId: 'yelu' | 'association') => {
     if (isWanderer && combatStatus !== 'ended') {
@@ -129,13 +138,42 @@ export default function BattlegroundPage() {
       setSelectedTarget(null); // Reset target when switching factions
     }
   }
+
+  const renderMonsters = (factionId: 'yelu' | 'association') => {
+      const monsters = currentBattle?.monsters.filter(m => m.factionId === factionId) || [];
+       return (
+         <Card>
+            <CardHeader>
+              <CardTitle>{FACTIONS[factionId]?.name} 災獸</CardTitle>
+              {combatStatus === 'active' && <CardDescription>當前回合：1 | 下一回合：20秒</CardDescription>}
+            </CardHeader>
+            <CardContent>
+              {monsters.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {monsters.map((monster, index) => (
+                    <MonsterCard 
+                      key={index} 
+                      monster={monster}
+                      isTargeted={selectedTarget === monster.name}
+                      onSelectTarget={() => setSelectedTarget(monster.name)}
+                      isSelectable={combatStatus === 'active' && !hasFallen}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-8">此陣營目前沒有災獸。</p>
+              )}
+            </CardContent>
+          </Card>
+       )
+  }
   
   const renderContent = (factionId: 'yelu' | 'association') => {
     if (isBattleLoading) {
       return (
-          <div className="lg:col-span-2 space-y-6">
-            <Skeleton className="h-48 w-full" />
+          <div className="space-y-6">
             <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-48 w-full" />
         </div>
       );
     }
@@ -151,101 +189,56 @@ export default function BattlegroundPage() {
       )
     }
 
-    const monsters = currentBattle.monsters.filter(m => m.factionId === factionId);
-
-    if (combatStatus === 'preparing' && preparationEndTime) {
+    // This checks if the current tab is the one the player should be looking at
+    if (combatStatus === 'active' && playerFaction && playerFaction !== factionId) {
         return (
-            <div className="space-y-6">
-                <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle.name} />
-                 {isWanderer && !supportedFaction && (
-                     <Alert>
-                        <Info className="h-4 w-4" />
-                        <AlertTitle>流浪者請注意</AlertTitle>
-                        <AlertDescription>
-                          共鬥開始前，請在下方選擇您想支援的陣營。
-                        </AlertDescription>
-                    </Alert>
-                )}
-                 <Card>
-                  <CardHeader><CardTitle>戰場災獸</CardTitle></CardHeader>
-                  <CardContent>
-                    {monsters.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                        {monsters.map((monster, index) => (
-                          <MonsterCard 
-                            key={index} 
-                            monster={monster}
-                            isTargeted={false}
-                            onSelectTarget={() => {}}
-                            isSelectable={false}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-center py-8">此陣營目前沒有災獸。</p>
-                    )}
-                  </CardContent>
-                 </Card>
-            </div>
+          <Card className="flex flex-col items-center justify-center min-h-[300px]">
+              <CardHeader className="text-center">
+                  <CardTitle>您正在支援另一方的戰場</CardTitle>
+                  <CardDescription>請切換到您支援的陣營分頁以參與戰鬥。</CardDescription>
+              </CardHeader>
+          </Card>
         )
     }
-
-    if (combatStatus === 'active') {
-
-       if (!playerFaction || playerFaction !== factionId) {
-         return (
-            <Card className="flex flex-col items-center justify-center min-h-[300px]">
-                <CardHeader className="text-center">
-                    <CardTitle>請選擇支援陣營</CardTitle>
-                    <CardDescription>身為流浪者，您需要選擇一方勢力以加入戰鬥。</CardDescription>
-                </CardHeader>
-            </Card>
-         )
-       }
         
-      return (
+    return (
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>{FACTIONS[factionId]?.name} 災獸</CardTitle>
-              <CardDescription>當前回合：1 | 下一回合：20秒</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {monsters.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {monsters.map((monster, index) => (
-                    <MonsterCard 
-                      key={index} 
-                      monster={monster}
-                      isTargeted={selectedTarget === monster.name}
-                      onSelectTarget={() => setSelectedTarget(monster.name)}
-                      isSelectable={true}
-                    />
-                  ))}
+            {/* Monster Display Area */}
+            {renderMonsters(factionId)}
+
+            {/* Log / Preparation Area */}
+            {combatStatus === 'preparing' && preparationEndTime && (
+                 <div>
+                    <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle.name} />
+                    {isWanderer && !supportedFaction && (
+                         <Alert className="mt-4">
+                            <Info className="h-4 w-4" />
+                            <AlertTitle>流浪者請注意</AlertTitle>
+                            <AlertDescription>
+                            共鬥開始前，請在上方選擇您想支援的陣營。
+                            </AlertDescription>
+                        </Alert>
+                    )}
                 </div>
-              ) : (
-                <p className="text-muted-foreground text-center py-8">此陣營目前沒有災獸。</p>
-              )}
-            </CardContent>
-          </Card>
-           <Card>
-            <CardHeader>
-              <CardTitle>共鬥紀錄</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-64">
-                <div className="space-y-3 text-sm font-mono">
-                  <p><span className="text-primary">[回合 1]</span> 戰鬥開始！</p>
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
+            )}
+            
+            {combatStatus === 'active' && (
+                <Card>
+                    <CardHeader>
+                    <CardTitle>共鬥紀錄</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                    <ScrollArea className="h-64">
+                        <div className="space-y-3 text-sm font-mono">
+                        <p><span className="text-primary">[回合 1]</span> 戰鬥開始！</p>
+                         {hasFallen && <p className="text-red-500">[系統] 您的HP已歸零，無法繼續行動。</p>}
+                        </div>
+                    </ScrollArea>
+                    </CardContent>
+                </Card>
+            )}
         </div>
       )
-    }
-    
-    // Default fallback
-    return <p>載入中或狀態錯誤...</p>
   }
 
   return (
@@ -287,13 +280,13 @@ export default function BattlegroundPage() {
                     <div className="space-y-1">
                         <div className="flex justify-between items-center text-sm">
                         <span className="font-medium text-green-400">HP</span>
-                        <span className="font-mono">95 / 120</span>
+                        <span className="font-mono">{battleHP} / {userData?.attributes.hp || 0}</span>
                         </div>
-                        <Progress value={(95/120) * 100} className="h-3 bg-green-500/20 [&>div]:bg-green-500" />
+                        <Progress value={(battleHP / (userData?.attributes.hp || 1)) * 100} className="h-3 bg-green-500/20 [&>div]:bg-green-500" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="flex items-center gap-2"><Sword className="h-4 w-4 text-muted-foreground"/> 攻擊力: 35</div>
-                        <div className="flex items-center gap-2"><Shield className="h-4 w-4 text-muted-foreground"/> 防禦力: 18</div>
+                        <div className="flex items-center gap-2"><Sword className="h-4 w-4 text-muted-foreground"/> 攻擊力: {userData?.attributes.atk || 0}</div>
+                        <div className="flex items-center gap-2"><Shield className="h-4 w-4 text-muted-foreground"/> 防禦力: {userData?.attributes.def || 0}</div>
                     </div>
                 </CardContent>
                 </Card>
@@ -304,10 +297,10 @@ export default function BattlegroundPage() {
                     <CardDescription>冷卻時間：20秒</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 gap-2">
-                    <Button disabled={combatStatus !== 'active' || !selectedTarget}>攻擊</Button>
-                    <Button variant="outline" disabled={combatStatus !== 'active'}>技能</Button>
-                    <Button variant="outline" disabled={combatStatus !== 'active'}>道具</Button>
-                    <Button variant="ghost" disabled={combatStatus !== 'active'}>防禦</Button>
+                    <Button disabled={combatStatus !== 'active' || !selectedTarget || hasFallen}>攻擊</Button>
+                    <Button variant="outline" disabled={combatStatus !== 'active' || hasFallen}>技能</Button>
+                    <Button variant="outline" disabled={combatStatus !== 'active' || hasFallen}>道具</Button>
+                    <Button variant="ghost" disabled={combatStatus !== 'active' || hasFallen}>防禦</Button>
                 </CardContent>
                 </Card>
                 
