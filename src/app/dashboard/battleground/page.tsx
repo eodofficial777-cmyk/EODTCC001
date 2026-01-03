@@ -147,23 +147,33 @@ export default function BattlegroundPage() {
     };
   }, [userData?.items, allItems]);
   
-  const { finalAtk, finalDef } = useMemo(() => {
-    let atk = userData?.attributes.atk || 0;
-    let def = userData?.attributes.def || 0;
+  const { baseAtk, baseDef, equipmentAtk, equipmentDef, finalAtk, finalDef } = useMemo(() => {
+    const bAtk = userData?.attributes.atk || 0;
+    const bDef = userData?.attributes.def || 0;
+    let eqAtk = 0;
+    let eqDef = 0;
 
     equippedItems.forEach(itemId => {
         const item = allItems?.find(i => i.id === itemId);
         if (item) {
             item.effects?.forEach(effect => {
                 if ('attribute' in effect) {
-                    if (effect.attribute === 'atk' && effect.operator === '+') atk += effect.value;
-                    if (effect.attribute === 'def' && effect.operator === '+') def += effect.value;
+                    if (effect.attribute === 'atk' && effect.operator === '+') eqAtk += effect.value;
+                    if (effect.attribute === 'def' && effect.operator === '+') eqDef += effect.value;
                 }
             });
         }
     });
-    return { finalAtk: atk, finalDef: def };
-  }, [userData, equippedItems, allItems]);
+
+    return { 
+        baseAtk: bAtk, 
+        baseDef: bDef,
+        equipmentAtk: eqAtk,
+        equipmentDef: eqDef,
+        finalAtk: bAtk + eqAtk, 
+        finalDef: bDef + eqDef 
+    };
+}, [userData, equippedItems, allItems]);
 
 
   // --- Effects ---
@@ -201,7 +211,18 @@ export default function BattlegroundPage() {
 
   // --- Render Functions ---
   const renderMonsters = (factionId: 'yelu' | 'association') => {
-      const monsters = currentBattle?.monsters.filter(m => m.factionId === factionId) || [];
+       const monsters = currentBattle?.monsters.filter(m => m.factionId === factionId) || [];
+       if (combatStatus === 'active' && playerFaction && playerFaction !== factionId) {
+        return (
+          <Card className="flex flex-col items-center justify-center min-h-[300px]">
+              <CardHeader className="text-center">
+                  <CardTitle>您正在支援另一方的戰場</CardTitle>
+                  <CardDescription>請切換到您支援的陣營分頁以參與戰鬥。</CardDescription>
+              </CardHeader>
+          </Card>
+        )
+    }
+
        return (
          <Card>
             <CardHeader>
@@ -250,37 +271,24 @@ export default function BattlegroundPage() {
       )
     }
 
-    if (combatStatus === 'active' && playerFaction && playerFaction !== factionId) {
-        return (
-          <Card className="flex flex-col items-center justify-center min-h-[300px]">
-              <CardHeader className="text-center">
-                  <CardTitle>您正在支援另一方的戰場</CardTitle>
-                  <CardDescription>請切換到您支援的陣營分頁以參與戰鬥。</CardDescription>
-              </CardHeader>
-          </Card>
-        )
-    }
-        
     return (
       <div className="space-y-6">
-        {/* Monster Display Area */}
-        {renderMonsters(factionId)}
-
         {/* Log / Preparation Area */}
-        {combatStatus === 'preparing' && preparationEndTime && (
+        {combatStatus === 'preparing' && preparationEndTime ? (
           <div>
             <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle.name} />
-            {isWanderer && !supportedFaction && (
+             {isWanderer && !supportedFaction && (
               <Alert className="mt-4">
                 <Info className="h-4 w-4" />
                 <AlertTitle>流浪者請注意</AlertTitle>
                 <AlertDescription>共鬥開始前，請在上方選擇您想支援的陣營。</AlertDescription>
               </Alert>
             )}
+             <div className="mt-4">
+                {renderMonsters(factionId)}
+            </div>
           </div>
-        )}
-
-        {combatStatus === 'active' && (
+        ) : (
           <Card>
             <CardHeader>
               <CardTitle>共鬥紀錄</CardTitle>
@@ -295,6 +303,8 @@ export default function BattlegroundPage() {
             </CardContent>
           </Card>
         )}
+        
+        {combatStatus === 'active' && <div>{renderMonsters(factionId)}</div>}
       </div>
     );
   }
@@ -342,9 +352,15 @@ export default function BattlegroundPage() {
                         </div>
                         <Progress value={(battleHP / (userData?.attributes.hp || 1)) * 100} className="h-3 bg-green-500/20 [&>div]:bg-green-500" />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="flex items-center gap-2"><Sword className="h-4 w-4 text-muted-foreground"/> 攻擊力: {finalAtk}</div>
-                        <div className="flex items-center gap-2"><Shield className="h-4 w-4 text-muted-foreground"/> 防禦力: {finalDef}</div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 text-muted-foreground"><Sword className="h-4 w-4"/> 攻擊力</div>
+                            <div className="font-mono pl-6">{finalAtk} <span className="text-xs text-muted-foreground">({baseAtk}+{equipmentAtk})</span></div>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 text-muted-foreground"><Shield className="h-4 w-4"/> 防禦力</div>
+                            <div className="font-mono pl-6">{finalDef} <span className="text-xs text-muted-foreground">({baseDef}+{equipmentDef})</span></div>
+                        </div>
                     </div>
                 </CardContent>
                 </Card>
