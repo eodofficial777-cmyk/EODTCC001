@@ -895,90 +895,92 @@ export default function AdminPage() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-headline">管理員後台</CardTitle>
-        <CardDescription>
-          管理遊戲的各個方面。此頁面僅供管理員存取。
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="accounts" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:w-max lg:grid-flow-col">
-            <TabsTrigger value="accounts">帳號審核</TabsTrigger>
-            <TabsTrigger value="missions">任務管理</TabsTrigger>
-            <TabsTrigger value="store">商店道具</TabsTrigger>
-            <TabsTrigger value="battle">共鬥管理</TabsTrigger>
-            <TabsTrigger value="conflict">陣營對抗</TabsTrigger>
-            <TabsTrigger value="crafting">裝備合成</TabsTrigger>
-            <TabsTrigger value="skills">技能管理</TabsTrigger>
-            <TabsTrigger value="titles">稱號管理</TabsTrigger>
-            <TabsTrigger value="rewards">獎勵發放</TabsTrigger>
-            <TabsTrigger value="database">資料庫</TabsTrigger>
-          </TabsList>
+    <div className="w-full">
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline">管理員後台</CardTitle>
+          <CardDescription>
+            管理遊戲的各個方面。此頁面僅供管理員存取。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="accounts" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:w-max lg:grid-flow-col">
+              <TabsTrigger value="accounts">帳號審核</TabsTrigger>
+              <TabsTrigger value="missions">任務管理</TabsTrigger>
+              <TabsTrigger value="store">商店道具</TabsTrigger>
+              <TabsTrigger value="battle">共鬥管理</TabsTrigger>
+              <TabsTrigger value="conflict">陣營對抗</TabsTrigger>
+              <TabsTrigger value="crafting">裝備合成</TabsTrigger>
+              <TabsTrigger value="skills">技能管理</TabsTrigger>
+              <TabsTrigger value="titles">稱號管理</TabsTrigger>
+              <TabsTrigger value="rewards">獎勵發放</TabsTrigger>
+              <TabsTrigger value="database">資料庫</TabsTrigger>
+            </TabsList>
 
-          <div className="mt-4 p-4 border rounded-md min-h-[400px]">
-            <TabsContent value="accounts">
-              <AccountApproval />
-            </TabsContent>
-            <TabsContent value="missions">
-              <TaskManagement />
-            </TabsContent>
-            <TabsContent value="store">
-               <StoreManagement />
-            </TabsContent>
-            <TabsContent value="battle">
-               <h3 className="text-lg font-semibold">共鬥管理</h3>
-              <p className="text-muted-foreground mt-2">
-                開啟新的共鬥戰場，設定怪物屬性，並查看過去的戰鬥紀錄。
-              </p>
-            </TabsContent>
-            <TabsContent value="conflict">
-               <h3 className="text-lg font-semibold">陣營對抗管理</h3>
-              <p className="text-muted-foreground mt-2">
-                重置陣營積分以開啟新賽季，並存檔當前賽季的結果。
-              </p>
-               <Button variant="destructive" className="mt-4">重置賽季積分</Button>
-            </TabsContent>
-             <TabsContent value="crafting">
-               <h3 className="text-lg font-semibold">裝備合成管理</h3>
-              <p className="text-muted-foreground mt-2">
-                定義裝備合成配方。例如：某裝備 + 某物品 = 新裝備。
-              </p>
-            </TabsContent>
-             <TabsContent value="skills">
-               <h3 className="text-lg font-semibold">技能管理</h3>
-              <p className="text-muted-foreground mt-2">
-                管理不同陣營和種族的可用技能。
-              </p>
-            </TabsContent>
-             <TabsContent value="titles">
-               <h3 className="text-lg font-semibold">稱號管理</h3>
-              <p className="text-muted-foreground mt-2">
-                新增和管理一般及隱藏稱號的達成條件。
-              </p>
-            </TabsContent>
-             <TabsContent value="rewards">
-               <h3 className="text-lg font-semibold">特殊獎勵發放</h3>
-              <p className="text-muted-foreground mt-2">
-                使用複合篩選條件向特定玩家群體發放獎勵。
-              </p>
-            </TabsContent>
-            <TabsContent value="database">
-               <h3 className="text-lg font-semibold">資料庫管理</h3>
-              <p className="text-muted-foreground mt-2">
-                執行資料庫維護操作。請謹慎使用。
-              </p>
-              <Button onClick={handleSeedDatabase} disabled={isSeeding} className="mt-4">
-                {isSeeding ? '植入資料中...' : '植入初始遊戲資料'}
-              </Button>
-               <p className="text-xs text-muted-foreground mt-2">
-                點擊此按鈕將會在您的資料庫中建立或覆蓋基礎遊戲資料，例如陣營、種族、任務類型和物品等。
-              </p>
-            </TabsContent>
-          </div>
-        </Tabs>
-      </CardContent>
-    </Card>
+            <div className="mt-4 p-4 border rounded-md min-h-[400px]">
+              <TabsContent value="accounts">
+                <AccountApproval />
+              </TabsContent>
+              <TabsContent value="missions">
+                <TaskManagement />
+              </TabsContent>
+              <TabsContent value="store">
+                 <StoreManagement />
+              </TabsContent>
+              <TabsContent value="battle">
+                 <h3 className="text-lg font-semibold">共鬥管理</h3>
+                <p className="text-muted-foreground mt-2">
+                  開啟新的共鬥戰場，設定怪物屬性，並查看過去的戰鬥紀錄。
+                </p>
+              </TabsContent>
+              <TabsContent value="conflict">
+                 <h3 className="text-lg font-semibold">陣營對抗管理</h3>
+                <p className="text-muted-foreground mt-2">
+                  重置陣營積分以開啟新賽季，並存檔當前賽季的結果。
+                </p>
+                 <Button variant="destructive" className="mt-4">重置賽季積分</Button>
+              </TabsContent>
+               <TabsContent value="crafting">
+                 <h3 className="text-lg font-semibold">裝備合成管理</h3>
+                <p className="text-muted-foreground mt-2">
+                  定義裝備合成配方。例如：某裝備 + 某物品 = 新裝備。
+                </p>
+              </TabsContent>
+               <TabsContent value="skills">
+                 <h3 className="text-lg font-semibold">技能管理</h3>
+                <p className="text-muted-foreground mt-2">
+                  管理不同陣營和種族的可用技能。
+                </p>
+              </TabsContent>
+               <TabsContent value="titles">
+                 <h3 className="text-lg font-semibold">稱號管理</h3>
+                <p className="text-muted-foreground mt-2">
+                  新增和管理一般及隱藏稱號的達成條件。
+                </p>
+              </TabsContent>
+               <TabsContent value="rewards">
+                 <h3 className="text-lg font-semibold">特殊獎勵發放</h3>
+                <p className="text-muted-foreground mt-2">
+                  使用複合篩選條件向特定玩家群體發放獎勵。
+                </p>
+              </TabsContent>
+              <TabsContent value="database">
+                 <h3 className="text-lg font-semibold">資料庫管理</h3>
+                <p className="text-muted-foreground mt-2">
+                  執行資料庫維護操作。請謹慎使用。
+                </p>
+                <Button onClick={handleSeedDatabase} disabled={isSeeding} className="mt-4">
+                  {isSeeding ? '植入資料中...' : '植入初始遊戲資料'}
+                </Button>
+                 <p className="text-xs text-muted-foreground mt-2">
+                  點擊此按鈕將會在您的資料庫中建立或覆蓋基礎遊戲資料，例如陣營、種族、任務類型和物品等。
+                </p>
+              </TabsContent>
+            </div>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

@@ -585,43 +585,45 @@ export default function MissionsPage() {
   const safeTaskTypes = taskTypes || [];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-1 flex flex-col gap-6">
-        {isLoading ? (
-          <Card>
-            <CardHeader><Skeleton className="h-8 w-1/2" /></CardHeader>
-            <CardContent className="space-y-4">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </CardContent>
-          </Card>
-        ) : user && userData && taskTypes ? (
-          <MissionSubmitForm user={user} userData={userData} taskTypes={safeTaskTypes} onTaskSubmitted={handleTaskSubmitted} />
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>請先登入</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>您必須登入才能提交任務。</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-      <div className="lg:col-span-2">
-        <AllSubmissionsFeed
-          tasks={tasks}
-          isLoading={tasksLoading}
-          onRefresh={() => loadTasks()}
-          taskTypes={safeTaskTypes}
-          onFilterChange={loadTasks}
-        />
-      </div>
-      <div className="lg:col-span-3">
-        {user && taskTypes && <UserSubmissionsHistory userId={user.uid} taskTypes={safeTaskTypes} refreshTrigger={refreshTrigger} />}
-      </div>
+    <div className="w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1 flex flex-col gap-6">
+                {isLoading ? (
+                <Card>
+                    <CardHeader><Skeleton className="h-8 w-1/2" /></CardHeader>
+                    <CardContent className="space-y-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    </CardContent>
+                </Card>
+                ) : user && userData && taskTypes ? (
+                <MissionSubmitForm user={user} userData={userData} taskTypes={safeTaskTypes} onTaskSubmitted={handleTaskSubmitted} />
+                ) : (
+                <Card>
+                    <CardHeader>
+                    <CardTitle>請先登入</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                    <p>您必須登入才能提交任務。</p>
+                    </CardContent>
+                </Card>
+                )}
+            </div>
+            <div className="lg:col-span-2">
+                <AllSubmissionsFeed
+                tasks={tasks}
+                isLoading={tasksLoading}
+                onRefresh={() => loadTasks()}
+                taskTypes={safeTaskTypes}
+                onFilterChange={loadTasks}
+                />
+            </div>
+            <div className="lg:col-span-3">
+                {user && taskTypes && <UserSubmissionsHistory userId={user.uid} taskTypes={safeTaskTypes} refreshTrigger={refreshTrigger} />}
+            </div>
+        </div>
     </div>
   );
 }
