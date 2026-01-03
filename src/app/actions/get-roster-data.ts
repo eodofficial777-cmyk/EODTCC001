@@ -34,7 +34,7 @@ let rosterCache: {
   };
   timestamp: number;
 } | null = null;
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 
 async function ensureAdminAuth() {
   if (auth.currentUser?.email !== ADMIN_EMAIL) {
@@ -54,11 +54,8 @@ export async function getRosterData(): Promise<{
   cacheTimestamp?: string;
 }> {
   const now = Date.now();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayStartTimestamp = todayStart.getTime();
-
-  if (rosterCache && rosterCache.timestamp >= todayStartTimestamp) {
+  
+  if (rosterCache && now - rosterCache.timestamp < CACHE_DURATION) {
     return {
       allUsers: rosterCache.data.allUsers,
       rosterByFaction: rosterCache.data.rosterByFaction,
@@ -67,6 +64,8 @@ export async function getRosterData(): Promise<{
   }
 
   try {
+    // This call is not strictly necessary if the rules allow public reads,
+    // which is often the case for a public roster.
     // await ensureAdminAuth();
 
     const usersQuery = query(
