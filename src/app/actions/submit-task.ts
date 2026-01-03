@@ -8,7 +8,9 @@ import {
   increment,
   runTransaction,
   collection,
-  getDoc,
+  getDocs,
+  query,
+  where,
   arrayUnion,
   FieldValue,
 } from 'firebase/firestore';
@@ -56,6 +58,13 @@ export async function submitTask(payload: SubmitTaskPayload) {
     
     // We use a transaction to safely read user data and check conditions before writing.
     const { userDocSnap, taskType } = await runTransaction(db, async (transaction) => {
+      // Check for duplicate submission URL
+      const duplicateUrlQuery = query(collection(db, 'tasks'), where('submissionUrl', '==', submissionUrl));
+      const duplicateSnapshot = await getDocs(duplicateUrlQuery);
+      if (!duplicateSnapshot.empty) {
+        throw new Error('這個噗浪網址已經被提交過了。');
+      }
+      
       const userDoc = await transaction.get(userRef);
       if (!userDoc.exists()) {
         throw new Error('找不到使用者資料');
