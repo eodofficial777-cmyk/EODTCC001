@@ -11,13 +11,14 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Gem } from 'lucide-react';
+import { Gem, Users } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Item, AttributeEffect, TriggeredEffect } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDoc } from '@/firebase';
 import { doc } from 'firebase/firestore';
+import { RACES } from '@/lib/game-data';
 
 function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
     if ('attribute' in effect) { // AttributeEffect
@@ -49,6 +50,12 @@ function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
     return desc;
 }
 
+const itemTypeTranslations: { [key in Item['itemTypeId']]: string } = {
+  equipment: '裝備',
+  consumable: '戰鬥道具',
+  special: '特殊道具',
+};
+
 
 export default function StorePage() {
   const { user, isUserLoading } = useUser();
@@ -66,16 +73,7 @@ export default function StorePage() {
     if (!firestore || !userFactionId) {
       return null;
     }
-    
-    // Wanderers can see all published items.
-    if (userFactionId === 'wanderer') {
-      return query(
-        collection(firestore, 'items'),
-        where('isPublished', '==', true)
-      );
-    }
-
-    // Other factions see their own items.
+    // All players, including wanderers, see items assigned to their factionId.
     return query(
       collection(firestore, 'items'),
       where('factionId', '==', userFactionId),
@@ -93,7 +91,7 @@ export default function StorePage() {
       {isLoading && Array.from({ length: 4 }).map((_, i) => (
         <Card key={i}>
             <CardHeader>
-                <Skeleton className="h-40 w-full mb-4"/>
+                <Skeleton className="aspect-square w-full mb-4"/>
                 <Skeleton className="h-6 w-3/4" />
                 <Skeleton className="h-4 w-1/2" />
             </CardHeader>
@@ -112,10 +110,14 @@ export default function StorePage() {
           </div>
       )}
 
-      {!isLoading && items && items.map((item) => (
+      {!isLoading && items && items.map((item) => {
+        const raceName = item.raceId === 'all' ? '通用' : RACES[item.raceId as keyof typeof RACES]?.name || '未知';
+        const itemTypeName = itemTypeTranslations[item.itemTypeId] || '道具';
+        
+        return (
           <Card key={item.id} className="flex flex-col">
             <CardHeader>
-              <div className="relative h-40 w-full mb-4">
+              <div className="relative aspect-square w-full mb-4">
                 {item.imageUrl ? (
                   <Image
                     src={item.imageUrl}
@@ -128,12 +130,12 @@ export default function StorePage() {
                         <span className="text-muted-foreground text-sm">沒有圖片</span>
                     </div>
                 )}
-                 {item.itemTypeId && <Badge className="absolute top-2 right-2">{item.itemTypeId}</Badge>}
+                 <Badge className="absolute top-2 right-2">{itemTypeName}</Badge>
               </div>
               <CardTitle className="font-headline">{item.name}</CardTitle>
               <CardDescription>{item.description}</CardDescription>
             </CardHeader>
-            <CardContent className="flex-grow">
+            <CardContent className="flex-grow space-y-2">
                <div className="text-sm text-primary-foreground/80 bg-primary/20 p-2 rounded-md space-y-1">
                 <span className="font-semibold">效果：</span>
                 {item.effects && item.effects.length > 0 ? (
@@ -144,6 +146,10 @@ export default function StorePage() {
                     </ul>
                 ) : <p>無</p>}
                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2">
+                    <Users className="h-4 w-4" />
+                    <span>種族限制：{raceName}</span>
+                </div>
             </CardContent>
             <CardFooter className="flex justify-between items-center">
               <div className="flex items-center gap-1 font-mono text-lg font-bold text-primary">
@@ -154,7 +160,7 @@ export default function StorePage() {
             </CardFooter>
           </Card>
         )
-      )}
+      })}
     </div>
   );
 }
