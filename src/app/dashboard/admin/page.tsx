@@ -40,7 +40,7 @@ import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Che
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus, Monster } from '@/lib/types';
+import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus, Monster, CombatEncounter } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -79,8 +79,8 @@ import { Badge } from '@/components/ui/badge';
 import { distributeRewards, FilterCriteria } from '@/app/actions/distribute-rewards';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { updateMaintenanceStatus } from '@/app/actions/update-maintenance-status';
-import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useDoc, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
+import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
 import { createBattle } from '@/app/actions/manage-battle';
 
 function AccountApproval() {
@@ -2002,10 +2002,18 @@ function DatabaseManagement() {
 
 function BattleManagement() {
     const { toast } = useToast();
+    const firestore = useFirestore();
     const [battleName, setBattleName] = useState('');
     const [yeluMonsters, setYeluMonsters] = useState<Partial<Monster>[]>([]);
     const [associationMonsters, setAssociationMonsters] = useState<Partial<Monster>[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+
+    const latestBattleQuery = useMemoFirebase(
+      () => (firestore ? query(collection(firestore, 'combatEncounters'), orderBy('startTime', 'desc'), limit(1)) : null),
+      [firestore]
+    );
+    const { data: battleData, isLoading: isBattleLoading } = useCollection<CombatEncounter>(latestBattleQuery);
+    const currentBattle = battleData?.[0];
 
     const addMonster = (faction: 'yelu' | 'association') => {
         const newMonster: Partial<Monster> = { name: '', imageUrl: 'https://images.plurk.com/', hp: 1000, atk: '10+1D6' };
@@ -2106,6 +2114,38 @@ function BattleManagement() {
             <p className="text-muted-foreground mt-2">
                 開啟新的共鬥戰場，設定災獸屬性，並查看過去的戰鬥紀錄。
             </p>
+            {isBattleLoading ? <Skeleton className="h-48 w-full mt-4" /> : currentBattle && (
+              <Card className="mt-4 border-primary">
+                  <CardHeader>
+                      <CardTitle>當前戰場：{currentBattle.name}</CardTitle>
+                      <CardDescription>
+                          狀態：<Badge variant={currentBattle.status === 'active' ? 'destructive' : 'secondary'}>{currentBattle.status}</Badge>
+                      </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                      <h4 className="font-semibold mb-2">災獸資訊</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {Object.values(FACTIONS).map(f => {
+                              const factionMonsters = currentBattle.monsters.filter(m => m.factionId === f.id);
+                              if (factionMonsters.length === 0) return null;
+                              return (
+                                  <div key={f.id}>
+                                      <h5 className="font-bold mb-2" style={{color: f.color}}>{f.name}</h5>
+                                      <div className="space-y-2">
+                                        {factionMonsters.map((monster, i) => (
+                                          <div key={i} className="flex justify-between items-center text-sm p-2 border rounded-md">
+                                              <span>{monster.name}</span>
+                                              <span className="font-mono text-muted-foreground">HP: {monster.hp} / ATK: {monster.atk}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                  </div>
+                              )
+                          })}
+                      </div>
+                  </CardContent>
+              </Card>
+            )}
             <Card className="mt-4">
                 <CardHeader>
                     <CardTitle>開啟新戰場</CardTitle>
@@ -2121,8 +2161,8 @@ function BattleManagement() {
                     </div>
                 </CardContent>
                 <CardFooter>
-                    <Button onClick={handleCreateBattle} disabled={isLoading} className="w-full">
-                        {isLoading ? "開啟中..." : "確認並開啟戰場"}
+                    <Button onClick={handleCreateBattle} disabled={isLoading || (!!currentBattle && currentBattle.status !== 'ended')} className="w-full">
+                        {isLoading ? "開啟中..." : (!!currentBattle && currentBattle.status !== 'ended') ? '有戰場正在進行中' : "確認並開啟戰場"}
                     </Button>
                 </CardFooter>
             </Card>

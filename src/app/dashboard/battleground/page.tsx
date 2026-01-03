@@ -22,7 +22,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { CombatEncounter } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const PreparationCountdown = ({ preparationEndTime }: { preparationEndTime: Date }) => {
+const PreparationCountdown = ({ preparationEndTime, battleName }: { preparationEndTime: Date, battleName: string }) => {
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
@@ -51,7 +51,7 @@ const PreparationCountdown = ({ preparationEndTime }: { preparationEndTime: Date
       <CardHeader>
         <CardTitle className="flex items-center justify-center gap-2 text-blue-300">
           <Timer className="h-6 w-6" />
-          準備期間
+          準備期間：{battleName}
         </CardTitle>
         <CardDescription>共鬥將在以下時間後開始：</CardDescription>
       </CardHeader>
@@ -63,9 +63,9 @@ const PreparationCountdown = ({ preparationEndTime }: { preparationEndTime: Date
 };
 
 
-const MonsterCard = ({ monster, isTargeted, onSelectTarget }: { monster: any, isTargeted: boolean, onSelectTarget: (id: string) => void }) => {
+const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { monster: any, isTargeted: boolean, onSelectTarget: (id: string) => void, isSelectable: boolean }) => {
   return (
-    <Card className={`overflow-hidden transition-all duration-300 ${isTargeted ? 'border-primary ring-2 ring-primary' : ''}`}>
+    <Card className={`overflow-hidden transition-all duration-300 ${isTargeted && isSelectable ? 'border-primary ring-2 ring-primary' : ''}`}>
        <div className="relative aspect-square w-full">
         {monster.imageUrl && (
           <Image
@@ -88,12 +88,14 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget }: { monster: any, is
           <Progress value={(monster.hp / monster.hp) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
         </div>
       </CardContent>
-      <CardFooter className="p-3 pt-0">
-        <Button className="w-full" size="sm" onClick={() => onSelectTarget(monster.id)} disabled={isTargeted}>
-          <Target className="mr-2 h-4 w-4" />
-          {isTargeted ? '已鎖定' : '鎖定目標'}
-        </Button>
-      </CardFooter>
+      {isSelectable &&
+        <CardFooter className="p-3 pt-0">
+          <Button className="w-full" size="sm" onClick={() => onSelectTarget(monster.name)} disabled={isTargeted}>
+            <Target className="mr-2 h-4 w-4" />
+            {isTargeted ? '已鎖定' : '鎖定目標'}
+          </Button>
+        </CardFooter>
+      }
     </Card>
   )
 }
@@ -149,10 +151,12 @@ export default function BattlegroundPage() {
       )
     }
 
+    const monsters = currentBattle.monsters.filter(m => m.factionId === factionId);
+
     if (combatStatus === 'preparing' && preparationEndTime) {
         return (
             <div className="space-y-6">
-                <PreparationCountdown preparationEndTime={preparationEndTime} />
+                <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle.name} />
                  {isWanderer && !supportedFaction && (
                      <Alert>
                         <Info className="h-4 w-4" />
@@ -162,12 +166,31 @@ export default function BattlegroundPage() {
                         </AlertDescription>
                     </Alert>
                 )}
+                 <Card>
+                  <CardHeader><CardTitle>戰場災獸</CardTitle></CardHeader>
+                  <CardContent>
+                    {monsters.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                        {monsters.map((monster, index) => (
+                          <MonsterCard 
+                            key={index} 
+                            monster={monster}
+                            isTargeted={false}
+                            onSelectTarget={() => {}}
+                            isSelectable={false}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-center py-8">此陣營目前沒有災獸。</p>
+                    )}
+                  </CardContent>
+                 </Card>
             </div>
         )
     }
 
     if (combatStatus === 'active') {
-       const monsters = currentBattle.monsters.filter(m => m.factionId === factionId);
 
        if (!playerFaction || playerFaction !== factionId) {
          return (
@@ -185,7 +208,7 @@ export default function BattlegroundPage() {
           <Card>
             <CardHeader>
               <CardTitle>{FACTIONS[factionId]?.name} 災獸</CardTitle>
-              <CardDescription>當前回合：1 | 下一回合：18秒</CardDescription>
+              <CardDescription>當前回合：1 | 下一回合：20秒</CardDescription>
             </CardHeader>
             <CardContent>
               {monsters.length > 0 ? (
@@ -196,6 +219,7 @@ export default function BattlegroundPage() {
                       monster={monster}
                       isTargeted={selectedTarget === monster.name}
                       onSelectTarget={() => setSelectedTarget(monster.name)}
+                      isSelectable={true}
                     />
                   ))}
                 </div>
@@ -277,6 +301,7 @@ export default function BattlegroundPage() {
                 <Card>
                 <CardHeader>
                     <CardTitle>行動</CardTitle>
+                    <CardDescription>冷卻時間：20秒</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 gap-2">
                     <Button disabled={combatStatus !== 'active' || !selectedTarget}>攻擊</Button>
@@ -285,10 +310,25 @@ export default function BattlegroundPage() {
                     <Button variant="ghost" disabled={combatStatus !== 'active'}>防禦</Button>
                 </CardContent>
                 </Card>
-                <Card>
-                <CardHeader><CardTitle>裝備</CardTitle></CardHeader>
-                <CardContent><p className="text-muted-foreground text-sm">此處顯示已裝備的物品。</p></CardContent>
-                </Card>
+                
+                 <Tabs defaultValue="equipment" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="equipment">裝備</TabsTrigger>
+                        <TabsTrigger value="skills">技能</TabsTrigger>
+                        <TabsTrigger value="items">道具</TabsTrigger>
+                    </TabsList>
+                    <div className="mt-4">
+                        <TabsContent value="equipment">
+                            <Card><CardContent className="p-4"><p className="text-muted-foreground text-sm text-center py-4">此處顯示已裝備的物品。戰鬥準備期間可更換。</p></CardContent></Card>
+                        </TabsContent>
+                        <TabsContent value="skills">
+                            <Card><CardContent className="p-4"><p className="text-muted-foreground text-sm text-center py-4">此處顯示可使用的技能。</p></CardContent></Card>
+                        </TabsContent>
+                        <TabsContent value="items">
+                           <Card><CardContent className="p-4"><p className="text-muted-foreground text-sm text-center py-4">此處顯示可使用的道具。</p></CardContent></Card>
+                        </TabsContent>
+                    </div>
+                </Tabs>
             </div>
         </div>
     </div>
