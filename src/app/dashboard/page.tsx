@@ -1,4 +1,3 @@
-
 'use client';
 
 import Image from 'next/image';
@@ -19,7 +18,7 @@ import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection } from '@
 import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { Item, AttributeEffect, TriggeredEffect } from '@/lib/types';
+import type { Item, AttributeEffect, TriggeredEffect, Title } from '@/lib/types';
 import {
   Tooltip,
   TooltipContent,
@@ -47,7 +46,7 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -92,7 +91,7 @@ const itemTypeTranslations: { [key in Item['itemTypeId']]: { name: string; color
   special: { name: '特殊道具', color: 'bg-purple-600' },
 };
 
-function ChangeTitleDialog({ user, userData, onTitleChanged }: { user: any, userData: any, onTitleChanged: () => void }) {
+function ChangeTitleDialog({ user, userData, allTitles, onTitleChanged }: { user: any, userData: any, allTitles: Title[], onTitleChanged: () => void }) {
     const { toast } = useToast();
     const [selectedTitle, setSelectedTitle] = useState<string>(userData.titles?.[0] || '');
     const [isSaving, setIsSaving] = useState(false);
@@ -133,7 +132,7 @@ function ChangeTitleDialog({ user, userData, onTitleChanged }: { user: any, user
                 <div className="py-4">
                     <RadioGroup value={selectedTitle} onValueChange={setSelectedTitle}>
                         {(userData.titles || []).map((titleId: string, index: number) => {
-                             const titleData = userData.allTitles?.find((t: any) => t.id === titleId);
+                             const titleData = allTitles?.find((t: any) => t.id === titleId);
                              const titleName = titleData?.name || titleId;
                             return (
                                 <Label key={index} htmlFor={titleId} className="flex items-center justify-between rounded-md border p-3 hover:bg-accent has-[[data-state=checked]]:border-primary">
@@ -247,7 +246,7 @@ export default function DashboardPage() {
   const { data: allItems, isLoading: areItemsLoading } = useCollection<Item>(itemsQuery);
   
   const titlesQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'titles') : null), [firestore]);
-  const { data: allTitles, isLoading: areTitlesLoading } = useCollection(titlesQuery);
+  const { data: allTitles, isLoading: areTitlesLoading } = useCollection<Title>(titlesQuery);
 
 
   const activityLogQuery = useMemoFirebase(
@@ -256,11 +255,6 @@ export default function DashboardPage() {
   );
   const { data: recentLogs, isLoading: isLogsLoading } = useCollection(activityLogQuery);
   
-  const userDataWithTitles = useMemoFirebase(() => {
-    if (!userData || !allTitles) return userData;
-    return { ...userData, allTitles };
-  }, [userData, allTitles]);
-
   const faction = userData?.factionId ? FACTIONS[userData.factionId as keyof typeof FACTIONS] : null;
   const race = userData?.raceId ? RACES[userData.raceId as keyof typeof RACES] : null;
   
@@ -341,7 +335,7 @@ export default function DashboardPage() {
              <div className="text-left w-full">
               <h4 className="font-semibold mb-2 text-center">當前稱號</h4>
                {isLoading ? <Skeleton className="h-7 w-36 mx-auto" /> : <p className="text-center text-primary text-lg font-medium">{currentTitle?.name ?? '無'}</p>}
-               {user && userDataWithTitles && userDataWithTitles.titles && userDataWithTitles.titles.length > 0 && <ChangeTitleDialog user={user} userData={userDataWithTitles} onTitleChanged={mutate} />}
+               {user && userData && allTitles && userData.titles && userData.titles.length > 0 && <ChangeTitleDialog user={user} userData={userData} allTitles={allTitles} onTitleChanged={mutate} />}
             </div>
           </CardContent>
           <CardFooter>
