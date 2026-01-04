@@ -2104,9 +2104,8 @@ function BattleLogViewer({ battleId, battleName }: { battleId: string, battleNam
     )
 }
 
-function BattleManagement() {
+function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh }: { allItems: Item[], allTitles: Title[], allCombatEncounters: CombatEncounter[], onRefresh: () => void }) {
     const { toast } = useToast();
-    const [adminData, setAdminData] = useState<Awaited<ReturnType<typeof getAdminData>>>({});
     const [battleName, setBattleName] = useState('');
     const [yeluMonsters, setYeluMonsters] = useState<Partial<Monster>[]>([]);
     const [associationMonsters, setAssociationMonsters] = useState<Partial<Monster>[]>([]);
@@ -2117,20 +2116,7 @@ function BattleManagement() {
     const [newMonster, setNewMonster] = useState<Partial<Omit<Monster, 'monsterId' | 'originalHp'>>>({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: 'https://images.plurk.com/' });
     const [isAddingMonster, setIsAddingMonster] = useState(false);
     
-    const { allItems, allTitles, combatEncounters } = adminData;
-
-    const currentBattle = useMemo(() => combatEncounters?.[0] && combatEncounters[0].status !== 'closed' ? combatEncounters[0] : null, [combatEncounters]);
-    
-    const fetchAdminData = useCallback(async () => {
-        setIsLoading(true);
-        const data = await getAdminData();
-        setAdminData(data);
-        setIsLoading(false);
-    }, []);
-
-    useEffect(() => {
-        fetchAdminData();
-    }, [fetchAdminData]);
+    const currentBattle = useMemo(() => allCombatEncounters?.[0] && allCombatEncounters[0].status !== 'closed' ? allCombatEncounters[0] : null, [allCombatEncounters]);
 
     const addMonster = (faction: 'yelu' | 'association' | 'common') => {
         const newMonster: Partial<Monster> = { name: '', imageUrl: 'https://images.plurk.com/', hp: 1000, atk: '10+1D6', factionId: faction };
@@ -2172,7 +2158,7 @@ function BattleManagement() {
             setAssociationMonsters([]);
             setCommonMonsters([]);
             setRewards({ honorPoints: 0, currency: 0, logMessage: '' });
-            fetchAdminData();
+            onRefresh();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '開啟失敗', description: error.message });
         } finally {
@@ -2187,7 +2173,7 @@ function BattleManagement() {
             const result = await startBattle(currentBattle.id);
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: '戰場已正式開始！' });
-            fetchAdminData();
+            onRefresh();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '操作失敗', description: error.message });
         } finally {
@@ -2202,7 +2188,7 @@ function BattleManagement() {
             const result = await endBattle(currentBattle.id);
             if (result.error) throw new Error(result.error);
             toast({ title: '操作成功', description: result.message });
-            fetchAdminData();
+            onRefresh();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '操作失敗', description: error.message });
         } finally {
@@ -2221,7 +2207,7 @@ function BattleManagement() {
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: `已將「${newMonster.name}」增援至戰場！` });
             setNewMonster({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: 'https://images.plurk.com/' });
-            fetchAdminData();
+            onRefresh();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '增援失敗', description: error.message });
         } finally {
@@ -2411,7 +2397,7 @@ function BattleManagement() {
                         <TableHeader><TableRow><TableHead>名稱</TableHead><TableHead>狀態</TableHead><TableHead>開始時間</TableHead><TableHead>結束時間</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {isLoading ? <TableRow><TableCell colSpan={5}><Skeleton className="w-full h-10"/></TableCell></TableRow>
-                            : combatEncounters && combatEncounters.length > 0 ? combatEncounters.map(b => (
+                            : allCombatEncounters && allCombatEncounters.length > 0 ? allCombatEncounters.map(b => (
                                 <TableRow key={b.id}>
                                     <TableCell>{b.name}</TableCell>
                                     <TableCell><Badge variant={b.status === 'ended' ? 'outline' : 'default'}>{b.status}</Badge></TableCell>
@@ -2436,6 +2422,49 @@ function BattleManagement() {
 }
 
 export default function AdminPage() {
+  const [adminData, setAdminData] = useState<Awaited<ReturnType<typeof getAdminData>>>({});
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchAllData = useCallback(async () => {
+    setIsLoading(true);
+    const data = await getAdminData();
+    setAdminData(data);
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
+
+  if (isLoading) {
+    return (
+        <div className="w-full">
+            <Card>
+                <CardHeader>
+                    <Skeleton className="h-10 w-48" />
+                    <Skeleton className="h-5 w-72" />
+                </CardHeader>
+                <CardContent>
+                    <Skeleton className="h-10 w-full mb-4" />
+                    <Skeleton className="h-96 w-full" />
+                </CardContent>
+            </Card>
+        </div>
+    )
+  }
+
+  if (adminData.error) {
+     return (
+      <Alert variant="destructive">
+        <Terminal className="h-4 w-4" />
+        <AlertTitle>讀取管理資料失敗</AlertTitle>
+        <AlertDescription>
+          <pre className="mt-2 text-xs bg-black/20 p-2 rounded-md font-mono">{adminData.error}</pre>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
     <div className="w-full">
       <Card>
@@ -2474,7 +2503,12 @@ export default function AdminPage() {
                  <CraftingManagement />
               </TabsContent>
               <TabsContent value="battle">
-                 <BattleManagement />
+                 <BattleManagement 
+                    allItems={adminData.items || []}
+                    allTitles={adminData.titles || []}
+                    allCombatEncounters={adminData.combatEncounters || []}
+                    onRefresh={fetchAllData}
+                 />
               </TabsContent>
               <TabsContent value="conflict">
                 <ConflictManagement />
