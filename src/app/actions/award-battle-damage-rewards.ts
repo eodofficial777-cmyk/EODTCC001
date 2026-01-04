@@ -9,6 +9,7 @@ import {
   runTransaction,
   arrayUnion,
   serverTimestamp,
+  getDoc,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
@@ -59,25 +60,28 @@ export async function awardBattleDamageRewards(payload: {
 
     // 2. Aggregate damage by user
     const damageByUser = new Map<string, number>();
+    const battleDoc = await getDoc(doc(db, 'combatEncounters', battleId));
+    if (!battleDoc.exists()) {
+        throw new Error('找不到指定的戰場資料。');
+    }
+    const participants = battleDoc.data().participants || {};
+
+    // Create a mapping from roleName to userId
+    const roleNameToUserId: { [key: string]: string } = {};
+    for (const userId in participants) {
+        roleNameToUserId[participants[userId].roleName] = userId;
+    }
 
     for (const log of logs) {
-        // We need to extract the user ID from the log message.
-        // Assuming logData format is like: "{roleName} 使用..."
-        // A better approach would be to store userId in the log document.
-        // For now, let's assume we can get it. This is a simplification.
-        // Let's find the corresponding user by their name in the log
-         const battleDoc = await getDoc(doc(db, 'combatEncounters', battleId));
-         if (!battleDoc.exists()) continue;
-         const participants = battleDoc.data().participants || {};
-         
-         let userId: string | null = null;
-         for (const id in participants) {
-             if (log.logData.startsWith(participants[id].roleName)) {
-                 userId = id;
-                 break;
-             }
-         }
-
+        // Find the user ID based on who initiated the log
+        let userId: string | null = null;
+        for (const roleName in roleNameToUserId) {
+            if (log.logData.startsWith(roleName)) {
+                userId = roleNameToUserId[roleName];
+                break;
+            }
+        }
+        
         if (userId && log.damage && log.damage > 0) {
             const currentDamage = damageByUser.get(userId) || 0;
             damageByUser.set(userId, currentDamage + log.damage);
