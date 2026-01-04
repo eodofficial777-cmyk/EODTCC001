@@ -18,7 +18,7 @@ import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@
 import { doc, collection, query, orderBy, limit, where, updateDoc } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import type { CombatEncounter, User, Item, Skill, Monster, CombatLog } from '@/lib/types';
+import type { CombatEncounter, User, Item, Skill, Monster, CombatLog, AttributeEffect } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { performAttack } from '@/app/actions/perform-attack';
@@ -111,8 +111,8 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
     const { finalAtkString, finalDefString } = useMemo(() => {
         if (!userData || !allItems) return { finalAtkString: '0', finalDefString: '0' };
 
-        let baseAtk = userData.attributes.atk;
-        let baseDef = userData.attributes.def;
+        const baseAtk = userData.attributes.atk;
+        const baseDef = userData.attributes.def;
         let equipAtk = 0;
         let equipDef = 0;
         let diceAtkParts: string[] = [];
@@ -122,12 +122,16 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
             if (item) {
                 item.effects?.forEach(effect => {
                     if ('attribute' in effect) {
-                        if (effect.attribute === 'atk') {
-                            if (effect.operator === '+') equipAtk += effect.value;
-                            else if (effect.operator === 'd') diceAtkParts.push(`1d${effect.value}`);
+                        const attrEffect = effect as AttributeEffect;
+                        if (attrEffect.attribute === 'atk') {
+                            if (attrEffect.operator === '+') {
+                                equipAtk += Number(attrEffect.value);
+                            } else if (attrEffect.operator === 'd') {
+                                diceAtkParts.push(String(attrEffect.value));
+                            }
                         }
-                        if (effect.attribute === 'def' && effect.operator === '+') {
-                            equipDef += effect.value;
+                        if (attrEffect.attribute === 'def' && attrEffect.operator === '+') {
+                            equipDef += Number(attrEffect.value);
                         }
                     }
                 });

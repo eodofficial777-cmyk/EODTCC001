@@ -8,10 +8,15 @@ import {
   arrayUnion,
   arrayRemove,
   collection,
+  writeBatch,
+  getDocs,
+  query,
+  where,
+  updateDoc,
 } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, Item } from '@/lib/types';
+import type { User, Item, CombatEncounter } from '@/lib/types';
 
 let app;
 if (!getApps().length) {
@@ -27,6 +32,29 @@ interface CraftItemPayload {
   materialItemId: string;
   targetItemId: string;
 }
+
+// Helper function to reset a user's equipped items in active battles
+async function resetUserEquipmentInActiveBattles(userId: string) {
+    const q = query(collection(db, 'combatEncounters'), where('status', 'in', ['preparing', 'active']));
+    const querySnapshot = await getDocs(q);
+    
+    const batch = writeBatch(db);
+
+    querySnapshot.forEach(docSnap => {
+        const encounter = docSnap.data() as CombatEncounter;
+        if (encounter.participants && encounter.participants[userId]) {
+            const userParticipant = encounter.participants[userId];
+            if (userParticipant.equippedItems && userParticipant.equippedItems.length > 0) {
+                 const battleDocRef = doc(db, 'combatEncounters', docSnap.id);
+                 const fieldPath = `participants.${userId}.equippedItems`;
+                 batch.update(battleDocRef, { [fieldPath]: [] });
+            }
+        }
+    });
+
+    await batch.commit();
+}
+
 
 export async function craftItem(payload: CraftItemPayload): Promise<{ success: boolean; error?: string }> {
   const { userId, baseItemId, materialItemId, targetItemId } = payload;
@@ -74,22 +102,14 @@ export async function craftItem(payload: CraftItemPayload): Promise<{ success: b
       if (!userItems.includes(materialItemId)) throw new Error(`您沒有「${materialItem.name}」。`);
 
       // 3. Perform atomic update
-      // IMPORTANT: arrayRemove removes ALL instances of the value. If a user has multiples, this will consume all.
-      // A more complex system is needed for item stacks. For now, this assumes unique items or single consumption.
-      transaction.update(userRef, {
-        items: arrayRemove(baseItemId, materialItemId)
-      });
-      // We need to re-fetch the user doc state after the remove to add the new item,
-      // to avoid race conditions within the transaction's logic.
-      // The below is not ideal, but a simple workaround for array operations.
-      const tempUpdatedItems = user.items.filter(id => id !== baseItemId && id !== materialItemId);
-      tempUpdatedItems.push(targetItemId);
+      const itemsToRemove = [baseItemId, materialItemId];
+      const updatedItems = userItems.filter(id => !itemsToRemove.includes(id));
+      updatedItems.push(targetItemId);
 
       transaction.update(userRef, {
-          items: arrayUnion(targetItemId)
+        items: updatedItems,
       });
       
-
       // 4. Create activity log
       const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
       transaction.set(activityLogRef, {
@@ -102,6 +122,9 @@ export async function craftItem(payload: CraftItemPayload): Promise<{ success: b
 
       return { baseItemName: baseItem.name, materialItemName: materialItem.name, targetItemName: targetItem.name };
     });
+
+    // 5. After successful transaction, reset equipped items in active battles
+    await resetUserEquipmentInActiveBattles(userId);
 
     return { success: true };
   } catch (error: any) {
