@@ -110,7 +110,6 @@ export async function endBattle(battleId: string): Promise<{ success: boolean; e
 
     await updateDoc(battleRef, { status: 'ended', endTime: serverTimestamp() });
 
-    // Distribute rewards if they exist
     const participants = Object.keys(battleData.participants || {});
     const rewards = battleData.endOfBattleRewards;
 
@@ -123,7 +122,9 @@ export async function endBattle(battleId: string): Promise<{ success: boolean; e
           itemId: rewards.itemId,
           titleId: rewards.titleId,
           logMessage: rewards.logMessage || `參與戰役「${battleData.name}」獎勵`,
-        }
+        },
+        isBattleEnd: true,
+        battleData: battleData,
       });
       if (distributionResult.error) {
         throw new Error(`戰場已結束，但獎勵發放失敗：${distributionResult.error}`);

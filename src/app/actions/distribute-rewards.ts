@@ -14,12 +14,13 @@ import {
   doc,
   runTransaction,
   getDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, Item, Title, CombatLog } from '@/lib/types';
-import { parse } from 'path';
+import type { User, Item, Title, CombatLog, CombatEncounter } from '@/lib/types';
+import { checkAndAwardTitles } from '../services/check-and-award-titles';
 
 const ADMIN_EMAIL = 'admin@eodtcc.com';
 const ADMIN_PASSWORD = 'password';
@@ -70,6 +71,8 @@ export interface DistributionPayload {
     targetUserIds?: string[];
     filters?: FilterCriteria;
     rewards: RewardPayload;
+    isBattleEnd?: boolean;
+    battleData?: CombatEncounter;
 }
 
 async function getDamageDealtInBattle(battleId: string, damageThreshold: number): Promise<string[]> {
@@ -83,7 +86,6 @@ async function getDamageDealtInBattle(battleId: string, damageThreshold: number)
 
     logsSnapshot.docs.forEach(doc => {
         const log = doc.data() as CombatLog;
-        // Example logData: "角色名稱 對 災獸名稱 造成 123 點傷害..."
         const match = log.logData.match(/^(.*?) 對 .* 造成 (\d+) 點傷害/);
         if (match) {
             const userName = match[1];
@@ -119,10 +121,12 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
 }> {
   try {
     await ensureAdminAuth();
-    const { targetUserIds, filters, rewards } = payload;
+    const { targetUserIds, filters, rewards, isBattleEnd, battleData } = payload;
     let finalUserIds: string[] = [];
 
-    // --- Pre-fetch item/title names for logging ---
+    const allTitlesSnap = await getDocs(collection(db, 'titles'));
+    const allTitles = allTitlesSnap.docs.map(doc => doc.data() as Title);
+
     let itemName = '';
     if (rewards.itemId) {
       const itemSnap = await getDoc(doc(db, 'items', rewards.itemId));
@@ -134,13 +138,11 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
         if (titleSnap.exists()) titleName = (titleSnap.data() as Title).name;
     }
 
-    // --- Determine Target Users ---
     if (targetUserIds && targetUserIds.length > 0) {
       finalUserIds = targetUserIds;
     } else if (filters) {
         let userPool: User[] = [];
 
-        // If filtering by battle damage, get that user list first.
         if (filters.combatEncounterId && filters.damageDealt_val) {
             const damageUserIds = await getDamageDealtInBattle(filters.combatEncounterId, filters.damageDealt_val);
             const userSnaps = await Promise.all(damageUserIds.map(id => getDoc(doc(db, 'users', id))));
@@ -160,7 +162,6 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
             if (filters.currency_op === '<' && user.currency >= (filters.currency_val || 0)) return false;
             if (filters.taskCount_op === '>' && (user.tasks || []).length <= (filters.taskCount_val || 0)) return false;
             if (filters.taskCount_op === '<' && (user.tasks || []).length >= (filters.taskCount_val || 0)) return false;
-            // The battle damage filter is already applied by pre-filtering userPool
             return true;
         });
 
@@ -171,55 +172,79 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
       return { success: true, processedCount: 0, processedUsers: [] };
     }
 
-    // Firestore batch writes are limited to 500 operations. We'll process in chunks.
-    const chunkSize = 400; // Keep it below 500 to be safe (includes activity log writes)
+    const chunkSize = 400;
     let processedCount = 0;
     
     for (let i = 0; i < finalUserIds.length; i += chunkSize) {
         const chunk = finalUserIds.slice(i, i + chunkSize);
-        const batch = writeBatch(db);
-
+        
         for (const userId of chunk) {
-            const userRef = doc(db, 'users', userId);
-            const userUpdate: { [key: string]: any } = {};
-            let changeLog = [];
+            await runTransaction(db, async (transaction) => {
+                const userRef = doc(db, 'users', userId);
+                const userSnap = await transaction.get(userRef);
+                if (!userSnap.exists()) return;
 
-            if (rewards.honorPoints) {
-                userUpdate.honorPoints = increment(rewards.honorPoints);
-                changeLog.push(`+${rewards.honorPoints} 榮譽`);
-            }
-            if (rewards.currency) {
-                userUpdate.currency = increment(rewards.currency);
-                changeLog.push(`+${rewards.currency} 貨幣`);
-            }
-            if (rewards.itemId) {
-                userUpdate.items = arrayUnion(rewards.itemId);
-                changeLog.push(`獲得道具「${itemName || rewards.itemId}」`);
-            }
-            if (rewards.titleId) {
-                userUpdate.titles = arrayUnion(rewards.titleId);
-                 changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
-            }
+                const user = userSnap.data() as User;
+                const userUpdate: { [key: string]: any } = {};
+                let changeLog = [];
 
-            if (Object.keys(userUpdate).length > 0) {
-                 batch.update(userRef, userUpdate);
-            }
+                if (rewards.honorPoints) {
+                    userUpdate.honorPoints = increment(rewards.honorPoints);
+                }
+                if (rewards.currency) {
+                    userUpdate.currency = increment(rewards.currency);
+                }
+                if (rewards.itemId) {
+                    userUpdate.items = arrayUnion(rewards.itemId);
+                    changeLog.push(`獲得道具「${itemName || rewards.itemId}」`);
+                }
+                if (rewards.titleId) {
+                    userUpdate.titles = arrayUnion(rewards.titleId);
+                    changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
+                }
 
-            // Add activity log
-            const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
-            batch.set(activityLogRef, {
-                id: activityLogRef.id,
-                userId: userId,
-                timestamp: serverTimestamp(),
-                description: rewards.logMessage,
-                change: changeLog.join(', ')
+                if (isBattleEnd && battleData) {
+                    userUpdate.participatedBattleIds = arrayUnion(battleData.id);
+                    const participant = battleData.participants?.[userId];
+                    if (participant && participant.hp <= 0) {
+                        userUpdate.hpZeroCount = increment(1);
+                    }
+                }
+
+                transaction.update(userRef, userUpdate);
+
+                const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
+                transaction.set(activityLogRef, {
+                    id: activityLogRef.id,
+                    userId: userId,
+                    timestamp: serverTimestamp(),
+                    description: rewards.logMessage,
+                    change: changeLog.join(', ') || '系統發放'
+                });
+
+                // Post-update: check for titles
+                const updatedUserData = { ...user, ...userUpdate };
+                const newTitles = await checkAndAwardTitles(updatedUserData, allTitles, { battleId: battleData?.id });
+
+                if (newTitles.length > 0) {
+                    const newTitleIds = newTitles.map(t => t.id);
+                    const newTitleNames = newTitles.map(t => t.name).join('、');
+                    transaction.update(userRef, { titles: arrayUnion(...newTitleIds) });
+                    
+                    const titleLogRef = doc(collection(db, `users/${userId}/activityLogs`));
+                    transaction.set(titleLogRef, {
+                         id: titleLogRef.id,
+                         userId: userId,
+                         timestamp: serverTimestamp(),
+                         description: `達成了新的里程碑！`,
+                         change: `獲得稱號：${newTitleNames}`
+                    });
+                }
             });
         }
-        await batch.commit();
         processedCount += chunk.length;
     }
 
-    // For the summary, fetch the user data of the processed IDs
     const finalUsersData = await Promise.all(finalUserIds.map(id => getDoc(doc(db, 'users', id))));
     const processedUsers = finalUsersData.map(snap => {
         if (!snap.exists()) return { id: snap.id, roleName: 'Unknown User' };

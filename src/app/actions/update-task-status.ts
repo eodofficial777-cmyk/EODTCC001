@@ -10,11 +10,13 @@ import {
   arrayUnion,
   collection,
   FieldValue,
+  getDocs,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { Task, TaskType, User } from '@/lib/types';
+import type { Task, TaskType, User, Title } from '@/lib/types';
+import { checkAndAwardTitles } from '../services/check-and-award-titles';
 
 const ADMIN_EMAIL = 'admin@eodtcc.com';
 const ADMIN_PASSWORD = 'password';
@@ -51,73 +53,53 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
   try {
     await ensureAdminAuth();
 
+    const allTitlesSnap = await getDocs(collection(db, 'titles'));
+    const allTitles = allTitlesSnap.docs.map(doc => doc.data() as Title);
+
     await runTransaction(db, async (transaction) => {
       const taskRef = doc(db, 'tasks', taskId);
       const taskSnap = await transaction.get(taskRef);
 
-      if (!taskSnap.exists()) {
-        throw new Error('找不到指定的任務。');
-      }
+      if (!taskSnap.exists()) throw new Error('找不到指定的任務。');
 
       const task = taskSnap.data() as Task;
-      if (task.status !== 'pending') {
-        throw new Error(`此任務的狀態已經是「${task.status}」，無法重複審核。`);
-      }
+      if (task.status !== 'pending') throw new Error(`此任務的狀態已經是「${task.status}」，無法重複審核。`);
 
-      // Just update status if rejected
       if (status === 'rejected') {
         transaction.update(taskRef, { status: 'rejected' });
         return;
       }
       
-      // --- Approval Logic ---
-      
       const userRef = doc(db, 'users', task.userId);
       const userSnap = await transaction.get(userRef);
-      if (!userSnap.exists()) {
-        throw new Error(`找不到提交任務的使用者 (ID: ${task.userId})`);
-      }
+      if (!userSnap.exists()) throw new Error(`找不到提交任務的使用者 (ID: ${task.userId})`);
       const user = userSnap.data() as User;
 
       const taskTypeRef = doc(db, 'taskTypes', task.taskTypeId);
       const taskTypeSnap = await transaction.get(taskTypeRef);
-       if (!taskTypeSnap.exists()) {
-        throw new Error(`找不到任務類型 (ID: ${task.taskTypeId})`);
-      }
+       if (!taskTypeSnap.exists()) throw new Error(`找不到任務類型 (ID: ${task.taskTypeId})`);
       const taskType = taskTypeSnap.data() as TaskType;
 
-      // 1. Update task status
       transaction.update(taskRef, { status: 'approved' });
 
-      // 2. Update user points, currency, and rewards
-      const userUpdateData: { [key: string]: any } = {
-        currency: increment(task.currencyAwarded),
-        honorPoints: increment(task.honorPointsAwarded),
-      };
-      if (taskType.titleAwarded) {
-        userUpdateData.titles = arrayUnion(taskType.titleAwarded);
-      }
-      if (taskType.itemAwarded) {
-        userUpdateData.items = arrayUnion(taskType.itemAwarded);
-      }
+      const userUpdateData: { [key: string]: any } = {};
+      if(task.currencyAwarded > 0) userUpdateData.currency = increment(task.currencyAwarded);
+      if(task.honorPointsAwarded > 0) userUpdateData.honorPoints = increment(task.honorPointsAwarded);
+      if (taskType.titleAwarded) userUpdateData.titles = arrayUnion(taskType.titleAwarded);
+      if (taskType.itemAwarded) userUpdateData.items = arrayUnion(taskType.itemAwarded);
       transaction.update(userRef, userUpdateData);
 
-      // 3. Update war season score if points were awarded
       if (task.honorPointsAwarded > 0) {
         let factionToContributeTo = 'none';
         if (task.userFactionId === 'wanderer') {
-            if (task.factionContribution && task.factionContribution !== 'none') {
-                factionToContributeTo = task.factionContribution;
-            }
+            if (task.factionContribution && task.factionContribution !== 'none') factionToContributeTo = task.factionContribution;
         } else {
             factionToContributeTo = task.userFactionId;
         }
 
         if (factionToContributeTo === 'yelu' || factionToContributeTo === 'association') {
             const seasonRef = doc(db, 'war-seasons', 'current');
-            const seasonUpdate: { [key: string]: FieldValue } = {
-                [`${factionToContributeTo}.rawScore`]: increment(task.honorPointsAwarded)
-            };
+            const seasonUpdate: { [key: string]: FieldValue } = { [`${factionToContributeTo}.rawScore`]: increment(task.honorPointsAwarded) };
             if (task.userFactionId !== 'wanderer') {
                  seasonUpdate[`${factionToContributeTo}.activePlayers`] = arrayUnion(task.userId);
             }
@@ -125,7 +107,6 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
         }
       }
 
-      // 4. Create an activity log
       const activityLogRef = doc(collection(db, `users/${task.userId}/activityLogs`));
       const changeDescription = `+${task.honorPointsAwarded} 榮譽, +${task.currencyAwarded} 貨幣`;
       transaction.set(activityLogRef, {
@@ -135,6 +116,25 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
         description: `任務「${taskType.name}」審核通過`,
         change: changeDescription
       });
+
+      // Post-update: check for titles
+      const updatedUserData = { ...user, ...userUpdateData };
+      const newTitles = await checkAndAwardTitles(updatedUserData, allTitles);
+
+      if (newTitles.length > 0) {
+          const newTitleIds = newTitles.map(t => t.id);
+          const newTitleNames = newTitles.map(t => t.name).join('、');
+          transaction.update(userRef, { titles: arrayUnion(...newTitleIds) });
+          
+          const titleLogRef = doc(collection(db, `users/${task.userId}/activityLogs`));
+          transaction.set(titleLogRef, {
+               id: titleLogRef.id,
+               userId: task.userId,
+               timestamp: serverTimestamp(),
+               description: `達成了新的里程碑！`,
+               change: `獲得稱號：${newTitleNames}`
+          });
+      }
     });
 
     return { success: true };

@@ -8,6 +8,7 @@
 
 
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -30,6 +31,9 @@ export interface User {
     atk: number;
     def: number;
   };
+  participatedBattleIds?: string[];
+  hpZeroCount?: number;
+  itemUseCount?: { [itemId: string]: number };
   isAdmin?: boolean;
 }
 
@@ -202,6 +206,8 @@ export interface CombatLog {
   timestamp: any;
   turn: number;
   type: 'player_attack' | 'monster_attack' | 'skill_used' | 'item_used' | 'system';
+  itemId?: string;
+  damage?: number;
 }
 
 // Add this type to fix the error

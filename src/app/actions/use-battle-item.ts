@@ -1,3 +1,4 @@
+
 'use server';
 
 import {
@@ -6,10 +7,14 @@ import {
   runTransaction,
   serverTimestamp,
   collection,
+  increment,
+  arrayUnion,
+  getDocs,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, Item, CombatEncounter, Participant, ActiveBuff, Monster, TriggeredEffect } from '@/lib/types';
+import type { User, Item, CombatEncounter, Participant, ActiveBuff, Monster, TriggeredEffect, Title } from '@/lib/types';
+import { checkAndAwardTitles } from '../services/check-and-award-titles';
 
 let app: App;
 if (!getApps().length) {
@@ -59,6 +64,8 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
   const userRef = doc(db, 'users', userId);
   const itemRef = doc(db, 'items', itemId);
   const battleRef = doc(db, 'combatEncounters', battleId);
+  const allTitlesSnap = await getDocs(collection(db, 'titles'));
+  const allTitles = allTitlesSnap.docs.map(doc => doc.data() as Title);
 
   try {
     const { logMessage } = await runTransaction(db, async (transaction) => {
@@ -70,7 +77,7 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
         if (!itemDoc.exists()) throw new Error('找不到指定的道具。');
         if (!battleDoc.exists()) throw new Error('找不到指定的戰場。');
 
-        const user = userDoc.data() as User;
+        let user = userDoc.data() as User;
         const item = itemDoc.data() as Item;
         const battle = battleDoc.data() as CombatEncounter;
 
@@ -113,7 +120,7 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
                     if (targetIndex === -1) throw new Error('找不到指定的目標。');
                     if (monsters[targetIndex].hp <= 0) throw new Error('目標已經被擊敗了。');
                     
-                    const damage = effect.value; // Direct damage
+                    const damage = effect.value;
                     monsters[targetIndex].hp = Math.max(0, monsters[targetIndex].hp - damage);
                     logMessages.push(`對 ${monsters[targetIndex].name} 造成了 ${damage} 點傷害。`);
                     break;
@@ -128,13 +135,13 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
             }
         }
         
-        // Consume item
         userItems.splice(itemIndex, 1);
+        const userUpdateData: {[key: string]: any} = {
+            items: userItems,
+            [`itemUseCount.${itemId}`]: increment(1)
+        };
+        transaction.update(userRef, userUpdateData);
 
-        // Update User Doc
-        transaction.update(userRef, { items: userItems });
-
-        // Update Battle Doc
         transaction.update(battleRef, {
             monsters,
             [`participants.${userId}`]: {
@@ -143,7 +150,6 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
             },
         });
         
-        // Create Battle Log
         const finalLogMessage = logMessages.join(' ');
         const battleLogRef = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
         transaction.set(battleLogRef, {
@@ -153,9 +159,9 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
             timestamp: serverTimestamp(),
             turn: battle.turn,
             type: 'item_used',
+            itemId, // Log which item was used
         });
         
-        // Create Activity Log
         const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
         transaction.set(activityLogRef, {
             id: activityLogRef.id,
@@ -164,6 +170,26 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
             description: `在戰鬥中使用了「${item.name}」`,
             change: `消耗 1 個 ${item.name}`,
         });
+        
+        // Post-update: check for titles
+        user.items = userItems; // Manually update for check
+        user.itemUseCount = { ...user.itemUseCount, [itemId]: (user.itemUseCount?.[itemId] || 0) + 1 };
+        const newTitles = await checkAndAwardTitles(user, allTitles, { battleId, itemId, damageDealt: 0 });
+
+        if (newTitles.length > 0) {
+            const newTitleIds = newTitles.map(t => t.id);
+            const newTitleNames = newTitles.map(t => t.name).join('、');
+            transaction.update(userRef, { titles: arrayUnion(...newTitleIds) });
+            
+            const titleLogRef = doc(collection(db, `users/${userId}/activityLogs`));
+            transaction.set(titleLogRef, {
+                 id: titleLogRef.id,
+                 userId: userId,
+                 timestamp: serverTimestamp(),
+                 description: `達成了新的里程碑！`,
+                 change: `獲得稱號：${newTitleNames}`
+            });
+        }
         
         return { logMessage: finalLogMessage };
     });

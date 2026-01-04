@@ -88,16 +88,24 @@
           "type": "object",
           "description": "The character's attributes.",
           "properties": {
-            "hp": {
-              "type": "number"
-            },
-            "atk": {
-              "type": "number"
-            },
-            "def": {
-              "type": "number"
-            }
+            "hp": { "type": "number" },
+            "atk": { "type": "number" },
+            "def": { "type": "number" }
           }
+        },
+        "participatedBattleIds": {
+            "type": "array",
+            "description": "An array of combat encounter IDs the user has participated in.",
+            "items": { "type": "string" }
+        },
+        "hpZeroCount": {
+            "type": "number",
+            "description": "Number of times the user's HP dropped to zero in battles."
+        },
+        "itemUseCount": {
+            "type": "object",
+            "description": "A map of item IDs to the number of times the user has used them.",
+            "additionalProperties": { "type": "number" }
         }
       },
       "required": [
@@ -119,54 +127,21 @@
       "type": "object",
       "description": "Represents a character within the EOD 終端機 application, associated with a user.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the character."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to the User who owns this character. (Relationship: User 1:N Character)"
-        },
-        "name": {
-          "type": "string",
-          "description": "The character's name."
-        },
-        "factionId": {
-          "type": "string",
-          "description": "Reference to the Faction the character belongs to. (Relationship: Faction 1:N Character)"
-        },
-        "raceId": {
-          "type": "string",
-          "description": "Reference to the Race of the character. (Relationship: Race 1:N Character)"
-        },
-        "honorPoints": {
-          "type": "number",
-          "description": "The character's honor points."
-        },
-        "attributes": {
-          "type": "string",
-          "description": "The character's attributes."
-        },
-        "resources": {
-          "type": "string",
-          "description": "The character's resources."
-        },
+        "id": { "type": "string", "description": "Unique identifier for the character." },
+        "userId": { "type": "string", "description": "Reference to the User who owns this character." },
+        "name": { "type": "string", "description": "The character's name." },
+        "factionId": { "type": "string", "description": "Reference to the Faction the character belongs to." },
+        "raceId": { "type": "string", "description": "Reference to the Race of the character." },
+        "honorPoints": { "type": "number", "description": "The character's honor points." },
+        "attributes": { "type": "string", "description": "The character's attributes." },
+        "resources": { "type": "string", "description": "The character's resources." },
         "equipmentIds": {
           "type": "array",
-          "description": "References to the Equipment the character has. (Relationship: Character N:N Equipment)",
-          "items": {
-            "type": "string"
-          }
+          "description": "References to the Equipment the character has.",
+          "items": { "type": "string" }
         }
       },
-      "required": [
-        "id",
-        "userId",
-        "name",
-        "factionId",
-        "raceId",
-        "honorPoints"
-      ]
+      "required": [ "id", "userId", "name", "factionId", "raceId", "honorPoints" ]
     },
     "Faction": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -174,24 +149,11 @@
       "type": "object",
       "description": "Represents a faction within the EOD 終端機 application.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the faction."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the faction."
-        },
-        "score": {
-          "type": "number",
-          "description": "The current score of the faction."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the faction." },
+        "name": { "type": "string", "description": "The name of the faction." },
+        "score": { "type": "number", "description": "The current score of the faction." }
       },
-      "required": [
-        "id",
-        "name",
-        "score"
-      ]
+      "required": [ "id", "name", "score" ]
     },
     "Race": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -199,39 +161,14 @@
       "type": "object",
       "description": "Represents a race within the EOD 終端機 application.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the race."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the race."
-        },
-        "description": {
-          "type": "string",
-          "description": "A description of the race."
-        },
-        "hp": {
-          "type": "number",
-          "description": "Base hit points for the race."
-        },
-        "atk": {
-          "type": "number",
-          "description": "Base attack power for the race."
-        },
-        "def": {
-          "type": "number",
-          "description": "Base defense power for the race."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the race." },
+        "name": { "type": "string", "description": "The name of the race." },
+        "description": { "type": "string", "description": "A description of the race." },
+        "hp": { "type": "number", "description": "Base hit points for the race." },
+        "atk": { "type": "number", "description": "Base attack power for the race." },
+        "def": { "type": "number", "description": "Base defense power for the race." }
       },
-      "required": [
-        "id",
-        "name",
-        "description",
-        "hp",
-        "atk",
-        "def"
-      ]
+      "required": [ "id", "name", "description", "hp", "atk", "def" ]
     },
     "Task": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -239,75 +176,20 @@
       "type": "object",
       "description": "Represents a task submitted by a user.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the task."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to the User who submitted the task."
-        },
-        "userName": {
-          "type": "string",
-          "description": "The name of the user who submitted the task."
-        },
-        "userFactionId": {
-          "type": "string",
-          "description": "The faction of the user who submitted the task."
-        },
-        "taskTypeId": {
-          "type": "string",
-          "description": "Reference to the TaskType of the task."
-        },
-        "title": {
-          "type": "string",
-          "description": "The title or description of the submission."
-        },
-        "submissionUrl": {
-          "type": "string",
-          "description": "URL where the task submission can be found.",
-          "format": "uri"
-        },
-        "honorPointsAwarded": {
-          "type": "number",
-          "description": "Honor points awarded for the task."
-        },
-        "currencyAwarded": {
-          "type": "number",
-          "description": "Currency awarded for the task."
-        },
-        "submissionDate": {
-          "type": "string",
-          "description": "Date and time the task was submitted.",
-          "format": "date-time"
-        },
-        "status": {
-          "type": "string",
-          "description": "The review status of the task.",
-          "enum": [
-            "pending",
-            "approved",
-            "rejected"
-          ]
-        },
-        "factionContribution": {
-          "type": "string",
-          "description": "For Wanderers, which faction this task contributed to."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the task." },
+        "userId": { "type": "string", "description": "Reference to the User who submitted the task." },
+        "userName": { "type": "string", "description": "The name of the user who submitted the task." },
+        "userFactionId": { "type": "string", "description": "The faction of the user who submitted the task." },
+        "taskTypeId": { "type": "string", "description": "Reference to the TaskType of the task." },
+        "title": { "type": "string", "description": "The title or description of the submission." },
+        "submissionUrl": { "type": "string", "description": "URL where the task submission can be found.", "format": "uri" },
+        "honorPointsAwarded": { "type": "number", "description": "Honor points awarded for the task." },
+        "currencyAwarded": { "type": "number", "description": "Currency awarded for the task." },
+        "submissionDate": { "type": "string", "description": "Date and time the task was submitted.", "format": "date-time" },
+        "status": { "type": "string", "description": "The review status of the task.", "enum": [ "pending", "approved", "rejected" ] },
+        "factionContribution": { "type": "string", "description": "For Wanderers, which faction this task contributed to." }
       },
-      "required": [
-        "id",
-        "userId",
-        "userName",
-        "userFactionId",
-        "taskTypeId",
-        "title",
-        "submissionUrl",
-        "honorPointsAwarded",
-        "currencyAwarded",
-        "submissionDate",
-        "status"
-      ]
+      "required": [ "id", "userId", "userName", "userFactionId", "taskTypeId", "title", "submissionUrl", "honorPointsAwarded", "currencyAwarded", "submissionDate", "status" ]
     },
     "TaskType": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -315,58 +197,18 @@
       "type": "object",
       "description": "Represents a type of task that can be submitted.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the task type."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the task type."
-        },
-        "description": {
-          "type": "string",
-          "description": "A description of the task type."
-        },
-        "honorPoints": {
-          "type": "number",
-          "description": "Honor points awarded for this task type."
-        },
-        "currency": {
-          "type": "number",
-          "description": "Currency awarded for this task type."
-        },
-        "titleAwarded": {
-          "type": "string",
-          "description": "The title ID awarded for completing this task type (optional)."
-        },
-        "itemAwarded": {
-          "type": "string",
-          "description": "The item ID awarded for completing this task type (optional)."
-        },
-        "category": {
-          "type": "string",
-          "description": "The category of the task.",
-          "enum": ["main", "side", "general"]
-        },
-        "requiresApproval": {
-          "type": "boolean",
-          "description": "Indicates if a task of this type requires admin approval before rewards are given."
-        },
-        "singleSubmission": {
-          "type": "boolean",
-          "description": "Indicates if a user can only submit a task of this type once."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the task type." },
+        "name": { "type": "string", "description": "The name of the task type." },
+        "description": { "type": "string", "description": "A description of the task type." },
+        "honorPoints": { "type": "number", "description": "Honor points awarded for this task type." },
+        "currency": { "type": "number", "description": "Currency awarded for this task type." },
+        "titleAwarded": { "type": "string", "description": "The title ID awarded for completing this task type (optional)." },
+        "itemAwarded": { "type": "string", "description": "The item ID awarded for completing this task type (optional)." },
+        "category": { "type": "string", "description": "The category of the task.", "enum": ["main", "side", "general"] },
+        "requiresApproval": { "type": "boolean", "description": "Indicates if a task of this type requires admin approval before rewards are given." },
+        "singleSubmission": { "type": "boolean", "description": "Indicates if a user can only submit a task of this type once." }
       },
-      "required": [
-        "id",
-        "name",
-        "description",
-        "honorPoints",
-        "currency",
-        "category",
-        "requiresApproval",
-        "singleSubmission"
-      ]
+      "required": [ "id", "name", "description", "honorPoints", "currency", "category", "requiresApproval", "singleSubmission" ]
     },
     "Item": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -374,84 +216,33 @@
       "type": "object",
       "description": "Represents an item in the game.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the item."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the item."
-        },
-        "description": {
-          "type": "string",
-          "description": "A description of the item."
-        },
-        "imageUrl": {
-            "type": "string",
-            "format": "uri",
-            "description": "URL of the item's image."
-        },
-        "itemTypeId": {
-          "type": "string",
-          "description": "Reference to the ItemType of the item.",
-          "enum": ["equipment", "consumable", "special", "stat_boost"]
-        },
-        "price": {
-          "type": "number",
-          "description": "The price of the item."
-        },
-        "factionId": {
-          "type": "string",
-          "description": "Reference to the Faction that this item belongs to. Required for store items."
-        },
-        "raceId": {
-            "type": "string",
-            "description": "Race restriction for the item. Can be 'all' for no restriction."
-        },
+        "id": { "type": "string", "description": "Unique identifier for the item." },
+        "name": { "type": "string", "description": "The name of the item." },
+        "description": { "type": "string", "description": "A description of the item." },
+        "imageUrl": { "type": "string", "format": "uri", "description": "URL of the item's image." },
+        "itemTypeId": { "type": "string", "description": "Reference to the ItemType of the item.", "enum": ["equipment", "consumable", "special", "stat_boost"] },
+        "price": { "type": "number", "description": "The price of the item." },
+        "factionId": { "type": "string", "description": "Reference to the Faction that this item belongs to." },
+        "raceId": { "type": "string", "description": "Race restriction for the item. Can be 'all' for no restriction." },
         "effects": {
             "type": "array",
             "description": "Structured description of the item's effects.",
-            "items": {
-                "oneOf": [
-                    {
-                        "type": "object",
-                        "properties": {
-                            "attribute": { "type": "string", "enum": ["hp", "atk", "def"] },
-                            "operator": { "type": "string", "enum": ["+", "*", "d"] },
-                            "value": { "type": ["number", "string"] }
-                        },
-                        "required": ["attribute", "operator", "value"]
-                    },
-                    {
-                        "type": "object",
-                        "properties": {
-                            "trigger": { "type": "string", "enum": ["on_use"] },
-                            "probability": { "type": "number", "minimum": 0, "maximum": 100 },
-                            "effectType": { "type": "string", "enum": ["hp_recovery", "damage_enemy", "atk_buff", "def_buff", "hp_cost"] },
-                            "value": { "type": "number" },
-                            "duration": { "type": "number" }
-                        },
-                        "required": ["trigger", "probability", "effectType", "value"]
-                    }
-                ]
-            }
+            "items": { "oneOf": [
+                {
+                    "type": "object",
+                    "properties": { "attribute": { "type": "string", "enum": ["hp", "atk", "def"] }, "operator": { "type": "string", "enum": ["+", "*", "d"] }, "value": { "type": ["number", "string"] } },
+                    "required": ["attribute", "operator", "value"]
+                },
+                {
+                    "type": "object",
+                    "properties": { "trigger": { "type": "string", "enum": ["on_use"] }, "probability": { "type": "number", "minimum": 0, "maximum": 100 }, "effectType": { "type": "string", "enum": ["hp_recovery", "damage_enemy", "atk_buff", "def_buff", "hp_cost"] }, "value": { "type": "number" }, "duration": { "type": "number" } },
+                    "required": ["trigger", "probability", "effectType", "value"]
+                }
+            ]}
         },
-        "isPublished": {
-            "type": "boolean",
-            "description": "If true, the item will appear in the faction store."
-        }
+        "isPublished": { "type": "boolean", "description": "If true, the item will appear in the faction store." }
       },
-      "required": [
-        "id",
-        "name",
-        "description",
-        "itemTypeId",
-        "price",
-        "factionId",
-        "raceId",
-        "isPublished",
-        "effects"
-      ]
+      "required": [ "id", "name", "description", "itemTypeId", "price", "factionId", "raceId", "isPublished", "effects" ]
     },
     "ItemType": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -459,24 +250,11 @@
       "type": "object",
       "description": "Represents a type of item.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the item type."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the item type."
-        },
-        "description": {
-          "type": "string",
-          "description": "A description of the item type."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the item type." },
+        "name": { "type": "string", "description": "The name of the item type." },
+        "description": { "type": "string", "description": "A description of the item type." }
       },
-      "required": [
-        "id",
-        "name",
-        "description"
-      ]
+      "required": [ "id", "name", "description" ]
     },
     "Equipment": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -484,29 +262,12 @@
       "type": "object",
       "description": "Represents a piece of equipment a character can equip.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the equipment."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the equipment."
-        },
-        "description": {
-          "type": "string",
-          "description": "A description of the equipment."
-        },
-        "attributes": {
-          "type": "string",
-          "description": "The attributes that the equipment provides to the character."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the equipment." },
+        "name": { "type": "string", "description": "The name of the equipment." },
+        "description": { "type": "string", "description": "A description of the equipment." },
+        "attributes": { "type": "string", "description": "The attributes that the equipment provides to the character." }
       },
-      "required": [
-        "id",
-        "name",
-        "description",
-        "attributes"
-      ]
+      "required": [ "id", "name", "description", "attributes" ]
     },
     "CombatLog": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -519,7 +280,9 @@
         "logData": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" },
         "turn": { "type": "number" },
-        "type": { "type": "string", "enum": ["player_attack", "monster_attack", "skill_used", "item_used", "system"] }
+        "type": { "type": "string", "enum": ["player_attack", "monster_attack", "skill_used", "item_used", "system"] },
+        "itemId": { "type": "string", "description": "The ID of the item used, for item_used logs." },
+        "damage": { "type": "number", "description": "The amount of damage dealt in this action." }
       },
       "required": [ "id", "encounterId", "logData", "timestamp", "turn", "type" ]
     },
@@ -534,18 +297,8 @@
         "factionId": { "type": "string" },
         "equippedItems": { "type": "array", "items": { "type": "string" } },
         "supportedFaction": { "type": "string", "enum": ["yelu", "association"] },
-        "activeBuffs": {
-          "type": "array",
-          "description": "List of active buffs on the participant.",
-          "items": {
-            "$ref": "#/entities/ActiveBuff"
-          }
-        },
-        "skillCooldowns": {
-          "type": "object",
-          "description": "A map of skill IDs to the number of turns remaining for cooldown.",
-          "additionalProperties": { "type": "number" }
-        }
+        "activeBuffs": { "type": "array", "description": "List of active buffs on the participant.", "items": { "$ref": "#/entities/ActiveBuff" } },
+        "skillCooldowns": { "type": "object", "description": "A map of skill IDs to the number of turns remaining for cooldown.", "additionalProperties": { "type": "number" } }
       },
       "required": ["hp", "roleName", "factionId"]
     },
@@ -641,9 +394,9 @@
       "type": "object",
       "description": "Links characters to their earned titles.",
       "properties": {
-        "characterId": { "type": "string", "description": "Reference to the Character. (Relationship: Character N:N Title)" },
-        "titleId": { "type": "string", "description": "Reference to the Title. (Relationship: Character N:N Title)" },
-        "obtainedDate": { "type": "string", "description": "The date the title was obtained.", "format": "date-time" }
+        "characterId": { "type": "string" },
+        "titleId": { "type": "string" },
+        "obtainedDate": { "type": "string", "format": "date-time" }
       },
       "required": [ "characterId", "titleId", "obtainedDate" ]
     },
@@ -656,8 +409,8 @@
         "id": { "type": "string", "description": "Unique identifier for the skill." },
         "name": { "type": "string", "description": "The name of the skill." },
         "description": { "type": "string", "description": "A description of the skill's effects." },
-        "factionId": { "type": "string", "description": "Reference to the Faction that can use the skill, can be null for all faction skills.(Relationship: Faction 1:N Skill)" },
-        "raceId": { "type": "string", "description": "Reference to the Race that can use the skill, can be null for all race skills.(Relationship: Race 1:N Skill)" },
+        "factionId": { "type": "string" },
+        "raceId": { "type": "string" },
         "cooldown": { "type": "number", "description": "The number of turns before the skill can be used again." },
         "effects": {
             "type": "array", "description": "Structured description of the skill's effects.",
@@ -666,8 +419,7 @@
                     "value": { "type": ["number", "string"] },
                     "probability": { "type": "number", "minimum": 0, "maximum": 100 },
                     "duration": { "type": "number" }
-                },
-                "required": ["effectType"]
+                }, "required": ["effectType"]
             }
         }
       },
@@ -679,11 +431,11 @@
       "type": "object",
       "description": "Represents a log entry for a character's activity.",
       "properties": {
-        "id": { "type": "string", "description": "Unique identifier for the log entry." },
-        "userId": { "type": "string", "description": "The ID of the user this log belongs to." },
-        "timestamp": { "type": "string", "description": "Date and time the activity occurred.", "format": "date-time" },
-        "description": { "type": "string", "description": "A description of the activity." },
-        "change": { "type": "string", "description": "A summary of the change, e.g., '+100 Honor Points'." }
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "change": { "type": "string" }
       },
       "required": [ "id", "userId", "timestamp", "description", "change" ]
     },
@@ -693,11 +445,11 @@
         "type": "object",
         "description": "Defines a crafting recipe for combining items.",
         "properties": {
-            "id": { "type": "string", "description": "Unique identifier for the recipe." },
-            "baseItemId": { "type": "string", "description": "The ID of the base item (usually equipment)." },
-            "materialItemId": { "type": "string", "description": "The ID of the material item (usually a special item)." },
-            "resultItemId": { "type": "string", "description": "The ID of the resulting crafted item." },
-             "isPublished": { "type": "boolean", "description": "If true, the recipe will appear in the crafting reference list." }
+            "id": { "type": "string" },
+            "baseItemId": { "type": "string" },
+            "materialItemId": { "type": "string" },
+            "resultItemId": { "type": "string" },
+             "isPublished": { "type": "boolean" }
         },
         "required": [ "id", "baseItemId", "materialItemId", "resultItemId", "isPublished" ]
     },
@@ -706,39 +458,29 @@
         "title": "Maintenance",
         "type": "object",
         "description": "Global maintenance status of the application.",
-        "properties": {
-            "isMaintenance": { "type": "boolean", "description": "If true, the application is in maintenance mode." }
-        },
+        "properties": { "isMaintenance": { "type": "boolean" } },
         "required": ["isMaintenance"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+    "providers": [ "password", "anonymous" ]
   },
   "firestore": {
     "structure": [
-      { "path": "/users/{userId}", "definition": { "entityName": "User", "schema": { "$ref": "#/backend/entities/User" }, "description": "Stores user account information. User ID is used for path-based ownership.", "params": [ { "name": "userId", "description": "The unique identifier of the user." } ] } },
-      { "path": "/users/{userId}/characters/{characterId}", "definition": { "entityName": "Character", "schema": { "$ref": "#/backend/entities/Character" }, "description": "Stores character information for a user.  User ID is used for path-based ownership.", "params": [ { "name": "userId", "description": "The unique identifier of the user." }, { "name": "characterId", "description": "The unique identifier of the character." } ] } },
-      { "path": "/factions/{factionId}", "definition": { "entityName": "Faction", "schema": { "$ref": "#/backend/entities/Faction" }, "description": "Stores faction information.", "params": [ { "name": "factionId", "description": "The unique identifier of the faction." } ] } },
-      { "path": "/races/{raceId}", "definition": { "entityName": "Race", "schema": { "$ref": "#/backend/entities/Race" }, "description": "Stores race information.", "params": [ { "name": "raceId", "description": "The unique identifier of the race." } ] } },
-      { "path": "/tasks/{taskId}", "definition": { "entityName": "Task", "schema": { "$ref": "#/backend/entities/Task" }, "description": "Stores tasks submitted by all users.", "params": [ { "name": "taskId", "description": "The unique identifier of the task." } ] } },
-       { "path": "/users/{userId}/activityLogs/{logId}", "definition": { "entityName": "ActivityLog", "schema": { "$ref": "#/backend/entities/ActivityLog" }, "description": "Stores activity logs for a user.", "params": [ { "name": "userId", "description": "The unique identifier of the user." }, { "name": "logId", "description": "The unique identifier of the log entry." } ] } },
-      { "path": "/taskTypes/{taskTypeId}", "definition": { "entityName": "TaskType", "schema": { "$ref": "#/backend/entities/TaskType" }, "description": "Stores task type information.", "params": [ { "name": "taskTypeId", "description": "The unique identifier of the task type." } ] } },
-      { "path": "/items/{itemId}", "definition": { "entityName": "Item", "schema": { "$ref": "#/backend/entities/Item" }, "description": "Stores item information.", "params": [ { "name": "itemId", "description": "The unique identifier of the item." } ] } },
-      { "path": "/itemTypes/{itemTypeId}", "definition": { "entityName": "ItemType", "schema": { "$ref": "#/backend/entities/ItemType" }, "description": "Stores item type information.", "params": [ { "name": "itemTypeId", "description": "The unique identifier of the item type." } ] } },
-      { "path": "/equipment/{equipmentId}", "definition": { "entityName": "Equipment", "schema": { "$ref": "#/backend/entities/Equipment" }, "description": "Stores equipment information.", "params": [ { "name": "equipmentId", "description": "The unique identifier of the equipment." } ] } },
-       { "path": "/craftRecipes/{recipeId}", "definition": { "entityName": "CraftRecipe", "schema": { "$ref": "#/backend/entities/CraftRecipe" }, "description": "Stores crafting recipe information.", "params": [ { "name": "recipeId", "description": "The unique identifier of the crafting recipe." } ] } },
-      { "path": "/combatEncounters/{combatEncounterId}", "definition": { "entityName": "CombatEncounter", "schema": { "$ref": "#/entities/CombatEncounter" }, "description": "Stores combat encounter information.", "params": [ { "name": "combatEncounterId", "description": "The unique identifier of the combat encounter." } ] } },
-      { "path": "/combatEncounters/{combatEncounterId}/combatLogs/{combatLogId}", "definition": { "entityName": "CombatLog", "schema": { "$ref": "#/entities/CombatLog" }, "description": "Stores combat log data for a specific combat encounter.", "params": [ { "name": "combatEncounterId", "description": "The unique identifier of the combat encounter." }, { "name": "combatLogId", "description": "The unique identifier of the combat log." } ] } },
-      { "path": "/titles/{titleId}", "definition": { "entityName": "Title", "schema": { "$ref": "#/backend/entities/Title" }, "description": "Stores title information.", "params": [ { "name": "titleId", "description": "The unique identifier of the title." } ] } },
-      { "path": "/characterTitles/{characterTitleId}", "definition": { "entityName": "CharacterTitle", "schema": { "$ref": "#/backend/entities/CharacterTitle" }, "description": "Stores associations between characters and titles.", "params": [ { "name": "characterTitleId", "description": "The unique identifier for the character-title association (consider a composite key of characterId and titleId)." } ] } },
-      { "path": "/skills/{skillId}", "definition": { "entityName": "Skill", "schema": { "$ref": "#/backend/entities/Skill" }, "description": "Stores skill information.", "params": [ { "name": "skillId", "description": "The unique identifier of the skill." } ] } },
-      { "path": "/roles_admin/{userId}", "definition": { "entityName": "role_admin", "schema": { "$ref": "#/backend/entities/User" }, "description": "Indicates that the user is an administrator. Existence of the document grants admin privileges.", "params": [ { "name": "userId", "description": "The unique identifier of the user." } ] } },
-      { "path": "/globals/maintenance", "definition": { "entityName": "Maintenance", "schema": { "$ref": "#/backend/entities/Maintenance" }, "description": "Stores global application settings, like maintenance mode.", "params": [] } }
-    ],
-    "reasoning": "This Firestore structure prioritizes security, scalability, and debuggability, following the core design principles and strategy mandates. It emphasizes authorization independence, clarity of intent, and avoids custom claims (DBAC). The structure is designed to support secure `list` operations (QAPs) and maintain data integrity. \n\n**Authorization Independence:**\nTo ensure authorization independence, the structure denormalizes authorization context where necessary. For example, if `Character` access depended on `Faction` attributes, those attributes would be copied into every `Character` document.\n\n**Structural Segregation:**\nThe design segregates data based on security requirements. User-specific data is stored under `/users/{userId}`, while global data like `Factions` and `Races` reside in root-level collections. This simplifies security rules by ensuring that each collection has a homogeneous security posture. The global `tasks` collection is introduced for easy querying of all submissions by admins and for the public feed.\n\n**Access Modeling:**\n*   **Private Data:** User-owned data (e.g., Characters, ActivityLogs) is stored under `/users/{userId}` to leverage path-based ownership. This allows simple and efficient security rules based on `request.auth.uid`.\n*   **Collaborative Data:** The global `/tasks` collection is readable by all but can only be created by authenticated users, supporting a public submission feed.\n*   **Global Roles (DBAC):** Admin roles are managed through the existence of documents in dedicated collections (e.g., `/roles_admin/{uid}`).\n\n**QAPs Support:**\nThe structure supports secure `list` operations (QAPs) by:\n\n*   Segregating data with different access needs into separate collections. For instance, admin-only data is stored separately from user-owned data.\n*   Using path-based ownership for user-specific data, which allows listing only resources owned by the authenticated user.\n\n**Invariants:**\nThe structure supports data integrity through the use of ownership, timestamps, and denormalized data. Security rules can enforce constraints on these fields to maintain data consistency."
+      { "path": "/users/{userId}", "definition": { "schema": { "$ref": "#/entities/User" } } },
+      { "path": "/factions/{factionId}", "definition": { "schema": { "$ref": "#/entities/Faction" } } },
+      { "path": "/races/{raceId}", "definition": { "schema": { "$ref": "#/entities/Race" } } },
+      { "path": "/tasks/{taskId}", "definition": { "schema": { "$ref": "#/entities/Task" } } },
+      { "path": "/users/{userId}/activityLogs/{logId}", "definition": { "schema": { "$ref": "#/entities/ActivityLog" } } },
+      { "path": "/taskTypes/{taskTypeId}", "definition": { "schema": { "$ref": "#/entities/TaskType" } } },
+      { "path": "/items/{itemId}", "definition": { "schema": { "$ref": "#/entities/Item" } } },
+      { "path": "/itemTypes/{itemTypeId}", "definition": { "schema": { "$ref": "#/entities/ItemType" } } },
+      { "path": "/craftRecipes/{recipeId}", "definition": { "schema": { "$ref": "#/entities/CraftRecipe" } } },
+      { "path": "/combatEncounters/{combatEncounterId}", "definition": { "schema": { "$ref": "#/entities/CombatEncounter" } } },
+      { "path": "/combatEncounters/{combatEncounterId}/combatLogs/{combatLogId}", "definition": { "schema": { "$ref": "#/entities/CombatLog" } } },
+      { "path": "/titles/{titleId}", "definition": { "schema": { "$ref": "#/entities/Title" } } },
+      { "path": "/skills/{skillId}", "definition": { "schema": { "$ref": "#/entities/Skill" } } },
+      { "path": "/globals/maintenance", "definition": { "schema": { "$ref": "#/entities/Maintenance" } } }
+    ]
   }
 }

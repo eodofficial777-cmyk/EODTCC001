@@ -1,3 +1,4 @@
+
 'use server';
 
 import {
@@ -16,7 +17,8 @@ import {
 } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
-import type { TaskType } from '@/lib/types';
+import type { TaskType, Title } from '@/lib/types';
+import { checkAndAwardTitles } from '../services/check-and-award-titles';
 
 
 // Helper to initialize Firebase (client SDK)
@@ -56,9 +58,10 @@ export async function submitTask(payload: SubmitTaskPayload) {
     const userRef = doc(db, 'users', userId);
     const seasonRef = doc(db, 'war-seasons', 'current');
     
-    // We use a transaction to safely read user data and check conditions before writing.
-    const { userDocSnap, taskType } = await runTransaction(db, async (transaction) => {
-      // Check for duplicate submission URL
+    const allTitlesSnap = await getDocs(collection(db, 'titles'));
+    const allTitles = allTitlesSnap.docs.map(doc => doc.data() as Title);
+
+    await runTransaction(db, async (transaction) => {
       const duplicateUrlQuery = query(collection(db, 'tasks'), where('submissionUrl', '==', submissionUrl));
       const duplicateSnapshot = await getDocs(duplicateUrlQuery);
       if (!duplicateSnapshot.empty) {
@@ -74,109 +77,102 @@ export async function submitTask(payload: SubmitTaskPayload) {
       if (!taskTypeSnap.exists()) {
         throw new Error('無效的任務類型');
       }
-      const taskTypeData = taskTypeSnap.data() as TaskType;
+      const taskType = taskTypeSnap.data() as TaskType;
+      const userData = userDoc.data();
 
-      // For single submission tasks, check if the taskTypeId is already in the user's submitted list
-      if (taskTypeData.singleSubmission && (userDoc.data().tasks || []).includes(taskTypeId)) {
+      if (taskType.singleSubmission && (userData.tasks || []).includes(taskTypeId)) {
         throw new Error('您已經提交過此類型的任務。');
       }
-      return { userDocSnap: userDoc, taskType: taskTypeData };
-    });
-
-    const batch = writeBatch(db);
-
-    // 1. Create new task document
-    const newTaskRef = doc(collection(db, 'tasks'));
-    batch.set(newTaskRef, {
-      id: newTaskRef.id,
-      userId,
-      userName,
-      userFactionId,
-      taskTypeId,
-      title,
-      submissionUrl,
-      honorPointsAwarded: taskType.honorPoints,
-      currencyAwarded: taskType.currency,
-      submissionDate: serverTimestamp(),
-      status: taskType.requiresApproval ? 'pending' : 'approved',
-      factionContribution: factionContribution || null,
-    });
-    
-    let honorToAward = taskType.honorPoints;
-    let currencyToAward = taskType.currency;
-
-    // If the task requires approval, don't award points immediately.
-    if (taskType.requiresApproval) {
+      
+      const newTaskRef = doc(collection(db, 'tasks'));
+      transaction.set(newTaskRef, {
+        id: newTaskRef.id,
+        userId,
+        userName,
+        userFactionId,
+        taskTypeId,
+        title,
+        submissionUrl,
+        honorPointsAwarded: taskType.honorPoints,
+        currencyAwarded: taskType.currency,
+        submissionDate: serverTimestamp(),
+        status: taskType.requiresApproval ? 'pending' : 'approved',
+        factionContribution: factionContribution || null,
+      });
+      
+      let honorToAward = taskType.honorPoints;
+      let currencyToAward = taskType.currency;
+      if (taskType.requiresApproval) {
         honorToAward = 0;
         currencyToAward = 0;
-    }
+      }
 
-    // 2. Update user's points and currency
-    const userTasks = userDocSnap.data()?.tasks || [];
-    if (taskType.singleSubmission) {
+      const userTasks = userData.tasks || [];
+      if (taskType.singleSubmission) {
         userTasks.push(taskTypeId);
-    } else {
+      } else {
         userTasks.push(newTaskRef.id);
-    }
+      }
 
-    // ALL players, including Wanderers, always get their personal honor points.
-    const userUpdateData: { [key: string]: any } = {
+      const userUpdateData: { [key: string]: any } = {
         tasks: userTasks,
-        currency: increment(currencyToAward),
-        honorPoints: increment(honorToAward),
-    };
-    
-    if (taskType.titleAwarded) {
-        userUpdateData.titles = arrayUnion(taskType.titleAwarded);
-    }
-    if (taskType.itemAwarded) {
-        userUpdateData.items = arrayUnion(taskType.itemAwarded);
-    }
+      };
+      if (currencyToAward > 0) userUpdateData.currency = increment(currencyToAward);
+      if (honorToAward > 0) userUpdateData.honorPoints = increment(honorToAward);
+      if (taskType.titleAwarded) userUpdateData.titles = arrayUnion(taskType.titleAwarded);
+      if (taskType.itemAwarded) userUpdateData.items = arrayUnion(taskType.itemAwarded);
 
-    batch.update(userRef, userUpdateData);
+      transaction.update(userRef, userUpdateData);
 
-    // 3. Update war season score (only if not requiring approval and honor is awarded)
-    if (honorToAward > 0) {
+      if (honorToAward > 0) {
         let factionToContributeTo = 'none';
-
         if (userFactionId === 'wanderer') {
-            if (factionContribution && factionContribution !== 'none') {
-                factionToContributeTo = factionContribution;
-            }
+            if (factionContribution && factionContribution !== 'none') factionToContributeTo = factionContribution;
         } else {
             factionToContributeTo = userFactionId;
         }
-
         if (factionToContributeTo === 'yelu' || factionToContributeTo === 'association') {
-            const seasonUpdate: { [key: string]: FieldValue } = {
-                [`${factionToContributeTo}.rawScore`]: increment(honorToAward)
-            };
-            
-            // Per new rule: Wanderers do NOT count as active players for factions.
-            // Only add user to activePlayers if they are a member of that faction.
+            const seasonUpdate: { [key: string]: FieldValue } = { [`${factionToContributeTo}.rawScore`]: increment(honorToAward) };
             if (userFactionId !== 'wanderer') {
                  seasonUpdate[`${factionToContributeTo}.activePlayers`] = arrayUnion(userId);
             }
-
-            batch.update(seasonRef, seasonUpdate);
+            transaction.update(seasonRef, seasonUpdate);
         }
-    }
-    
-    // 4. Create an activity log
-    const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
-    const changeDescription = taskType.requiresApproval 
+      }
+      
+      const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
+      const changeDescription = taskType.requiresApproval 
         ? '任務已提交審核' 
         : `+${taskType.honorPoints} 榮譽, +${taskType.currency} 貨幣`;
         
-    batch.set(activityLogRef, {
+      transaction.set(activityLogRef, {
         id: activityLogRef.id,
         userId: userId,
         timestamp: serverTimestamp(),
         description: `提交任務「${taskType.name}」`,
         change: changeDescription
-    });
+      });
 
-    await batch.commit();
+      // Post-update: check for titles
+      const updatedUserData = { ...userData, ...userUpdateData };
+      updatedUserData.tasks = userTasks; // Manually update tasks array for check
+      const newTitles = await checkAndAwardTitles(updatedUserData, allTitles);
+
+      if (newTitles.length > 0) {
+          const newTitleIds = newTitles.map(t => t.id);
+          const newTitleNames = newTitles.map(t => t.name).join('、');
+          transaction.update(userRef, { titles: arrayUnion(...newTitleIds) });
+          
+          const titleLogRef = doc(collection(db, `users/${userId}/activityLogs`));
+          transaction.set(titleLogRef, {
+               id: titleLogRef.id,
+               userId: userId,
+               timestamp: serverTimestamp(),
+               description: `達成了新的里程碑！`,
+               change: `獲得稱號：${newTitleNames}`
+          });
+      }
+    });
     
     return { success: true };
   } catch (error: any) {
