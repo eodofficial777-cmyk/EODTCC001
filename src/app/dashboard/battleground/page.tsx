@@ -255,7 +255,7 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, activeBuffs, allItems
 const MonsterCard = ({ monster, isAttackable, onSelect, actionContext }: { monster: Monster; isAttackable: boolean; onSelect: (monsterId: string) => void; actionContext: {type: string} | null }) => {
   const isDefeated = monster.hp <= 0;
   const maxHp = monster.originalHp ?? monster.hp;
-  const isTargeting = actionContext && (actionContext.type === 'direct_damage' || actionContext.type === 'probabilistic_damage');
+  const isTargeting = actionContext && (actionContext.type === 'direct_damage' || actionContext.type === 'probabilistic_damage' || actionContext.type === 'attack' || actionContext.type === 'skill_target');
   
   return (
     <Card 
@@ -370,7 +370,7 @@ export default function BattlegroundPage() {
   const { data: allItems, isLoading: areItemsLoading } = useCollection<Item>(allItemsQuery);
 
   const skillsQuery = useMemoFirebase(() => {
-    if (!firestore || !userData) return null;
+    if (!firestore || !userData?.factionId || !userData?.raceId) return null;
     return query(collection(firestore, 'skills'), where('factionId', '==', userData.factionId), where('raceId', '==', userData.raceId));
   }, [firestore, userData]);
   const { data: availableSkills } = useCollection<Skill>(skillsQuery);
