@@ -240,27 +240,35 @@ export default function BattlegroundPage() {
 
   // --- Effects ---
   useEffect(() => {
-    // Reset HP and cooldown when a new battle starts or when user data is loaded
-    if (userData?.attributes.hp) {
-      setBattleHP(userData.attributes.hp);
-      setActionCooldown(0);
+    if (userData?.attributes.hp && battleHP === 0) {
+        setBattleHP(userData.attributes.hp);
     }
-  }, [currentBattle?.id, userData?.attributes.hp]);
+    if (currentBattle?.id) {
+        // When a new battle starts, reset HP.
+        setBattleHP(userData?.attributes.hp || 0);
+        setActionCooldown(0);
+        setSupportedFaction(null);
+        setSelectedTarget(null);
+    }
+}, [currentBattle?.id, userData?.attributes.hp]);
+
 
   useEffect(() => {
     // Store the original HP of monsters when the battle data is first loaded or changes
     if (currentBattle?.monsters) {
-      const initialHPs = currentBattle.monsters.reduce((acc, monster) => {
-        if (!originalMonsterHPs[monster.name]) { // Only set if not already set
-            acc[monster.name] = monster.hp;
-        } else {
-            acc[monster.name] = originalMonsterHPs[monster.name];
-        }
-        return acc;
-      }, {} as Record<string, number>);
+      const initialHPs: Record<string, number> = {};
+        currentBattle.monsters.forEach(monster => {
+            if (!originalMonsterHPs[monster.name]) { // Only set if not already set
+                initialHPs[monster.name] = monster.hp;
+            } else {
+                initialHPs[monster.name] = originalMonsterHPs[monster.name];
+            }
+        });
       
-      // We only set this once per battle to avoid issues with live updates
-      if (Object.keys(originalMonsterHPs).length === 0 || !originalMonsterHPs[currentBattle.monsters[0].name]) {
+      const newMonsterNames = currentBattle.monsters.map(m => m.name);
+      const oldMonsterNames = Object.keys(originalMonsterHPs);
+
+      if (newMonsterNames.join(',') !== oldMonsterNames.join(',')) {
           setOriginalMonsterHPs(initialHPs);
       }
     }
@@ -301,13 +309,9 @@ export default function BattlegroundPage() {
 
         if (result.error) throw new Error(result.error);
         
-        // Frontend state updates for immediate feedback
         if(result.monsterDamageDealt) {
             setBattleHP(prevHp => Math.max(0, prevHp - (result.monsterDamageDealt ?? 0)));
         }
-        
-        // This will trigger a re-render with fresh data from the backend, including monster HP and new logs
-        mutateBattle(); 
         
         setActionCooldown(Date.now());
 
@@ -319,7 +323,7 @@ export default function BattlegroundPage() {
   }
 
   const handleCountdownFinished = useCallback(() => {
-    mutateBattle(); // Re-fetch the battle data
+    mutateBattle();
   }, [mutateBattle]);
 
   // --- Render Functions ---
@@ -417,8 +421,8 @@ export default function BattlegroundPage() {
 
     return (
       <div className="space-y-6">
-        <div>{renderMonsters(factionId)}</div>
         {renderLogOrCountdown()}
+        <div>{renderMonsters(factionId)}</div>
          {combatStatus === 'preparing' && isWanderer && !supportedFaction && (
           <Alert className="mt-4">
             <Info className="h-4 w-4" />
@@ -439,8 +443,8 @@ export default function BattlegroundPage() {
                         <h4 className="font-bold mb-2">流浪者支援選擇</h4>
                         <p className="text-sm text-muted-foreground mb-3">選擇一個陣營進行支援。一旦選定，本次戰鬥中將無法更改。</p>
                         <div className="flex gap-4">
-                            <Button onClick={() => handleSupportFaction('yelu')} variant={supportedFaction === 'yelu' ? 'default' : 'outline'} className="w-full">支援夜鷺</Button>
-                            <Button onClick={() => handleSupportFaction('association')} variant={supportedFaction === 'association' ? 'default' : 'outline'} className="w-full">支援協會</Button>
+                            <Button onClick={() => handleSupportFaction('yelu')} variant={supportedFaction === 'yelu' ? 'default' : 'outline'} className="w-full" disabled={!!supportedFaction}>支援夜鷺</Button>
+                            <Button onClick={() => handleSupportFaction('association')} variant={supportedFaction === 'association' ? 'default' : 'outline'} className="w-full" disabled={!!supportedFaction}>支援協會</Button>
                         </div>
                     </div>
                 )}

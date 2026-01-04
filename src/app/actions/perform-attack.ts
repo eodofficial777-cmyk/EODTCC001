@@ -37,9 +37,10 @@ export interface PerformAttackResult {
 
 // Helper function to parse dice notation like "1d6" or "2d10" and return the sum of rolls
 function rollDice(diceNotation: string): number {
-  if (!diceNotation || !diceNotation.includes('d')) return 0;
+  if (!diceNotation || !diceNotation.toLowerCase().includes('d')) return 0;
   const [numDice, numSides] = diceNotation.toLowerCase().split('d').map(Number);
-  if (isNaN(numDice) || isNaN(numSides)) return 0;
+  if (isNaN(numDice) || isNaN(numSides) || numDice <= 0 || numSides <= 0) return 0;
+  
   let total = 0;
   for (let i = 0; i < numDice; i++) {
     total += Math.floor(Math.random() * numSides) + 1;
@@ -48,10 +49,12 @@ function rollDice(diceNotation: string): number {
 }
 
 // Helper function to parse ATK strings like "20+1d10"
-function parseAtk(atkString: string): number {
+function parseAtk(atkString: string | undefined): number {
   if(!atkString) return 0;
+  
   const parts = atkString.split('+');
   let totalAtk = parseInt(parts[0], 10) || 0;
+
   if (parts[1]) {
     totalAtk += rollDice(parts[1]);
   }
@@ -79,8 +82,6 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       const user = userDoc.data() as User;
       const battle = battleDoc.data() as CombatEncounter;
       
-      // We will manage HP on the client-side for immediate feedback, so we don't need to read it here.
-      // But we must check the battle status.
       if (battle.status !== 'active') throw new Error('戰場目前不是戰鬥狀態。');
       
       const targetMonsterIndex = battle.monsters.findIndex(m => m.name === targetMonsterName);
@@ -91,6 +92,7 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
 
       // --- 1. Calculate Player Damage ---
       let playerBaseAtk = user.attributes.atk;
+      let playerDiceDamage = 0;
 
       // Fetch equipped items and calculate bonuses
       if (equippedItemIds.length > 0) {
@@ -99,23 +101,23 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
             if(itemDoc.exists()) {
                 const item = itemDoc.data() as Item;
                 item.effects.forEach(effect => {
-                    if ('attribute' in effect && effect.attribute === 'atk' && effect.operator === '+') {
-                        playerBaseAtk += effect.value;
-                    }
-                     if ('attribute' in effect && effect.attribute === 'atk' && effect.operator === 'd') {
-                        playerBaseAtk += rollDice(`1d${effect.value}`);
+                    if ('attribute' in effect && effect.attribute === 'atk') {
+                       if (effect.operator === '+') {
+                           playerBaseAtk += effect.value;
+                       } else if (effect.operator === 'd') {
+                           playerDiceDamage += rollDice(`1d${effect.value}`);
+                       }
                     }
                 });
             }
         });
       }
       
-      const finalPlayerDamage = playerBaseAtk;
+      const finalPlayerDamage = playerBaseAtk + playerDiceDamage;
       targetMonster.hp = Math.max(0, targetMonster.hp - finalPlayerDamage);
       
       // --- 2. Calculate Monster Damage ---
-      const monsterBaseAtkString = targetMonster.atk;
-      const finalMonsterDamage = parseAtk(monsterBaseAtkString);
+      const finalMonsterDamage = parseAtk(targetMonster.atk);
 
       // --- 3. Update Firestore Battle Document ---
       const updatedMonsters = [...battle.monsters];
@@ -123,12 +125,12 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       transaction.update(battleRef, { monsters: updatedMonsters });
       
       // --- 4. Create a single, consolidated Battle Log Entry ---
-      const consolidatedLogMessage = `您對 ${targetMonster.name} 造成 ${finalPlayerDamage} 點傷害，並受到 ${finalMonsterDamage} 點反擊傷害。`;
+      const consolidatedLogMessage = `${user.roleName} 對 ${targetMonster.name} 造成 ${finalPlayerDamage} 點傷害，並受到 ${finalMonsterDamage} 點反擊傷害。`;
       const battleLogRef = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
       transaction.set(battleLogRef, {
            logData: consolidatedLogMessage,
            timestamp: serverTimestamp(),
-           turn: battle.turn, // Turn can still be useful for other mechanics
+           turn: battle.turn, 
            type: 'player_attack'
       });
 
