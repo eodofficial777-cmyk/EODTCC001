@@ -31,6 +31,7 @@ import * as z from 'zod';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -285,6 +286,9 @@ export default function AuthPage() {
                         <FormControl>
                            <Input placeholder="帳號" {...field} />
                         </FormControl>
+                        <FormDescription>
+                          請使用英文大小寫與數字組合。
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -311,6 +315,9 @@ export default function AuthPage() {
                         <FormControl>
                           <Input type="password" {...field} />
                         </FormControl>
+                         <FormDescription>
+                          請使用英文大小寫與數字組合，至少6碼以上。
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
