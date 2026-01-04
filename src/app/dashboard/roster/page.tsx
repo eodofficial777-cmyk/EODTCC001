@@ -114,7 +114,6 @@ export default function RosterPage() {
   const [rosterData, setRosterData] = useState<Record<string, User[]> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [cacheTimestamp, setCacheTimestamp] = useState<string | null>(null);
   
   const fetchRoster = async () => {
     setIsLoading(true);
@@ -124,7 +123,6 @@ export default function RosterPage() {
       if (result.error) throw new Error(result.error);
       setAllUsers(result.allUsers || []);
       setRosterData(result.rosterByFaction || {});
-      setCacheTimestamp(result.cacheTimestamp || null);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -147,9 +145,8 @@ export default function RosterPage() {
         <div>
           <CardTitle className="font-headline">角色名冊</CardTitle>
           <CardDescription>
-            搜尋和篩選所有已批准的角色。資料每 5 分鐘更新一次。
+            搜尋和篩選所有已批准的角色。資料每一小時更新一次。
           </CardDescription>
-          {cacheTimestamp && !isLoading && <p className="text-xs text-muted-foreground mt-1">當前資料版本：{cacheTimestamp}</p>}
         </div>
         <Button onClick={fetchRoster} variant="ghost" size="icon" disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />

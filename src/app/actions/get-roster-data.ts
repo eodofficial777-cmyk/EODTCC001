@@ -36,7 +36,6 @@ export async function getRosterData(): Promise<{
   allUsers?: User[];
   rosterByFaction?: Record<string, User[]>;
   error?: string;
-  cacheTimestamp?: string;
 }> {
   const now = Date.now();
   
@@ -44,7 +43,6 @@ export async function getRosterData(): Promise<{
     return {
       allUsers: rosterCache.data.allUsers,
       rosterByFaction: rosterCache.data.rosterByFaction,
-      cacheTimestamp: new Date(rosterCache.timestamp).toLocaleString(),
     };
   }
 
@@ -88,7 +86,6 @@ export async function getRosterData(): Promise<{
     return {
       allUsers,
       rosterByFaction,
-      cacheTimestamp: new Date(now).toLocaleString(),
     };
   } catch (error: any) {
     console.error('Error fetching roster data:', error);
