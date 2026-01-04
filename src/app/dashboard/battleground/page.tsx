@@ -12,38 +12,32 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Heart, Shield, Sword, Target, Timer, Info, CheckCircle2, Package, WandSparkles } from 'lucide-react';
+import { Heart, Shield, Sword, Timer, CheckCircle2, Package, WandSparkles } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, orderBy, limit, where, updateDoc } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { CombatEncounter, User, Item, Skill, AttributeEffect, Monster, CombatLog, TriggeredEffect } from '@/lib/types';
+import type { CombatEncounter, User, Item, Skill, Monster, CombatLog } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { performAttack } from '@/app/actions/perform-attack';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 
 // --- Sub-components for better organization ---
 
 const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
     const [timeLeft, setTimeLeft] = useState('');
     const firestore = useFirestore();
-    const { mutate: mutateBattle } = useCollection<CombatEncounter>(
-        useMemoFirebase(() => collection(firestore, 'combatEncounters'), [firestore])
-    );
-     const onCountdownFinished = useCallback(() => {
+    const battleCollectionQuery = useMemoFirebase(() => collection(firestore, 'combatEncounters'), [firestore]);
+    const { mutate: mutateBattle } = useCollection<CombatEncounter>(battleCollectionQuery);
+
+    const onCountdownFinished = useCallback(() => {
         mutateBattle(); // Re-fetch the battle data
     }, [mutateBattle]);
+
 
     useEffect(() => {
         if (!battle) return;
@@ -123,10 +117,11 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
             }
         });
         
+        const totalAtk = baseAtk + equipAtk;
         const diceAtkString = diceAtkParts.length > 0 ? `+${diceAtkParts.join('+')}` : '';
 
         return {
-            finalAtkString: `${baseAtk + equipAtk}${diceAtkString} (${baseAtk}+${equipAtk})`,
+            finalAtkString: `${totalAtk}${diceAtkString} (${baseAtk}+${equipAtk})`,
             finalDefString: `${baseDef + equipDef} (${baseDef}+${equipDef})`
         };
     }, [userData, equippedItems, allItems]);
@@ -151,13 +146,13 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
                     </div>
                     <Progress value={(currentHP / (maxHP || 1)) * 100} className="h-3 bg-green-500/20 [&>div]:bg-green-500" />
                 </div>
-                <div className="grid grid-cols-2 gap-4 text-center">
-                    <div className="flex flex-col gap-1 border p-2 rounded-md">
-                        <div className="flex items-center gap-2 text-muted-foreground justify-center"><Sword className="h-4 w-4" /> 攻擊力</div>
+                <div className="grid grid-cols-1 gap-4">
+                   <div className="flex flex-col gap-1 border p-2 rounded-md">
+                        <div className="flex items-center gap-2 text-muted-foreground"><Sword className="h-4 w-4" /> 攻擊力</div>
                         <div className="font-mono text-lg font-bold">{finalAtkString}</div>
                     </div>
                     <div className="flex flex-col gap-1 border p-2 rounded-md">
-                        <div className="flex items-center gap-2 text-muted-foreground justify-center"><Shield className="h-4 w-4" /> 防禦力</div>
+                        <div className="flex items-center gap-2 text-muted-foreground"><Shield className="h-4 w-4" /> 防禦力</div>
                         <div className="font-mono text-lg font-bold">{finalDefString}</div>
                     </div>
                 </div>
@@ -166,16 +161,14 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
     );
 };
 
-const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { monster: Monster, isTargeted: boolean, onSelectTarget: (name: string) => void, isSelectable: boolean }) => {
+const MonsterCard = ({ monster }: { monster: Monster }) => {
   const isDefeated = monster.hp <= 0;
   const maxHp = monster.originalHp ?? monster.hp;
   
   return (
     <Card className={cn("overflow-hidden transition-all duration-300 flex flex-col", 
-        isTargeted && isSelectable && "border-primary ring-2 ring-primary",
         isDefeated && "grayscale opacity-50"
       )}
-      onClick={() => isSelectable && !isDefeated && onSelectTarget(monster.name)}
     >
        <div className="relative aspect-square w-full">
         {monster.imageUrl ? (
@@ -203,13 +196,6 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { mo
            <span>{monster.atk}</span>
         </div>
       </CardContent>
-       {isSelectable &&
-          <CardFooter className="p-3">
-            <Button className="w-full" size="sm" variant={isTargeted ? 'default' : 'outline'} disabled={isDefeated}>
-              {isDefeated ? '已擊敗' : isTargeted ? <><CheckCircle2 className="mr-2 h-4 w-4" />已鎖定</> : <><Target className="mr-2 h-4 w-4" />鎖定目標</>}
-            </Button>
-          </CardFooter>
-        }
     </Card>
   )
 }
@@ -268,7 +254,7 @@ export default function BattlegroundPage() {
     () => (firestore ? query(collection(firestore, 'combatEncounters'), orderBy('startTime', 'desc'), limit(1)) : null),
     [firestore]
   );
-  const { data: battleData, isLoading: isBattleLoading, mutate: mutateBattle } = useCollection<CombatEncounter>(latestBattleQuery);
+  const { data: battleData, isLoading: isBattleLoading } = useCollection<CombatEncounter>(latestBattleQuery);
   const currentBattle = battleData?.[0];
 
   const battleLogsQuery = useMemoFirebase(
@@ -286,23 +272,12 @@ export default function BattlegroundPage() {
   }, [firestore, userData]);
   const { data: availableSkills } = useCollection<Skill>(skillsQuery);
 
-  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [actionContext, setActionContext] = useState<{type: 'attack' | 'item', itemId?: string} | null>(null);
   const [actionCooldown, setActionCooldown] = useState<number>(0);
-  const [isAttacking, setIsAttacking] = useState(false);
-  const [battleHP, setBattleHP] = useState<number | undefined>(undefined);
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
   
   const participantData = useMemo(() => currentBattle?.participants?.[user?.uid ?? ''], [currentBattle, user]);
-  
-  useEffect(() => {
-    // Initialize or update battleHP when participantData or userData changes
-    if (participantData) {
-      setBattleHP(participantData.hp);
-    } else if (userData) {
-      setBattleHP(userData.attributes.hp);
-    }
-  }, [participantData, userData]);
-
-
+  const battleHP = participantData?.hp;
   const supportedFaction = participantData?.supportedFaction;
   const equippedItems = participantData?.equippedItems || [];
   
@@ -331,26 +306,29 @@ export default function BattlegroundPage() {
   }, [userData?.items, allItems]);
 
 
-  const handleAttack = async () => {
-    if (!user || !currentBattle || !selectedTarget || isAttacking || isOnCooldown || hasFallen || isBattleTimeOver) return;
+  const handlePerformAction = async (targetMonsterName: string) => {
+    if (!user || !currentBattle || !actionContext || isProcessingAction || isOnCooldown || hasFallen || isBattleTimeOver) return;
 
-    setIsAttacking(true);
+    setIsProcessingAction(true);
     try {
-        const { success, error, logMessage } = await performAttack({
-            userId: user.uid,
-            battleId: currentBattle.id,
-            targetMonsterName: selectedTarget,
-            equippedItemIds: equippedItems,
-            supportedFaction: supportedFaction || null
-        });
-
-        if (error) throw new Error(error);
+        if (actionContext.type === 'attack') {
+             const { success, error } = await performAttack({
+                userId: user.uid,
+                battleId: currentBattle.id,
+                targetMonsterName: targetMonsterName,
+                equippedItemIds: equippedItems,
+                supportedFaction: supportedFaction || null
+            });
+            if (error) throw new Error(error);
+        }
+        // Future: Handle item usage here
         
         setActionCooldown(Date.now());
     } catch (error: any) {
-        toast({ variant: 'destructive', title: '攻擊失敗', description: error.message });
+        toast({ variant: 'destructive', title: '行動失敗', description: error.message });
     } finally {
-        setIsAttacking(false);
+        setIsProcessingAction(false);
+        setActionContext(null);
     }
   }
 
@@ -394,8 +372,6 @@ export default function BattlegroundPage() {
 
       const battleDocRef = doc(firestore, 'combatEncounters', currentBattle.id);
       await updateDoc(battleDocRef, { participants });
-      
-      setSelectedTarget(null); // Reset target when switching factions
   }
   
   const monstersToDisplay = useMemo(() => {
@@ -410,7 +386,7 @@ export default function BattlegroundPage() {
   const isLoading = isUserLoading || isUserDataLoading || areItemsLoading || isBattleLoading;
   
   if (isLoading) {
-    return <div className="grid grid-cols-3 gap-6"><Skeleton className="col-span-2 h-screen"/><Skeleton className="col-span-1 h-screen"/></div>
+    return <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Skeleton className="lg:col-span-2 h-screen"/><Skeleton className="lg:col-span-1 h-screen"/></div>
   }
   
   if (!currentBattle || ['ended', 'closed'].includes(currentBattle.status)) {
@@ -433,9 +409,6 @@ export default function BattlegroundPage() {
                     <MonsterCard 
                         key={`${monster.name}-${index}`}
                         monster={monster}
-                        isTargeted={selectedTarget === monster.name}
-                        onSelectTarget={setSelectedTarget}
-                        isSelectable={combatStatus === 'active' && !hasFallen && !isBattleTimeOver}
                     />
                 ))}
             </div>
@@ -456,15 +429,35 @@ export default function BattlegroundPage() {
             <Card>
                 <CardHeader><CardTitle>行動</CardTitle></CardHeader>
                 <CardContent className="flex items-center gap-4">
-                     <Button size="lg" onClick={handleAttack} disabled={combatStatus !== 'active' || !selectedTarget || hasFallen || isOnCooldown || isAttacking || isBattleTimeOver}>
-                        {isAttacking ? '攻擊中...' : '攻擊'}
-                    </Button>
+                     <Dialog open={!!actionContext} onOpenChange={(isOpen) => !isOpen && setActionContext(null)}>
+                        <DialogTrigger asChild>
+                            <Button size="lg" onClick={() => setActionContext({type: 'attack'})} disabled={combatStatus !== 'active' || hasFallen || isOnCooldown || isProcessingAction || isBattleTimeOver}>
+                                {isProcessingAction ? '處理中...' : '攻擊'}
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>選擇攻擊目標</DialogTitle>
+                                <DialogDescription>選擇一隻災獸進行攻擊。</DialogDescription>
+                            </DialogHeader>
+                            <div className="grid grid-cols-2 gap-4 py-4">
+                                {monstersToDisplay.filter(m => m.hp > 0).map(monster => (
+                                    <Button key={monster.name} variant="outline" className="h-auto flex flex-col p-4 gap-2" onClick={() => handlePerformAction(monster.name)}>
+                                        <span className="font-bold">{monster.name}</span>
+                                        <span className="text-xs text-muted-foreground">HP: {monster.hp.toLocaleString()}</span>
+                                    </Button>
+                                ))}
+                                {monstersToDisplay.filter(m => m.hp > 0).length === 0 && (
+                                    <p className="col-span-2 text-center text-muted-foreground">沒有可攻擊的目標。</p>
+                                )}
+                            </div>
+                        </DialogContent>
+                    </Dialog>
                      <Button size="lg" variant="outline" disabled>技能</Button>
                      <Button size="lg" variant="outline" disabled>道具</Button>
                      <ActionCooldown cooldown={actionCooldown} onCooldownEnd={() => setActionCooldown(0)} />
                 </CardContent>
             </Card>
-
 
             <Card>
                 <CardHeader><CardTitle>共鬥紀錄</CardTitle></CardHeader>
