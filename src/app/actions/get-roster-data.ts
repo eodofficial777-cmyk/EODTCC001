@@ -22,30 +22,11 @@ if (!getApps().length) {
 }
 const db = getFirestore(app);
 
-// In-memory cache for development purposes. In production, this could be a file or a cache service.
-let rosterCache: {
-  data: {
-    allUsers: User[];
-    rosterByFaction: Record<string, User[]>;
-  };
-  timestamp: number;
-} | null = null;
-const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
-
 export async function getRosterData(): Promise<{
   allUsers?: User[];
   rosterByFaction?: Record<string, User[]>;
   error?: string;
 }> {
-  const now = Date.now();
-  
-  if (rosterCache && now - rosterCache.timestamp < CACHE_DURATION) {
-    return {
-      allUsers: rosterCache.data.allUsers,
-      rosterByFaction: rosterCache.data.rosterByFaction,
-    };
-  }
-
   try {
     const usersQuery = query(
       collection(db, 'users'),
@@ -76,12 +57,6 @@ export async function getRosterData(): Promise<{
         rosterByFaction[user.factionId].push(user);
       }
     });
-
-    // Update the cache
-    rosterCache = {
-      data: { allUsers, rosterByFaction },
-      timestamp: now,
-    };
 
     return {
       allUsers,
