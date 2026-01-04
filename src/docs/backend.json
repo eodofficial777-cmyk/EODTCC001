@@ -598,9 +598,10 @@
         "factionId": { "type": "string" },
         "imageUrl": { "type": "string", "format": "uri" },
         "hp": { "type": "number" },
+        "originalHp": { "type": "number" },
         "atk": { "type": "string" }
       },
-      "required": ["name", "factionId", "hp", "atk"]
+      "required": ["name", "factionId", "hp", "originalHp", "atk"]
     },
     "Title": {
       "$schema": "http://json-schema.org/draft-07/schema#",

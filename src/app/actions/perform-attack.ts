@@ -35,7 +35,7 @@ export interface PerformAttackResult {
 
 function rollDice(diceNotation: string): number {
   if (!diceNotation || !diceNotation.toLowerCase().includes('d')) return 0;
-  const [numDice, numSides] = diceNotation.toLowerCase().split('d').map(Number);
+  const [numDice, numSides] = diceNotation.toLowerCase().split('d').map(part => parseInt(part, 10));
   if (isNaN(numDice) || isNaN(numSides) || numDice <= 0 || numSides <= 0) return 0;
   
   let total = 0;
@@ -99,6 +99,7 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       // --- 1. Calculate Player Damage ---
       let playerBaseAtk = user.attributes.atk;
       let playerDiceDamage = 0;
+      let playerBaseDef = user.attributes.def;
 
       if (equippedItemIds.length > 0) {
         const itemDocs = await Promise.all(equippedItemIds.map(id => transaction.get(doc(db, 'items', id))));
@@ -106,12 +107,17 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
             if(itemDoc.exists()) {
                 const item = itemDoc.data() as Item;
                 item.effects?.forEach(effect => {
-                    if ('attribute' in effect && effect.attribute === 'atk') {
-                       if (effect.operator === '+') {
-                           playerBaseAtk += effect.value;
-                       } else if (effect.operator === 'd') {
-                           playerDiceDamage += rollDice(`1d${effect.value}`);
-                       }
+                    if ('attribute' in effect) {
+                         if (effect.attribute === 'atk') {
+                            if (effect.operator === '+') {
+                               playerBaseAtk += effect.value;
+                            } else if (effect.operator === 'd') {
+                               playerDiceDamage += rollDice(`1d${effect.value}`);
+                            }
+                         }
+                         if(effect.attribute === 'def' && effect.operator === '+') {
+                             playerBaseDef += effect.value;
+                         }
                     }
                 });
             }
@@ -122,7 +128,8 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       targetMonster.hp = Math.max(0, targetMonster.hp - finalPlayerDamage);
       
       // --- 2. Calculate Monster Damage ---
-      const finalMonsterDamage = parseAtk(targetMonster.atk);
+      const monsterRawDamage = parseAtk(targetMonster.atk);
+      const finalMonsterDamage = Math.max(0, monsterRawDamage - playerBaseDef); // Subtract player defense
       playerParticipantData.hp = Math.max(0, playerParticipantData.hp - finalMonsterDamage);
 
       // --- 3. Update Firestore Battle Document ---
@@ -147,6 +154,8 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       const consolidatedLogMessage = `${user.roleName} 對 ${targetMonster.name} 造成 ${finalPlayerDamage} 點傷害，並受到 ${finalMonsterDamage} 點反擊傷害。`;
       const battleLogRef = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
       transaction.set(battleLogRef, {
+           id: battleLogRef.id,
+           encounterId: battleId,
            logData: consolidatedLogMessage,
            timestamp: serverTimestamp(),
            turn: battle.turn, 

@@ -32,7 +32,7 @@ async function ensureAdminAuth() {
 
 interface CreateBattlePayload {
   name: string;
-  monsters: Monster[];
+  monsters: Omit<Monster, 'originalHp'>[];
 }
 
 export async function createBattle(payload: CreateBattlePayload): Promise<{ success: boolean; error?: string }> {
@@ -45,6 +45,11 @@ export async function createBattle(payload: CreateBattlePayload): Promise<{ succ
     const preparationEndTime = new Date(now.getTime() + prepTimeMinutes * 60000);
 
     const newBattleRef = doc(collection(db, 'combatEncounters'));
+    
+    const processedMonsters: Monster[] = monsters.map(m => ({
+        ...m,
+        originalHp: m.hp, // Set originalHp to the initial HP
+    }))
 
     const newBattle: CombatEncounter = {
       id: newBattleRef.id,
@@ -52,7 +57,7 @@ export async function createBattle(payload: CreateBattlePayload): Promise<{ succ
       status: 'preparing',
       startTime: serverTimestamp(),
       preparationEndTime: preparationEndTime,
-      monsters,
+      monsters: processedMonsters,
       turn: 0,
     };
 

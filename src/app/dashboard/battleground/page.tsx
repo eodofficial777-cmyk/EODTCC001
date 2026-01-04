@@ -37,7 +37,9 @@ import {
 
 const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
     const [timeLeft, setTimeLeft] = useState('');
-    const [onFinished, setOnFinished] = useState(() => () => {});
+    const { mutate: mutateBattle } = useCollection<CombatEncounter>(
+        useMemoFirebase(() => collection(useFirestore(), 'combatEncounters'), [])
+    );
 
     useEffect(() => {
         if (!battle) return;
@@ -47,7 +49,6 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
                 return battle.preparationEndTime.toDate();
             }
             if (battle.status === 'active' && battle.startTime) {
-                 // 24 hours after start time
                 const startTime = battle.startTime.toDate();
                 return new Date(startTime.getTime() + 24 * 60 * 60 * 1000);
             }
@@ -67,7 +68,7 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
             if (difference <= 0) {
                 setTimeLeft('00:00:00');
                 clearInterval(interval);
-                onFinished();
+                mutateBattle();
                 return;
             }
 
@@ -80,7 +81,7 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
 
         return () => clearInterval(interval);
 
-    }, [battle, onFinished]);
+    }, [battle, mutateBattle]);
 
     const title = battle?.status === 'preparing' ? '準備倒數' : '戰場剩餘時間';
     
@@ -96,30 +97,34 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
 
 
 const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }) => {
-     const { baseAtk, baseDef, equipmentAtk, equipmentDef, finalAtk, finalDef, diceAtkString } = useMemo(() => {
-        const bAtk = userData?.attributes.atk || 0;
-        const bDef = userData?.attributes.def || 0;
+     const { baseAtk, baseDef, equipmentAtk, equipmentDef, finalAtk, finalDef, diceAtkString, diceDefString } = useMemo(() => {
+        if (!userData || !allItems) return { baseAtk: 0, baseDef: 0, equipmentAtk: 0, equipmentDef: 0, finalAtk: 0, finalDef: 0, diceAtkString: '', diceDefString: '' };
+
+        const bAtk = userData.attributes.atk;
+        const bDef = userData.attributes.def;
         let eqAtk = 0;
         let eqDef = 0;
-        let diceStrings: string[] = [];
+        let atkDice: string[] = [];
+        let defDice: string[] = [];
 
-        equippedItems.forEach(itemId => {
-            const item = allItems?.find(i => i.id === itemId);
+        (equippedItems || []).forEach(itemId => {
+            const item = allItems.find(i => i.id === itemId);
             if (item) {
                 item.effects?.forEach(effect => {
                     if ('attribute' in effect) {
                          if (effect.attribute === 'atk') {
                             if (effect.operator === '+') eqAtk += effect.value;
-                            if (effect.operator === 'd') diceStrings.push(`1d${effect.value}`);
+                            if (effect.operator === 'd') atkDice.push(`1d${effect.value}`);
                          }
-                         if (effect.attribute === 'def' && effect.operator === '+') eqDef += effect.value;
+                         if (effect.attribute === 'def') {
+                            if (effect.operator === '+') eqDef += effect.value;
+                            if (effect.operator === 'd') defDice.push(`1d${effect.value}`);
+                         }
                     }
                 });
             }
         });
         
-        const diceStr = diceStrings.length > 0 ? `+${diceStrings.join('+')}` : '';
-
         return {
             baseAtk: bAtk,
             baseDef: bDef,
@@ -127,13 +132,16 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }) => {
             equipmentDef: eqDef,
             finalAtk: bAtk + eqAtk,
             finalDef: bDef + eqDef,
-            diceAtkString: diceStr
+            diceAtkString: atkDice.length > 0 ? `+${atkDice.join('+')}` : '',
+            diceDefString: defDice.length > 0 ? `+${defDice.join('+')}` : ''
         };
     }, [userData, equippedItems, allItems]);
     
     if (!userData) {
         return <Skeleton className="h-48 w-full"/>
     }
+
+    const maxHP = userData.attributes.hp;
 
     return (
         <Card>
@@ -144,20 +152,20 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }) => {
                 <div className="space-y-1">
                     <div className="flex justify-between items-center text-sm">
                         <span className="font-medium text-green-400">HP</span>
-                        <span className="font-mono">{battleHP} / {userData.attributes.hp}</span>
+                        <span className="font-mono">{battleHP} / {maxHP}</span>
                     </div>
-                    <Progress value={(battleHP / (userData.attributes.hp || 1)) * 100} className="h-3 bg-green-500/20 [&>div]:bg-green-500" />
+                    <Progress value={(battleHP / (maxHP || 1)) * 100} className="h-3 bg-green-500/20 [&>div]:bg-green-500" />
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-center">
                     <div className="flex flex-col gap-1 border p-2 rounded-md">
                         <div className="flex items-center gap-2 text-muted-foreground justify-center"><Sword className="h-4 w-4" /> 攻擊力</div>
-                        <div className="font-mono text-xl font-bold">{finalAtk}</div>
-                        <div className="text-xs text-muted-foreground font-mono">({baseAtk}+{equipmentAtk}{diceAtkString})</div>
+                        <div className="font-mono text-xl font-bold">{finalAtk}{diceAtkString}</div>
+                        <div className="text-xs text-muted-foreground font-mono">({baseAtk} + {equipmentAtk})</div>
                     </div>
                     <div className="flex flex-col gap-1 border p-2 rounded-md">
                         <div className="flex items-center gap-2 text-muted-foreground justify-center"><Shield className="h-4 w-4" /> 防禦力</div>
-                        <div className="font-mono text-xl font-bold">{finalDef}</div>
-                        <div className="text-xs text-muted-foreground font-mono">({baseDef}+{equipmentDef})</div>
+                        <div className="font-mono text-xl font-bold">{finalDef}{diceDefString}</div>
+                        <div className="text-xs text-muted-foreground font-mono">({baseDef} + {equipmentDef})</div>
                     </div>
                 </div>
             </CardContent>
@@ -165,17 +173,17 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }) => {
     );
 };
 
-const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }) => {
+const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { monster: Monster, isTargeted: boolean, onSelectTarget: (name: string) => void, isSelectable: boolean }) => {
   const isDefeated = monster.hp <= 0;
   
   return (
-    <Card className={cn("overflow-hidden transition-all duration-300 w-full", 
+    <Card className={cn("overflow-hidden transition-all duration-300 w-full flex flex-col", 
         isTargeted && isSelectable && "border-primary ring-2 ring-primary",
         isDefeated && "grayscale opacity-50"
       )}
       onClick={() => isSelectable && !isDefeated && onSelectTarget(monster.name)}
     >
-       <div className="relative aspect-video w-full">
+       <div className="relative aspect-square w-full">
         {monster.imageUrl ? (
           <Image
             src={monster.imageUrl}
@@ -188,11 +196,11 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }) => {
           <h4 className="font-bold">{monster.name}</h4>
         </div>
       </div>
-      <CardContent className="p-3 space-y-2">
+      <CardContent className="p-3 space-y-2 flex-grow">
         <div className="space-y-1">
           <div className="flex justify-between items-center text-xs font-mono">
             <span className='flex items-center gap-1'><Heart className="h-3 w-3 text-red-400" /> HP</span>
-            <span>{monster.hp.toLocaleString()}</span>
+            <span>{monster.hp.toLocaleString()} / {monster.originalHp.toLocaleString()}</span>
           </div>
           <Progress value={(monster.hp / monster.originalHp) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
         </div>
@@ -200,14 +208,14 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }) => {
            <span className='flex items-center gap-1'><Sword className="h-3 w-3" /> ATK</span>
            <span>{monster.atk}</span>
         </div>
-        {isSelectable &&
-          <div className="pt-2">
+      </CardContent>
+       {isSelectable &&
+          <CardFooter className="p-3">
             <Button className="w-full" size="sm" variant={isTargeted ? 'default' : 'outline'} disabled={isDefeated}>
               {isDefeated ? '已擊敗' : isTargeted ? <><CheckCircle2 className="mr-2 h-4 w-4" />已鎖定</> : <><Target className="mr-2 h-4 w-4" />鎖定目標</>}
             </Button>
-          </div>
+          </CardFooter>
         }
-      </CardContent>
     </Card>
   )
 }
@@ -218,17 +226,18 @@ const ActionCooldown = ({ cooldown, onCooldownEnd }) => {
 
     useEffect(() => {
         if (cooldown > 0) {
+            setProgress(0); // Start progress from 0
             const interval = setInterval(() => {
                 const now = Date.now();
                 const elapsed = (now - cooldown) / 1000;
-                const remaining = totalDuration - elapsed;
+                const newProgress = Math.min((elapsed / totalDuration) * 100, 100);
                 
-                if (remaining <= 0) {
+                if (newProgress >= 100) {
                     setProgress(100);
                     clearInterval(interval);
                     onCooldownEnd();
                 } else {
-                    setProgress((remaining / totalDuration) * 100);
+                    setProgress(newProgress);
                 }
             }, 100);
             return () => clearInterval(interval);
@@ -237,15 +246,17 @@ const ActionCooldown = ({ cooldown, onCooldownEnd }) => {
         }
     }, [cooldown, onCooldownEnd]);
     
-    if (cooldown === 0) return null;
+    if (cooldown === 0 || progress >= 100) return null;
+
+    const remainingTime = totalDuration - ((Date.now() - cooldown) / 1000);
 
     return (
         <div className="p-2 space-y-1 w-full">
              <div className="flex justify-between text-xs font-mono text-muted-foreground px-1">
                 <span>行動冷卻中...</span>
-                <span>{Math.max(0, totalDuration - ((Date.now() - cooldown) / 1000)).toFixed(1)}s</span>
+                <span>{Math.max(0, remainingTime).toFixed(1)}s</span>
             </div>
-            <Progress value={100 - progress} className="h-2" />
+            <Progress value={progress} className="h-2" />
         </div>
     );
 };
@@ -257,7 +268,7 @@ export default function BattlegroundPage() {
   const { toast } = useToast();
   
   const userDocRef = useMemoFirebase(() => (user ? doc(firestore, `users/${user.uid}`) : null), [user, firestore]);
-  const { data: userData, isLoading: isUserDataLoading } = useDoc<User>(userDocRef);
+  const { data: userData, isLoading: isUserDataLoading, mutate: mutateUser } = useDoc<User>(userDocRef);
 
   const latestBattleQuery = useMemoFirebase(
     () => (firestore ? query(collection(firestore, 'combatEncounters'), orderBy('startTime', 'desc'), limit(1)) : null),
@@ -284,27 +295,17 @@ export default function BattlegroundPage() {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [actionCooldown, setActionCooldown] = useState<number>(0);
   const [isAttacking, setIsAttacking] = useState(false);
-  const [localBattleHP, setLocalBattleHP] = useState<number>(0);
-
-
-  // Derive participant data from the battle object for persistence
-  const participantData = useMemo(() => currentBattle?.participants?.[user?.uid ?? ''], [currentBattle, user]);
   
-  useEffect(() => {
-    // If participant data exists, use its HP. Otherwise, use user's max HP.
-    const initialHP = participantData?.hp ?? userData?.attributes.hp;
-    if (initialHP !== undefined) {
-        setLocalBattleHP(initialHP);
-    }
-  }, [participantData, userData?.attributes.hp]);
-
-  const supportedFaction = useMemo(() => participantData?.supportedFaction || null, [participantData]);
+  const participantData = useMemo(() => currentBattle?.participants?.[user?.uid ?? ''], [currentBattle, user]);
+  const battleHP = useMemo(() => participantData?.hp, [participantData]);
+  
+  const supportedFaction = useMemo(() => participantData?.supportedFaction, [participantData]);
   const equippedItems = useMemo(() => participantData?.equippedItems || [], [participantData]);
-
+  
   const isWanderer = userData?.factionId === 'wanderer';
   const playerFaction = isWanderer ? supportedFaction : userData?.factionId;
   const combatStatus = currentBattle?.status;
-  const hasFallen = localBattleHP <= 0;
+  const hasFallen = battleHP !== undefined && battleHP <= 0;
   const isOnCooldown = actionCooldown > 0;
   
   const battleEndTime = useMemo(() => {
@@ -318,10 +319,10 @@ export default function BattlegroundPage() {
   
   const { inventoryEquipment, inventoryConsumables } = useMemo(() => {
     if (!userData?.items || !allItems) return { inventoryEquipment: [], inventoryConsumables: [] };
-    const userItems = new Set(userData.items);
+    const userItemIds = new Set(userData.items);
     return {
-        inventoryEquipment: allItems.filter(item => userItems.has(item.id) && item.itemTypeId === 'equipment'),
-        inventoryConsumables: allItems.filter(item => userItems.has(item.id) && item.itemTypeId === 'consumable')
+        inventoryEquipment: allItems.filter(item => userItemIds.has(item.id) && item.itemTypeId === 'equipment'),
+        inventoryConsumables: allItems.filter(item => userItemIds.has(item.id) && item.itemTypeId === 'consumable')
     };
   }, [userData?.items, allItems]);
 
@@ -342,7 +343,6 @@ export default function BattlegroundPage() {
         if (result.error) throw new Error(result.error);
         
         setActionCooldown(Date.now());
-        // No need to manually mutate, onSnapshot will update the state.
     } catch (error: any) {
         toast({ variant: 'destructive', title: '攻擊失敗', description: error.message });
     } finally {
@@ -365,8 +365,7 @@ export default function BattlegroundPage() {
         }
     }
     
-    // Persist equipment change to Firestore
-     const participants = {
+    const participants = {
         ...(currentBattle.participants || {}),
         [user.uid]: {
             ...(currentBattle.participants?.[user.uid] || { hp: userData?.attributes.hp, roleName: userData?.roleName, factionId: userData?.factionId }),
@@ -397,32 +396,15 @@ export default function BattlegroundPage() {
   
   const monstersToDisplay = useMemo(() => {
     if (!currentBattle?.monsters) return [];
-    
-    // Augment with original HP for progress bar calculation
-    // This is a simple way, a better way would be to store originalHp in the monster data itself.
-    const augmentedMonsters = currentBattle.monsters.map(m => {
-      const originalHp = currentBattle.monsters.find(original => original.name === m.name)?.hp;
-      return {
-          ...m,
-          originalHp: originalHp || m.hp || 1, // Fallback
-      }
-    });
-
     if (!playerFaction) {
-      return isWanderer ? [] : augmentedMonsters; // Wanderers see nothing until support, others see all if faction not loaded
+      return isWanderer ? [] : currentBattle.monsters;
     }
-    return augmentedMonsters.filter(m => m.factionId === playerFaction);
+    return currentBattle.monsters.filter(m => m.factionId === playerFaction);
   }, [currentBattle, playerFaction, isWanderer]);
 
 
   const isLoading = isUserLoading || isUserDataLoading || areItemsLoading || isBattleLoading;
   
-  const handleCountdownFinished = useCallback(() => {
-    mutateBattle(); // Re-fetch the battle data
-  }, [mutateBattle]);
-
-  // --- Render Functions ---
-
   if (isLoading) {
     return <div className="grid grid-cols-3 gap-6"><Skeleton className="col-span-2 h-screen"/><Skeleton className="col-span-1 h-screen"/></div>
   }
@@ -501,7 +483,7 @@ export default function BattlegroundPage() {
         <div className="col-span-1 space-y-6">
             <BattleTimer battle={currentBattle} />
             
-            <PlayerStatus userData={userData} battleHP={localBattleHP} equippedItems={equippedItems} allItems={allItems} />
+            <PlayerStatus userData={userData} battleHP={battleHP ?? userData?.attributes.hp} equippedItems={equippedItems} allItems={allItems} />
             
             <Tabs defaultValue="equipment" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
@@ -511,6 +493,10 @@ export default function BattlegroundPage() {
                 </TabsList>
                 <TabsContent value="equipment" className="mt-4">
                      <Card>
+                        <CardHeader>
+                            <CardTitle className='text-base'>裝備欄</CardTitle>
+                            <CardDescription className='text-xs'>點擊以裝備或卸下，最多兩件。</CardDescription>
+                        </CardHeader>
                         <CardContent className="p-4 space-y-2">
                              <TooltipProvider>
                                 {inventoryEquipment.length > 0 ? inventoryEquipment.map(item => (
@@ -521,7 +507,7 @@ export default function BattlegroundPage() {
                                                 onClick={() => handleToggleEquip(item.id)}
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    {item.imageUrl && <Image src={item.imageUrl} alt={item.name} width={32} height={32} className="rounded-sm"/>}
+                                                    {item.imageUrl && <Image src={item.imageUrl} alt={item.name} width={32} height={32} className="rounded-sm object-cover"/>}
                                                     <span>{item.name}</span>
                                                 </div>
                                                 {equippedItems.includes(item.id) && <CheckCircle2 className="h-5 w-5 text-primary" />}
@@ -562,7 +548,7 @@ export default function BattlegroundPage() {
                                 <TooltipTrigger asChild>
                                     <div className="flex items-center justify-between p-2 border rounded-md">
                                         <div className="flex items-center gap-2">
-                                            {item.imageUrl && <Image src={item.imageUrl} alt={item.name} width={32} height={32} className="rounded-sm"/>}
+                                            {item.imageUrl && <Image src={item.imageUrl} alt={item.name} width={32} height={32} className="rounded-sm object-cover"/>}
                                             <span>{item.name}</span>
                                         </div>
                                     </div>

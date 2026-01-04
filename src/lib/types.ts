@@ -141,6 +141,7 @@ export interface Monster {
     factionId: string;
     imageUrl: string;
     hp: number;
+    originalHp: number;
     atk: string; // e.g. "20+1D10"
 }
 
