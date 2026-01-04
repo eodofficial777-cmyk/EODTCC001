@@ -15,7 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Heart, Shield, Sword, Zap, Target, Timer, Info, CheckCircle2 } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
-import { doc, collection, query, orderBy, limit, where } from 'firebase/firestore';
+import { doc, collection, query, orderBy, limit, where, updateDoc } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -309,7 +309,6 @@ export default function BattlegroundPage() {
         }
     }
     
-    // Optimistic update would be complex, so we write to DB and let listener handle it
     const participants = {
         ...(currentBattle.participants || {}),
         [user.uid]: {
@@ -317,7 +316,9 @@ export default function BattlegroundPage() {
             equippedItems: newEquipped
         }
     };
-    await doc(firestore, `combatEncounters/${currentBattle.id}`).firestore.collection('combatEncounters').doc(currentBattle.id).update({ participants });
+    
+    const battleDocRef = doc(firestore, 'combatEncounters', currentBattle.id);
+    await updateDoc(battleDocRef, { participants });
   }
   
   const handleSupportFaction = async (factionId: 'yelu' | 'association') => {
@@ -330,7 +331,10 @@ export default function BattlegroundPage() {
             supportedFaction: factionId
         }
       };
-      await doc(firestore, `combatEncounters/${currentBattle.id}`).firestore.collection('combatEncounters').doc(currentBattle.id).update({ participants });
+
+      const battleDocRef = doc(firestore, 'combatEncounters', currentBattle.id);
+      await updateDoc(battleDocRef, { participants });
+      
       setSelectedTarget(null); // Reset target when switching factions
   }
 
