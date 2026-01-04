@@ -110,7 +110,25 @@ export async function endBattle(battleId: string): Promise<{ success: boolean; e
 
     await updateDoc(battleRef, { status: 'ended', endTime: serverTimestamp() });
 
+    // Update participant stats (participatedBattleIds, hpZeroCount)
     const participants = Object.keys(battleData.participants || {});
+    if (participants.length > 0) {
+        const batch = writeBatch(db);
+        participants.forEach(userId => {
+            const userRef = doc(db, 'users', userId);
+            const participantData = battleData.participants?.[userId];
+            const updates: { [key: string]: any } = {
+                participatedBattleIds: arrayUnion(battleId)
+            };
+            if (participantData && participantData.hp <= 0) {
+                updates.hpZeroCount = increment(1);
+            }
+            batch.update(userRef, updates);
+        });
+        await batch.commit();
+    }
+
+
     const rewards = battleData.endOfBattleRewards;
 
     if (rewards && participants.length > 0) {
@@ -123,8 +141,6 @@ export async function endBattle(battleId: string): Promise<{ success: boolean; e
           titleId: rewards.titleId,
           logMessage: rewards.logMessage || `參與戰役「${battleData.name}」獎勵`,
         },
-        isBattleEnd: true,
-        battleData: battleData,
       });
       if (distributionResult.error) {
         throw new Error(`戰場已結束，但獎勵發放失敗：${distributionResult.error}`);

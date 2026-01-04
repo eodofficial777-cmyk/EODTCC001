@@ -8,15 +8,11 @@ import {
   serverTimestamp,
   collection,
   increment,
-  arrayUnion,
-  getDocs,
-  getDoc,
-  updateDoc,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, Item, CombatEncounter, Participant, ActiveBuff, Monster, TriggeredEffect, Title } from '@/lib/types';
-import { checkAndAwardTitles } from '../services/check-and-award-titles';
+import type { User, Item, CombatEncounter, Participant, ActiveBuff, Monster, TriggeredEffect } from '@/lib/types';
+
 
 let app: App;
 if (!getApps().length) {
@@ -25,24 +21,6 @@ if (!getApps().length) {
   app = getApps()[0];
 }
 const db = getFirestore(app);
-
-// Helper function to roll dice
-function rollDice(diceNotation: string): number {
-  if (!diceNotation || typeof diceNotation !== 'string' || !diceNotation.toLowerCase().includes('d')) return 0;
-  
-  const [numDiceStr, numSidesStr] = diceNotation.toLowerCase().split('d');
-  const numDice = parseInt(numDiceStr, 10) || 1;
-  const numSides = parseInt(numSidesStr, 10);
-  
-  if (isNaN(numDice) || isNaN(numSides) || numDice <= 0 || numSides <= 0) return 0;
-  
-  let total = 0;
-  for (let i = 0; i < numDice; i++) {
-    total += Math.floor(Math.random() * numSides) + 1;
-  }
-  return total;
-}
-
 
 interface UseItemPayload {
   userId: string;
@@ -182,29 +160,6 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
         
         return { logMessage: finalLogMessage };
     });
-    
-    // --- Post-transaction Title Check ---
-    const updatedUserSnap = await getDoc(userRef);
-    if (updatedUserSnap.exists()) {
-        const allTitlesSnap = await getDocs(collection(db, 'titles'));
-        const allTitles = allTitlesSnap.docs.map(doc => doc.data() as Title);
-        const newTitles = await checkAndAwardTitles(updatedUserSnap.data() as User, allTitles, { battleId, itemId });
-
-        if (newTitles.length > 0) {
-            const newTitleIds = newTitles.map(t => t.id);
-            const newTitleNames = newTitles.map(t => t.name).join('、');
-            await updateDoc(userRef, { titles: arrayUnion(...newTitleIds) });
-            
-            const titleLogRef = doc(collection(db, `users/${userId}/activityLogs`));
-            await setDoc(titleLogRef, {
-                 id: titleLogRef.id,
-                 userId: userId,
-                 timestamp: serverTimestamp(),
-                 description: `達成了新的里程碑！`,
-                 change: `獲得稱號：${newTitleNames}`
-            });
-        }
-    }
     
     return { success: true, logMessage };
 

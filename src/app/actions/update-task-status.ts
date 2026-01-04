@@ -10,15 +10,12 @@ import {
   arrayUnion,
   collection,
   FieldValue,
-  getDocs,
-  getDoc,
-  updateDoc,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { Task, TaskType, User, Title } from '@/lib/types';
-import { checkAndAwardTitles } from '../services/check-and-award-titles';
+import type { Task, TaskType } from '@/lib/types';
+
 
 const ADMIN_EMAIL = 'admin@eodtcc.com';
 const ADMIN_PASSWORD = 'password';
@@ -57,7 +54,6 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
   }
 
   const taskRef = doc(db, 'tasks', taskId);
-  let userId: string | null = null;
 
   try {
     await ensureAdminAuth();
@@ -70,8 +66,7 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
       const task = taskSnap.data() as Task;
       if (task.status !== 'pending') throw new Error(`此任務的狀態已經是「${task.status}」，無法重複審核。`);
       
-      userId = task.userId;
-      const userRef = doc(db, 'users', userId);
+      const userRef = doc(db, 'users', task.userId);
 
       if (status === 'rejected') {
         transaction.update(taskRef, { status: 'rejected' });
@@ -133,37 +128,6 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
         change: changeDescription
       });
     });
-
-    // --- Post-transaction Title Check ---
-    if (status === 'approved' && userId) {
-      const userRef = doc(db, 'users', userId);
-      const updatedUserSnap = await getDoc(userRef);
-
-      if (updatedUserSnap.exists()) {
-        const updatedUserData = updatedUserSnap.data() as User;
-        const allTitlesSnap = await getDocs(collection(db, 'titles'));
-        const allTitles = allTitlesSnap.docs.map(doc => doc.data() as Title);
-        
-        const newTitles = await checkAndAwardTitles(updatedUserData, allTitles);
-
-        if (newTitles.length > 0) {
-          const newTitleIds = newTitles.map(t => t.id);
-          const newTitleNames = newTitles.map(t => t.name).join('、');
-          
-          await updateDoc(userRef, { titles: arrayUnion(...newTitleIds) });
-          
-          const titleLogRef = doc(collection(db, `users/${userId}/activityLogs`));
-          await setDoc(titleLogRef, {
-               id: titleLogRef.id,
-               userId: userId,
-               timestamp: serverTimestamp(),
-               description: `達成了新的里程碑！`,
-               change: `獲得稱號：${newTitleNames}`
-          });
-        }
-      }
-    }
-
 
     return { success: true };
   } catch (error: any) {

@@ -14,13 +14,10 @@ import {
   where,
   arrayUnion,
   FieldValue,
-  getDoc,
-  updateDoc,
 } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
-import type { TaskType, Title, User } from '@/lib/types';
-import { checkAndAwardTitles } from '../services/check-and-award-titles';
+import type { TaskType } from '@/lib/types';
 
 
 // Helper to initialize Firebase (client SDK)
@@ -120,8 +117,12 @@ export async function submitTask(payload: SubmitTaskPayload) {
 
       if (currencyToAward > 0) userUpdateData.currency = increment(currencyToAward);
       if (honorToAward > 0) userUpdateData.honorPoints = increment(honorToAward);
-      if (taskType.titleAwarded) userUpdateData.titles = arrayUnion(taskType.titleAwarded);
-      if (taskType.itemAwarded) userUpdateData.items = arrayUnion(taskType.itemAwarded);
+      if (taskType.titleAwarded) {
+          userUpdateData.titles = arrayUnion(taskType.titleAwarded);
+      }
+      if (taskType.itemAwarded) {
+          userUpdateData.items = arrayUnion(taskType.itemAwarded);
+      }
 
       transaction.update(userRef, userUpdateData);
 
@@ -156,32 +157,6 @@ export async function submitTask(payload: SubmitTaskPayload) {
         change: changeDescription
       });
     });
-
-    // --- Post-transaction Title Check ---
-    const updatedUserSnap = await getDoc(userRef);
-    if (updatedUserSnap.exists()) {
-        const updatedUserData = updatedUserSnap.data() as User;
-        const allTitlesSnap = await getDocs(collection(db, 'titles'));
-        const allTitles = allTitlesSnap.docs.map(doc => doc.data() as Title);
-
-        const newTitles = await checkAndAwardTitles(updatedUserData, allTitles);
-
-        if (newTitles.length > 0) {
-            const newTitleIds = newTitles.map(t => t.id);
-            const newTitleNames = newTitles.map(t => t.name).join('、');
-            
-            await updateDoc(userRef, { titles: arrayUnion(...newTitleIds) });
-            
-            const titleLogRef = doc(collection(db, `users/${userId}/activityLogs`));
-            await setDoc(titleLogRef, {
-                 id: titleLogRef.id,
-                 userId: userId,
-                 timestamp: serverTimestamp(),
-                 description: `達成了新的里程碑！`,
-                 change: `獲得稱號：${newTitleNames}`
-            });
-        }
-    }
     
     return { success: true };
   } catch (error: any) {
