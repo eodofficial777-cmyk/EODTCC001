@@ -154,7 +154,8 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
         
         const finalLogMessage = logMessages.join(' ');
         const battleLogRef = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
-        transaction.set(battleLogRef, {
+        
+        const logData: any = {
             id: battleLogRef.id,
             encounterId: battleId,
             logData: finalLogMessage,
@@ -162,8 +163,13 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
             turn: battle.turn,
             type: 'item_used',
             itemId,
-            damage: totalDamageDealtThisAction > 0 ? totalDamageDealtThisAction : undefined
-        });
+        };
+
+        if (totalDamageDealtThisAction > 0) {
+            logData.damage = totalDamageDealtThisAction;
+        }
+
+        transaction.set(battleLogRef, logData);
         
         const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
         transaction.set(activityLogRef, {
