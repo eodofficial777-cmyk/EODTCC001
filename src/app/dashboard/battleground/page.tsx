@@ -602,49 +602,93 @@ export default function BattlegroundPage() {
               )}
               
               <Card>
-                  <CardHeader><CardTitle>行動</CardTitle></CardHeader>
-                  <CardContent className="flex items-center gap-4">
-                       <Dialog open={actionContext?.type === 'attack' || actionContext?.type === 'skill_target'} onOpenChange={(isOpen) => !isOpen && setActionContext(null)}>
-                          <Button size="lg" onClick={() => setActionContext({type: 'attack'})} disabled={combatStatus !== 'active' || hasFallen || isOnCooldown || isProcessingAction || isBattleTimeOver}>
-                              {isProcessingAction ? '處理中...' : '攻擊'}
-                          </Button>
-                          <DialogContent>
-                              <DialogHeader>
-                                  <DialogTitle>選擇目標</DialogTitle>
-                                  <DialogDescription>選擇一隻災獸進行攻擊。</DialogDescription>
-                              </DialogHeader>
-                              <div className="grid grid-cols-2 gap-4 py-4">
-                                  {[...yeluMonsters, ...associationMonsters, ...commonMonsters]
-                                      .filter(m => m.hp > 0 && (m.factionId === playerTargetFaction || m.factionId === 'common'))
-                                      .map((monster) => (
-                                      <Button 
-                                        key={monster.monsterId} 
-                                        variant="outline" 
-                                        className="h-auto flex flex-col p-4 gap-2" 
-                                        onClick={() => {
-                                           if (actionContext?.type === 'attack') handlePerformAttack(monster.monsterId);
-                                           if (actionContext?.type === 'skill_target' && actionContext.skillId) {
-                                               const skill = availableSkills?.find(s => s.id === actionContext.skillId);
-                                               if (skill) handleUseSkill(skill, monster.monsterId);
-                                           }
-                                        }}
-                                      >
-                                          <span className="font-bold">{monster.name}</span>
-                                          <span className="text-xs text-muted-foreground">HP: {monster.hp.toLocaleString()}</span>
-                                      </Button>
-                                  ))}
-                                  {[...yeluMonsters, ...associationMonsters, ...commonMonsters].filter(m => m.hp > 0 && (m.factionId === playerTargetFaction || m.factionId === 'common')).length === 0 && (
-                                      <p className="col-span-2 text-center text-muted-foreground">沒有可攻擊的目標。</p>
-                                  )}
-                              </div>
-                               <DialogClose asChild>
-                                <Button type="button" variant="secondary" className="w-full">取消</Button>
-                              </DialogClose>
-                          </DialogContent>
-                      </Dialog>
-                       <Button size="lg" variant="outline" disabled>道具</Button>
-                       <ActionCooldown cooldown={actionCooldown} onCooldownEnd={() => setActionCooldown(0)} />
-                  </CardContent>
+                <CardHeader><CardTitle>行動</CardTitle></CardHeader>
+                <CardContent className="flex items-center gap-4">
+                    <Dialog open={actionContext !== null} onOpenChange={(isOpen) => !isOpen && setActionContext(null)}>
+                        <Button size="lg" onClick={() => setActionContext({type: 'attack'})} disabled={combatStatus !== 'active' || hasFallen || isOnCooldown || isProcessingAction || isBattleTimeOver}>
+                            {isProcessingAction ? '處理中...' : '攻擊'}
+                        </Button>
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <Button size="lg" variant="outline" disabled={combatStatus !== 'active' || hasFallen || isOnCooldown || isProcessingAction || isBattleTimeOver}>技能</Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>選擇技能</DialogTitle>
+                                </DialogHeader>
+                                <div className="grid grid-cols-1 gap-2 py-4">
+                                {availableSkills && availableSkills.length > 0 ? availableSkills.map(skill => {
+                                    const cooldownTurns = skillCooldowns[skill.id] || 0;
+                                    const isCoolingDown = cooldownTurns > 0;
+                                    return (
+                                        <TooltipProvider key={skill.id}><Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button 
+                                                    variant="outline" 
+                                                    className="w-full justify-between"
+                                                    onClick={() => handleSkillClick(skill)}
+                                                    disabled={isCoolingDown || hasFallen || isOnCooldown || isProcessingAction || combatStatus !== 'active' || isBattleTimeOver}
+                                                >
+                                                    <span>{skill.name}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {isCoolingDown ? `冷卻中 (${cooldownTurns})` : `CD: ${skill.cooldown}`}
+                                                    </span>
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="right" className="max-w-xs">
+                                                <p className="font-bold">{skill.name}</p>
+                                                <p className="text-xs text-muted-foreground mb-2">{skill.description}</p>
+                                                <div className="border-t pt-2 mt-2">
+                                                    {skill.effects.map((effect, i) => (
+                                                        <p key={i} className="text-xs">{formatEffect(effect)}</p>
+                                                    ))}
+                                                </div>
+                                            </TooltipContent>
+                                        </Tooltip></TooltipProvider>
+                                    )
+                                }) : <p className="text-muted-foreground text-sm text-center py-4">沒有可用的技能。</p>}
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                        <Button size="lg" variant="outline" disabled>道具</Button>
+                        <ActionCooldown cooldown={actionCooldown} onCooldownEnd={() => setActionCooldown(0)} />
+
+                        {/* This Dialog handles the monster targeting */}
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>選擇目標</DialogTitle>
+                                <DialogDescription>選擇一隻災獸進行{actionContext?.type === 'attack' ? '攻擊' : '技能施放'}。</DialogDescription>
+                            </DialogHeader>
+                            <div className="grid grid-cols-2 gap-4 py-4">
+                                {[...yeluMonsters, ...associationMonsters, ...commonMonsters]
+                                    .filter(m => m.hp > 0 && (m.factionId === playerTargetFaction || m.factionId === 'common'))
+                                    .map((monster) => (
+                                    <Button 
+                                    key={monster.monsterId} 
+                                    variant="outline" 
+                                    className="h-auto flex flex-col p-4 gap-2" 
+                                    onClick={() => {
+                                        if (actionContext?.type === 'attack') handlePerformAttack(monster.monsterId);
+                                        if (actionContext?.type === 'skill_target' && actionContext.skillId) {
+                                            const skill = availableSkills?.find(s => s.id === actionContext.skillId);
+                                            if (skill) handleUseSkill(skill, monster.monsterId);
+                                        }
+                                    }}
+                                    >
+                                        <span className="font-bold">{monster.name}</span>
+                                        <span className="text-xs text-muted-foreground">HP: {monster.hp.toLocaleString()}</span>
+                                    </Button>
+                                ))}
+                                {[...yeluMonsters, ...associationMonsters, ...commonMonsters].filter(m => m.hp > 0 && (m.factionId === playerTargetFaction || m.factionId === 'common')).length === 0 && (
+                                    <p className="col-span-2 text-center text-muted-foreground">沒有可攻擊的目標。</p>
+                                )}
+                            </div>
+                            <DialogClose asChild>
+                            <Button type="button" variant="secondary" className="w-full">取消</Button>
+                            </DialogClose>
+                        </DialogContent>
+                    </Dialog>
+                </CardContent>
               </Card>
 
               <Card>
@@ -681,9 +725,8 @@ export default function BattlegroundPage() {
             <PlayerStatus userData={userData} battleHP={isBattleActive ? battleHP : userData?.attributes.hp} equippedItems={isBattleActive ? equippedItems : []} activeBuffs={isBattleActive ? activeBuffs : []} allItems={allItems} />
             
             <Tabs defaultValue="equipment" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="equipment">裝備</TabsTrigger>
-                    <TabsTrigger value="skills">技能</TabsTrigger>
                     <TabsTrigger value="items">道具</TabsTrigger>
                 </TabsList>
                 <TabsContent value="equipment" className="mt-4">
@@ -720,40 +763,6 @@ export default function BattlegroundPage() {
                              </TooltipProvider>
                         </CardContent>
                     </Card>
-                </TabsContent>
-                <TabsContent value="skills" className="mt-4">
-                     <Card><CardContent className="p-4 space-y-2">
-                        {availableSkills && availableSkills.length > 0 ? availableSkills.map(skill => {
-                            const cooldownTurns = skillCooldowns[skill.id] || 0;
-                            const isCoolingDown = cooldownTurns > 0;
-                            return (
-                                <TooltipProvider key={skill.id}><Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button 
-                                            variant="outline" 
-                                            className="w-full justify-between"
-                                            onClick={() => handleSkillClick(skill)}
-                                            disabled={isCoolingDown || hasFallen || isOnCooldown || isProcessingAction || combatStatus !== 'active' || isBattleTimeOver}
-                                        >
-                                            <span>{skill.name}</span>
-                                            <span className="text-xs text-muted-foreground">
-                                                {isCoolingDown ? `冷卻中 (${cooldownTurns})` : `CD: ${skill.cooldown}`}
-                                            </span>
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="left" className="max-w-xs">
-                                        <p className="font-bold">{skill.name}</p>
-                                        <p className="text-xs text-muted-foreground mb-2">{skill.description}</p>
-                                        <div className="border-t pt-2 mt-2">
-                                            {skill.effects.map((effect, i) => (
-                                                <p key={i} className="text-xs">{formatEffect(effect)}</p>
-                                            ))}
-                                        </div>
-                                    </TooltipContent>
-                                </Tooltip></TooltipProvider>
-                            )
-                        }) : <p className="text-muted-foreground text-sm text-center py-4">沒有可用的技能。</p>}
-                     </CardContent></Card>
                 </TabsContent>
                  <TabsContent value="items" className="mt-4">
                      <Card><CardContent className="p-4 space-y-2">
