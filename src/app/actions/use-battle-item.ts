@@ -10,6 +10,8 @@ import {
   increment,
   arrayUnion,
   getDocs,
+  getDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
@@ -64,8 +66,6 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
   const userRef = doc(db, 'users', userId);
   const itemRef = doc(db, 'items', itemId);
   const battleRef = doc(db, 'combatEncounters', battleId);
-  const allTitlesSnap = await getDocs(collection(db, 'titles'));
-  const allTitles = allTitlesSnap.docs.map(doc => doc.data() as Title);
 
   try {
     const { logMessage } = await runTransaction(db, async (transaction) => {
@@ -171,18 +171,23 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
             change: `消耗 1 個 ${item.name}`,
         });
         
-        // Post-update: check for titles
-        user.items = userItems; // Manually update for check
-        user.itemUseCount = { ...user.itemUseCount, [itemId]: (user.itemUseCount?.[itemId] || 0) + 1 };
-        const newTitles = await checkAndAwardTitles(user, allTitles, { battleId, itemId, damageDealt: 0 });
+        return { logMessage: finalLogMessage };
+    });
+    
+    // --- Post-transaction Title Check ---
+    const updatedUserSnap = await getDoc(userRef);
+    if (updatedUserSnap.exists()) {
+        const allTitlesSnap = await getDocs(collection(db, 'titles'));
+        const allTitles = allTitlesSnap.docs.map(doc => doc.data() as Title);
+        const newTitles = await checkAndAwardTitles(updatedUserSnap.data() as User, allTitles, { battleId, itemId });
 
         if (newTitles.length > 0) {
             const newTitleIds = newTitles.map(t => t.id);
             const newTitleNames = newTitles.map(t => t.name).join('、');
-            transaction.update(userRef, { titles: arrayUnion(...newTitleIds) });
+            await updateDoc(userRef, { titles: arrayUnion(...newTitleIds) });
             
             const titleLogRef = doc(collection(db, `users/${userId}/activityLogs`));
-            transaction.set(titleLogRef, {
+            await setDoc(titleLogRef, {
                  id: titleLogRef.id,
                  userId: userId,
                  timestamp: serverTimestamp(),
@@ -190,9 +195,7 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
                  change: `獲得稱號：${newTitleNames}`
             });
         }
-        
-        return { logMessage: finalLogMessage };
-    });
+    }
     
     return { success: true, logMessage };
 
