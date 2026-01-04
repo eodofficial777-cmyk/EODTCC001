@@ -138,13 +138,18 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
 
 
 const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userData: User | null; battleHP: number | undefined; equippedItems: string[]; allItems: Item[] | null }) => {
-    const { finalAtk, baseAtk, equipAtk, diceAtkString, finalDef, baseDef, equipDef } = useMemo(() => {
-        if (!userData || !allItems) return { finalAtk: 0, baseAtk: 0, equipAtk: 0, diceAtkString: '', finalDef: 0, baseDef: 0, equipDef: 0 };
+    const { finalAtk, baseAtk, equipAtk, atkMultiplier, diceAtkString, finalDef, baseDef, equipDef, defMultiplier } = useMemo(() => {
+        if (!userData || !allItems) {
+             return { finalAtk: 0, baseAtk: 0, equipAtk: 0, atkMultiplier: 1, diceAtkString: '', finalDef: 0, baseDef: 0, equipDef: 0, defMultiplier: 1 };
+        }
 
         const baseAtk = userData.attributes.atk;
         const baseDef = userData.attributes.def;
         let equipAtk = 0;
+        let atkMultiplier = 1;
         let equipDef = 0;
+        let defMultiplier = 1;
+
         let diceAtkParts: string[] = [];
 
         (equippedItems || []).forEach(itemId => {
@@ -153,33 +158,40 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
                 item.effects?.forEach(effect => {
                     if ('attribute' in effect) {
                         const attrEffect = effect as AttributeEffect;
-                        const value = Number(attrEffect.value);
                         if (attrEffect.attribute === 'atk') {
-                            if (attrEffect.operator === '+' && !isNaN(value)) {
-                                equipAtk += value;
+                            if (attrEffect.operator === '+') {
+                                equipAtk += Number(attrEffect.value);
+                            } else if (attrEffect.operator === '*') {
+                                atkMultiplier *= Number(attrEffect.value);
                             } else if (attrEffect.operator === 'd') {
                                 diceAtkParts.push(String(attrEffect.value));
                             }
                         }
-                        if (attrEffect.attribute === 'def' && attrEffect.operator === '+' && !isNaN(value)) {
-                            equipDef += value;
+                        if (attrEffect.attribute === 'def') {
+                             if (attrEffect.operator === '+') {
+                                equipDef += Number(attrEffect.value);
+                            } else if (attrEffect.operator === '*') {
+                                defMultiplier *= Number(attrEffect.value);
+                            }
                         }
                     }
                 });
             }
         });
         
-        const totalAtk = baseAtk + equipAtk;
+        const totalAtk = (baseAtk + equipAtk) * atkMultiplier;
         const diceAtkString = diceAtkParts.length > 0 ? `+${diceAtkParts.join('+')}` : '';
 
         return {
-            finalAtk: totalAtk,
-            baseAtk: baseAtk,
-            equipAtk: equipAtk,
+            finalAtk: Math.round(totalAtk),
+            baseAtk,
+            equipAtk,
+            atkMultiplier,
             diceAtkString,
-            finalDef: baseDef + equipDef,
-            baseDef: baseDef,
-            equipDef: equipDef,
+            finalDef: Math.round((baseDef + equipDef) * defMultiplier),
+            baseDef,
+            equipDef,
+            defMultiplier,
         };
     }, [userData, equippedItems, allItems]);
     
@@ -206,11 +218,17 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
                 <div className="grid grid-cols-1 gap-4">
                    <div className="flex flex-col gap-1 border p-2 rounded-md">
                         <div className="flex items-center gap-2 text-muted-foreground"><Sword className="h-4 w-4" /> 攻擊力</div>
-                        <div className="font-mono text-lg font-bold">{`${finalAtk}${diceAtkString}`} <span className="text-sm font-normal text-muted-foreground">({baseAtk} + {equipAtk})</span></div>
+                        <div className="font-mono text-lg font-bold">
+                            {`${finalAtk}${diceAtkString}`} 
+                            <span className="text-sm font-normal text-muted-foreground"> ({baseAtk} + {equipAtk}) * {atkMultiplier.toFixed(2)}</span>
+                        </div>
                     </div>
                     <div className="flex flex-col gap-1 border p-2 rounded-md">
                         <div className="flex items-center gap-2 text-muted-foreground"><Shield className="h-4 w-4" /> 防禦力</div>
-                        <div className="font-mono text-lg font-bold">{finalDef} <span className="text-sm font-normal text-muted-foreground">({baseDef} + {equipDef})</span></div>
+                         <div className="font-mono text-lg font-bold">
+                            {finalDef} 
+                            <span className="text-sm font-normal text-muted-foreground"> ({baseDef} + {equipDef}) * {defMultiplier.toFixed(2)}</span>
+                        </div>
                     </div>
                 </div>
             </CardContent>
@@ -673,3 +691,4 @@ export default function BattlegroundPage() {
     </div>
   );
 }
+

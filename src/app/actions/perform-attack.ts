@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, Item, CombatEncounter, Monster } from '@/lib/types';
+import type { User, Item, CombatEncounter, Monster, AttributeEffect } from '@/lib/types';
 
 let app: App;
 if (!getApps().length) {
@@ -106,10 +106,10 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
 
       // --- 1. Calculate Player Damage ---
       let playerBaseAtk = user.attributes.atk;
-      let playerMultipliedAtk = playerBaseAtk;
+      let playerAtkMultiplier = 1;
       let playerDiceDamage = 0;
       let playerBaseDef = user.attributes.def;
-      let playerMultipliedDef = playerBaseDef;
+      let playerDefMultiplier = 1;
 
       if (equippedItemIds.length > 0) {
         const itemDocs = await Promise.all(equippedItemIds.map(id => transaction.get(doc(db, 'items', id))));
@@ -118,21 +118,21 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
                 const item = itemDoc.data() as Item;
                 item.effects?.forEach(effect => {
                     if ('attribute' in effect) {
-                         const value = Number(effect.value);
-                         if (effect.attribute === 'atk') {
-                            if (effect.operator === '+' && !isNaN(value)) {
-                               playerBaseAtk += value;
-                            } else if (effect.operator === '*' && !isNaN(value)) {
-                               playerMultipliedAtk *= value;
-                            } else if (effect.operator === 'd') {
-                               playerDiceDamage += rollDice(String(effect.value));
+                         const attrEffect = effect as AttributeEffect;
+                         if (attrEffect.attribute === 'atk') {
+                            if (attrEffect.operator === '+') {
+                               playerBaseAtk += Number(attrEffect.value);
+                            } else if (attrEffect.operator === '*') {
+                               playerAtkMultiplier *= Number(attrEffect.value);
+                            } else if (attrEffect.operator === 'd') {
+                               playerDiceDamage += rollDice(String(attrEffect.value));
                             }
                          }
                          if(effect.attribute === 'def') {
-                             if(effect.operator === '+' && !isNaN(value)) {
-                                playerBaseDef += value;
-                             } else if (effect.operator === '*' && !isNaN(value)) {
-                                playerMultipliedDef *= value;
+                             if(attrEffect.operator === '+') {
+                                playerBaseDef += Number(attrEffect.value);
+                             } else if (attrEffect.operator === '*') {
+                                playerDefMultiplier *= Number(attrEffect.value);
                              }
                          }
                     }
@@ -141,11 +141,11 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
         });
       }
       
-      const finalPlayerAtk = Math.round(playerMultipliedAtk);
+      const finalPlayerAtk = Math.round(playerBaseAtk * playerAtkMultiplier);
       const finalPlayerDamage = finalPlayerAtk + playerDiceDamage;
       targetMonster.hp = Math.max(0, targetMonster.hp - finalPlayerDamage);
       
-      const finalPlayerDef = Math.round(playerMultipliedDef);
+      const finalPlayerDef = Math.round(playerBaseDef * playerDefMultiplier);
 
       // --- 2. Calculate Monster Damage ---
       const monsterRawDamage = parseAtk(targetMonster.atk);
@@ -191,3 +191,4 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
     return { success: false, error: error.message || '攻擊失敗，請稍後再試。' };
   }
 }
+
