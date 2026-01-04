@@ -31,8 +31,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
     const [timeLeft, setTimeLeft] = useState('');
     const firestore = useFirestore();
-    const battleCollectionQuery = useMemoFirebase(() => collection(firestore, 'combatEncounters'), [firestore]);
+
+    const battleCollectionQuery = useMemoFirebase(() => {
+      if (!firestore) return null;
+      return collection(firestore, 'combatEncounters');
+    }, [firestore]);
+    
     const { mutate: mutateBattle } = useCollection<CombatEncounter>(battleCollectionQuery);
+
 
     const onCountdownFinished = useCallback(() => {
         mutateBattle(); // Re-fetch the battle data
@@ -76,6 +82,17 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
         return () => clearInterval(interval);
 
     }, [battle, onCountdownFinished]);
+
+    if (!battle || (battle.status !== 'preparing' && battle.status !== 'active')) {
+        return (
+             <Card>
+                <CardHeader className="text-center p-4">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">戰場狀態</CardTitle>
+                    <CardDescription className="text-2xl font-mono font-bold">未開啟</CardDescription>
+                </CardHeader>
+            </Card>
+        )
+    }
 
     const title = battle?.status === 'preparing' ? '準備倒數' : '戰場剩餘時間';
 
@@ -121,8 +138,8 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
         const diceAtkString = diceAtkParts.length > 0 ? `+${diceAtkParts.join('+')}` : '';
 
         return {
-            finalAtkString: `${totalAtk}${diceAtkString} (${baseAtk}+${equipAtk})`,
-            finalDefString: `${baseDef + equipDef} (${baseDef}+${equipDef})`
+            finalAtkString: `${totalAtk}${diceAtkString}`,
+            finalDefString: `${baseDef + equipDef}`
         };
     }, [userData, equippedItems, allItems]);
 
@@ -161,15 +178,18 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
     );
 };
 
-const MonsterCard = ({ monster }: { monster: Monster }) => {
+const MonsterCard = ({ monster, isTargeted, onSelect }: { monster: Monster; isTargeted: boolean; onSelect: () => void; }) => {
   const isDefeated = monster.hp <= 0;
   const maxHp = monster.originalHp ?? monster.hp;
   
   return (
-    <Card className={cn("overflow-hidden transition-all duration-300 flex flex-col", 
-        isDefeated && "grayscale opacity-50"
+    <Card className={cn("overflow-hidden transition-all duration-300 flex flex-col relative", 
+        isDefeated && "grayscale opacity-50",
+        isTargeted && !isDefeated && "border-primary ring-2 ring-primary"
       )}
+      onClick={onSelect}
     >
+       {isTargeted && !isDefeated && <div className="absolute top-2 left-2 bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-full">已鎖定</div>}
        <div className="relative aspect-square w-full">
         {monster.imageUrl ? (
           <Image
@@ -187,7 +207,7 @@ const MonsterCard = ({ monster }: { monster: Monster }) => {
         <div className="space-y-1">
           <div className="flex justify-between items-center text-xs font-mono">
             <span className='flex items-center gap-1'><Heart className="h-3 w-3 text-red-400" /> HP</span>
-            <span>{monster.hp.toLocaleString()} / {(monster.originalHp ?? monster.hp).toLocaleString()}</span>
+            <span>{monster.hp.toLocaleString()} / {(maxHp).toLocaleString()}</span>
           </div>
           <Progress value={(monster.hp / (maxHp > 0 ? maxHp : 1)) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
         </div>
@@ -306,7 +326,7 @@ export default function BattlegroundPage() {
   }, [userData?.items, allItems]);
 
 
-  const handlePerformAction = async (targetMonsterName: string) => {
+  const handlePerformAction = async (targetMonsterId: string) => {
     if (!user || !currentBattle || !actionContext || isProcessingAction || isOnCooldown || hasFallen || isBattleTimeOver) return;
 
     setIsProcessingAction(true);
@@ -315,7 +335,7 @@ export default function BattlegroundPage() {
              const { success, error } = await performAttack({
                 userId: user.uid,
                 battleId: currentBattle.id,
-                targetMonsterName: targetMonsterName,
+                targetMonsterId: targetMonsterId,
                 equippedItemIds: equippedItems,
                 supportedFaction: supportedFaction || null
             });
@@ -379,7 +399,9 @@ export default function BattlegroundPage() {
     if (!playerFaction) {
       return isWanderer ? [] : currentBattle.monsters;
     }
-    return currentBattle.monsters.filter(m => m.factionId === playerFaction);
+    const factionMonsters = currentBattle.monsters.filter(m => m.factionId === playerFaction);
+    const commonMonsters = currentBattle.monsters.filter(m => m.factionId === 'common');
+    return [...factionMonsters, ...commonMonsters];
   }, [currentBattle, playerFaction, isWanderer]);
 
 
@@ -389,92 +411,96 @@ export default function BattlegroundPage() {
     return <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Skeleton className="lg:col-span-2 h-screen"/><Skeleton className="lg:col-span-1 h-screen"/></div>
   }
   
-  if (!currentBattle || ['ended', 'closed'].includes(currentBattle.status)) {
-      return (
-        <Card className="flex flex-col items-center justify-center min-h-[300px] bg-muted/50">
-           <CardHeader className="text-center">
-            <CardTitle>共鬥尚未開放</CardTitle>
-            <CardDescription>請等待管理員開啟下一場戰鬥。</CardDescription>
-           </CardHeader>
-        </Card>
-      )
-  }
-  
+  const isBattleActive = currentBattle && !['ended', 'closed'].includes(currentBattle.status);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Battle Area */}
         <div className="lg:col-span-2 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {monstersToDisplay.map((monster, index) => (
-                    <MonsterCard 
-                        key={`${monster.name}-${index}`}
-                        monster={monster}
-                    />
-                ))}
-            </div>
+          {isBattleActive ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {monstersToDisplay.map((monster, index) => (
+                      <MonsterCard 
+                          key={`${monster.monsterId}-${index}`}
+                          monster={monster}
+                          isTargeted={false} // No global target selection
+                          onSelect={() => {}} // Not used for targeting anymore
+                      />
+                  ))}
+              </div>
 
-            {isWanderer && combatStatus !== 'ended' && !supportedFaction && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>流浪者支援選擇</CardTitle>
-                        <CardDescription>選擇一個陣營進行支援。一旦選定，本次戰鬥中將無法更改。</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex gap-4">
-                        <Button onClick={() => handleSupportFaction('yelu')} variant={'outline'} className="w-full">支援夜鷺</Button>
-                        <Button onClick={() => handleSupportFaction('association')} variant={'outline'} className="w-full">支援協會</Button>
-                    </CardContent>
-                </Card>
-            )}
-            
-            <Card>
-                <CardHeader><CardTitle>行動</CardTitle></CardHeader>
-                <CardContent className="flex items-center gap-4">
-                     <Dialog open={!!actionContext} onOpenChange={(isOpen) => !isOpen && setActionContext(null)}>
-                        <DialogTrigger asChild>
-                            <Button size="lg" onClick={() => setActionContext({type: 'attack'})} disabled={combatStatus !== 'active' || hasFallen || isOnCooldown || isProcessingAction || isBattleTimeOver}>
-                                {isProcessingAction ? '處理中...' : '攻擊'}
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>選擇攻擊目標</DialogTitle>
-                                <DialogDescription>選擇一隻災獸進行攻擊。</DialogDescription>
-                            </DialogHeader>
-                            <div className="grid grid-cols-2 gap-4 py-4">
-                                {monstersToDisplay.filter(m => m.hp > 0).map((monster, index) => (
-                                    <Button key={`${monster.name}-${index}`} variant="outline" className="h-auto flex flex-col p-4 gap-2" onClick={() => handlePerformAction(monster.name)}>
-                                        <span className="font-bold">{monster.name}</span>
-                                        <span className="text-xs text-muted-foreground">HP: {monster.hp.toLocaleString()}</span>
-                                    </Button>
-                                ))}
-                                {monstersToDisplay.filter(m => m.hp > 0).length === 0 && (
-                                    <p className="col-span-2 text-center text-muted-foreground">沒有可攻擊的目標。</p>
-                                )}
-                            </div>
-                        </DialogContent>
-                    </Dialog>
-                     <Button size="lg" variant="outline" disabled>技能</Button>
-                     <Button size="lg" variant="outline" disabled>道具</Button>
-                     <ActionCooldown cooldown={actionCooldown} onCooldownEnd={() => setActionCooldown(0)} />
-                </CardContent>
-            </Card>
+              {isWanderer && combatStatus !== 'ended' && !supportedFaction && (
+                  <Card>
+                      <CardHeader>
+                          <CardTitle>流浪者支援選擇</CardTitle>
+                          <CardDescription>選擇一個陣營進行支援。一旦選定，本次戰鬥中將無法更改。</CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex gap-4">
+                          <Button onClick={() => handleSupportFaction('yelu')} variant={'outline'} className="w-full">支援夜鷺</Button>
+                          <Button onClick={() => handleSupportFaction('association')} variant={'outline'} className="w-full">支援協會</Button>
+                      </CardContent>
+                  </Card>
+              )}
+              
+              <Card>
+                  <CardHeader><CardTitle>行動</CardTitle></CardHeader>
+                  <CardContent className="flex items-center gap-4">
+                       <Dialog open={!!actionContext} onOpenChange={(isOpen) => !isOpen && setActionContext(null)}>
+                          <DialogTrigger asChild>
+                              <Button size="lg" onClick={() => setActionContext({type: 'attack'})} disabled={combatStatus !== 'active' || hasFallen || isOnCooldown || isProcessingAction || isBattleTimeOver}>
+                                  {isProcessingAction ? '處理中...' : '攻擊'}
+                              </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                              <DialogHeader>
+                                  <DialogTitle>選擇攻擊目標</DialogTitle>
+                                  <DialogDescription>選擇一隻災獸進行攻擊。</DialogDescription>
+                              </DialogHeader>
+                              <div className="grid grid-cols-2 gap-4 py-4">
+                                  {monstersToDisplay.filter(m => m.hp > 0).map((monster, index) => (
+                                      <Button key={`${monster.monsterId}-${index}`} variant="outline" className="h-auto flex flex-col p-4 gap-2" onClick={() => handlePerformAction(monster.monsterId)}>
+                                          <span className="font-bold">{monster.name}</span>
+                                          <span className="text-xs text-muted-foreground">HP: {monster.hp.toLocaleString()}</span>
+                                      </Button>
+                                  ))}
+                                  {monstersToDisplay.filter(m => m.hp > 0).length === 0 && (
+                                      <p className="col-span-2 text-center text-muted-foreground">沒有可攻擊的目標。</p>
+                                  )}
+                              </div>
+                          </DialogContent>
+                      </Dialog>
+                       <Button size="lg" variant="outline" disabled>技能</Button>
+                       <Button size="lg" variant="outline" disabled>道具</Button>
+                       <ActionCooldown cooldown={actionCooldown} onCooldownEnd={() => setActionCooldown(0)} />
+                  </CardContent>
+              </Card>
 
-            <Card>
-                <CardHeader><CardTitle>共鬥紀錄</CardTitle></CardHeader>
-                <CardContent>
-                    <ScrollArea className="h-64">
-                        <div className="space-y-3 text-sm font-mono pr-4">
-                            {battleLogs && battleLogs.length > 0 ? battleLogs.map(log => (
-                                <p key={log.id}>
-                                    <span className="text-muted-foreground mr-2">[{new Date(log.timestamp?.toDate()).toLocaleTimeString()}]</span>
-                                    {log.logData}
-                                </p>
-                            )) : <p className="text-muted-foreground text-center">戰鬥尚未開始...</p>}
-                            {hasFallen && <p className="text-red-500">[{new Date().toLocaleTimeString()}] 您的HP已歸零，無法繼續行動。</p>}
-                        </div>
-                    </ScrollArea>
-                </CardContent>
-            </Card>
+              <Card>
+                  <CardHeader><CardTitle>共鬥紀錄</CardTitle></CardHeader>
+                  <CardContent>
+                      <ScrollArea className="h-64">
+                          <div className="space-y-3 text-sm font-mono pr-4">
+                              {battleLogs && battleLogs.length > 0 ? battleLogs.map(log => (
+                                  <p key={log.id}>
+                                      <span className="text-muted-foreground mr-2">[{new Date(log.timestamp?.toDate()).toLocaleTimeString()}]</span>
+                                      {log.logData}
+                                  </p>
+                              )) : <p className="text-muted-foreground text-center">戰鬥尚未開始...</p>}
+                              {hasFallen && <p className="text-red-500">[{new Date().toLocaleTimeString()}] 您的HP已歸零，無法繼續行動。</p>}
+                          </div>
+                      </ScrollArea>
+                  </CardContent>
+              </Card>
+            </>
+          ) : (
+             <Card className="flex flex-col items-center justify-center min-h-[60vh]">
+                <CardHeader className="text-center">
+                  <CardTitle className="font-headline text-2xl">共鬥尚未開放</CardTitle>
+                  <CardDescription>請等待管理員開啟下一場戰鬥。</CardDescription>
+                </CardHeader>
+              </Card>
+          )}
         </div>
 
         {/* Right Column: Player Status & Resources */}
