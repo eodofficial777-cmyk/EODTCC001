@@ -78,7 +78,7 @@ function RecipeTable({ recipes, itemsById }: { recipes: CraftRecipe[]; itemsById
                 </TableCell>
               </TableRow>
             )) : (
-              <TableRow>
+              <TableRow key="no-recipes-row">
                 <TableCell colSpan={2} className="text-center h-24">目前沒有可用的合成配方</TableCell>
               </TableRow>
             )}
