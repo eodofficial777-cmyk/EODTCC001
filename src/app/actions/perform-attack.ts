@@ -24,18 +24,15 @@ interface PerformAttackPayload {
   battleId: string;
   targetMonsterName: string;
   equippedItemIds: string[];
+  supportedFaction: 'yelu' | 'association' | null;
 }
 
 export interface PerformAttackResult {
     success: boolean;
     error?: string;
-    playerDamageDealt?: number;
-    monsterDamageDealt?: number;
     logMessage?: string;
 }
 
-
-// Helper function to parse dice notation like "1d6" or "2d10" and return the sum of rolls
 function rollDice(diceNotation: string): number {
   if (!diceNotation || !diceNotation.toLowerCase().includes('d')) return 0;
   const [numDice, numSides] = diceNotation.toLowerCase().split('d').map(Number);
@@ -48,7 +45,6 @@ function rollDice(diceNotation: string): number {
   return total;
 }
 
-// Helper function to parse ATK strings like "20+1d10"
 function parseAtk(atkString: string | undefined): number {
   if(!atkString) return 0;
   
@@ -63,7 +59,7 @@ function parseAtk(atkString: string | undefined): number {
 
 
 export async function performAttack(payload: PerformAttackPayload): Promise<PerformAttackResult> {
-  const { userId, battleId, targetMonsterName, equippedItemIds } = payload;
+  const { userId, battleId, targetMonsterName, equippedItemIds, supportedFaction } = payload;
   if (!userId || !battleId || !targetMonsterName) {
     return { success: false, error: '缺少必要的戰鬥資訊。' };
   }
@@ -72,7 +68,7 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
   const battleRef = doc(db, 'combatEncounters', battleId);
 
   try {
-    const { playerDamage, monsterDamage, logMessage } = await runTransaction(db, async (transaction) => {
+    const { logMessage } = await runTransaction(db, async (transaction) => {
       const userDoc = await transaction.get(userRef);
       const battleDoc = await transaction.get(battleRef);
 
@@ -90,17 +86,26 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       const targetMonster = { ...battle.monsters[targetMonsterIndex] };
       if (targetMonster.hp <= 0) throw new Error('目標已經被擊敗了。');
 
+      // --- Get or initialize player's participant data ---
+      const participants = battle.participants || {};
+      const playerParticipantData = participants[userId] || {
+          hp: user.attributes.hp,
+          roleName: user.roleName,
+          factionId: user.factionId,
+      };
+
+      if (playerParticipantData.hp <= 0) throw new Error('您的HP已歸零，無法行動。');
+
       // --- 1. Calculate Player Damage ---
       let playerBaseAtk = user.attributes.atk;
       let playerDiceDamage = 0;
 
-      // Fetch equipped items and calculate bonuses
       if (equippedItemIds.length > 0) {
         const itemDocs = await Promise.all(equippedItemIds.map(id => transaction.get(doc(db, 'items', id))));
         itemDocs.forEach(itemDoc => {
             if(itemDoc.exists()) {
                 const item = itemDoc.data() as Item;
-                item.effects.forEach(effect => {
+                item.effects?.forEach(effect => {
                     if ('attribute' in effect && effect.attribute === 'atk') {
                        if (effect.operator === '+') {
                            playerBaseAtk += effect.value;
@@ -118,11 +123,25 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       
       // --- 2. Calculate Monster Damage ---
       const finalMonsterDamage = parseAtk(targetMonster.atk);
+      playerParticipantData.hp = Math.max(0, playerParticipantData.hp - finalMonsterDamage);
 
       // --- 3. Update Firestore Battle Document ---
       const updatedMonsters = [...battle.monsters];
       updatedMonsters[targetMonsterIndex] = targetMonster;
-      transaction.update(battleRef, { monsters: updatedMonsters });
+      
+      const updatedParticipants = {
+          ...participants,
+          [userId]: {
+              ...playerParticipantData,
+              equippedItems: equippedItemIds, // Persist equipped items
+              supportedFaction: user.factionId === 'wanderer' ? supportedFaction : undefined, // Persist wanderer choice
+          }
+      };
+
+      transaction.update(battleRef, { 
+          monsters: updatedMonsters,
+          participants: updatedParticipants,
+      });
       
       // --- 4. Create a single, consolidated Battle Log Entry ---
       const consolidatedLogMessage = `${user.roleName} 對 ${targetMonster.name} 造成 ${finalPlayerDamage} 點傷害，並受到 ${finalMonsterDamage} 點反擊傷害。`;
@@ -134,10 +153,10 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
            type: 'player_attack'
       });
 
-      return { playerDamage: finalPlayerDamage, monsterDamage: finalMonsterDamage, logMessage: consolidatedLogMessage };
+      return { logMessage: consolidatedLogMessage };
     });
 
-    return { success: true, playerDamageDealt: playerDamage, monsterDamageDealt: monsterDamage, logMessage };
+    return { success: true, logMessage };
   } catch (error: any) {
     console.error('Attack failed:', error);
     return { success: false, error: error.message || '攻擊失敗，請稍後再試。' };

@@ -144,6 +144,14 @@ export interface Monster {
     atk: string; // e.g. "20+1D10"
 }
 
+export interface Participant {
+    hp: number;
+    roleName: string;
+    factionId: string;
+    equippedItems?: string[];
+    supportedFaction?: 'yelu' | 'association';
+}
+
 export interface CombatEncounter {
     id: string;
     name: string;
@@ -153,6 +161,9 @@ export interface CombatEncounter {
     endTime?: any; // Date
     monsters: Monster[];
     turn: number;
+    participants?: {
+        [userId: string]: Participant;
+    }
 }
 
 export interface CombatLog {
