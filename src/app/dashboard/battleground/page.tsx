@@ -37,6 +37,7 @@ import {
 
 const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
     const [timeLeft, setTimeLeft] = useState('');
+    const [onFinished, setOnFinished] = useState(() => () => {});
 
     useEffect(() => {
         if (!battle) return;
@@ -66,6 +67,7 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
             if (difference <= 0) {
                 setTimeLeft('00:00:00');
                 clearInterval(interval);
+                onFinished();
                 return;
             }
 
@@ -78,7 +80,7 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
 
         return () => clearInterval(interval);
 
-    }, [battle]);
+    }, [battle, onFinished]);
 
     const title = battle?.status === 'preparing' ? '準備倒數' : '戰場剩餘時間';
     
@@ -94,23 +96,29 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
 
 
 const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }) => {
-     const { baseAtk, baseDef, equipmentAtk, equipmentDef, finalAtk, finalDef } = useMemo(() => {
+     const { baseAtk, baseDef, equipmentAtk, equipmentDef, finalAtk, finalDef, diceAtkString } = useMemo(() => {
         const bAtk = userData?.attributes.atk || 0;
         const bDef = userData?.attributes.def || 0;
         let eqAtk = 0;
         let eqDef = 0;
+        let diceStrings: string[] = [];
 
         equippedItems.forEach(itemId => {
             const item = allItems?.find(i => i.id === itemId);
             if (item) {
                 item.effects?.forEach(effect => {
-                    if ('attribute' in effect && effect.operator === '+') {
-                         if (effect.attribute === 'atk') eqAtk += effect.value;
-                         if (effect.attribute === 'def') eqDef += effect.value;
+                    if ('attribute' in effect) {
+                         if (effect.attribute === 'atk') {
+                            if (effect.operator === '+') eqAtk += effect.value;
+                            if (effect.operator === 'd') diceStrings.push(`1d${effect.value}`);
+                         }
+                         if (effect.attribute === 'def' && effect.operator === '+') eqDef += effect.value;
                     }
                 });
             }
         });
+        
+        const diceStr = diceStrings.length > 0 ? `+${diceStrings.join('+')}` : '';
 
         return {
             baseAtk: bAtk,
@@ -118,26 +126,11 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }) => {
             equipmentAtk: eqAtk,
             equipmentDef: eqDef,
             finalAtk: bAtk + eqAtk,
-            finalDef: bDef + eqDef
+            finalDef: bDef + eqDef,
+            diceAtkString: diceStr
         };
     }, [userData, equippedItems, allItems]);
     
-    const diceAtk = useMemo(() => {
-         let diceDamage = '0';
-         equippedItems.forEach(itemId => {
-            const item = allItems?.find(i => i.id === itemId);
-             if (item) {
-                item.effects?.forEach(effect => {
-                    if ('attribute' in effect && effect.operator === 'd') {
-                        diceDamage = `1d${effect.value}`; // Assuming 1d for simplicity
-                    }
-                });
-            }
-        });
-        return diceDamage;
-    }, [equippedItems, allItems]);
-
-
     if (!userData) {
         return <Skeleton className="h-48 w-full"/>
     }
@@ -159,7 +152,7 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }) => {
                     <div className="flex flex-col gap-1 border p-2 rounded-md">
                         <div className="flex items-center gap-2 text-muted-foreground justify-center"><Sword className="h-4 w-4" /> 攻擊力</div>
                         <div className="font-mono text-xl font-bold">{finalAtk}</div>
-                        <div className="text-xs text-muted-foreground font-mono">({baseAtk}+{equipmentAtk}+{diceAtk})</div>
+                        <div className="text-xs text-muted-foreground font-mono">({baseAtk}+{equipmentAtk}{diceAtkString})</div>
                     </div>
                     <div className="flex flex-col gap-1 border p-2 rounded-md">
                         <div className="flex items-center gap-2 text-muted-foreground justify-center"><Shield className="h-4 w-4" /> 防禦力</div>
@@ -247,7 +240,7 @@ const ActionCooldown = ({ cooldown, onCooldownEnd }) => {
     if (cooldown === 0) return null;
 
     return (
-        <div className="p-2 space-y-1">
+        <div className="p-2 space-y-1 w-full">
              <div className="flex justify-between text-xs font-mono text-muted-foreground px-1">
                 <span>行動冷卻中...</span>
                 <span>{Math.max(0, totalDuration - ((Date.now() - cooldown) / 1000)).toFixed(1)}s</span>
@@ -291,17 +284,17 @@ export default function BattlegroundPage() {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [actionCooldown, setActionCooldown] = useState<number>(0);
   const [isAttacking, setIsAttacking] = useState(false);
+  const [localBattleHP, setLocalBattleHP] = useState<number>(0);
+
 
   // Derive participant data from the battle object for persistence
   const participantData = useMemo(() => currentBattle?.participants?.[user?.uid ?? ''], [currentBattle, user]);
   
-  const [battleHP, setBattleHP] = useState<number>(userData?.attributes.hp || 0);
-
   useEffect(() => {
     // If participant data exists, use its HP. Otherwise, use user's max HP.
     const initialHP = participantData?.hp ?? userData?.attributes.hp;
     if (initialHP !== undefined) {
-        setBattleHP(initialHP);
+        setLocalBattleHP(initialHP);
     }
   }, [participantData, userData?.attributes.hp]);
 
@@ -311,8 +304,9 @@ export default function BattlegroundPage() {
   const isWanderer = userData?.factionId === 'wanderer';
   const playerFaction = isWanderer ? supportedFaction : userData?.factionId;
   const combatStatus = currentBattle?.status;
-  const hasFallen = battleHP <= 0;
+  const hasFallen = localBattleHP <= 0;
   const isOnCooldown = actionCooldown > 0;
+  
   const battleEndTime = useMemo(() => {
     if (currentBattle?.status === 'active' && currentBattle.startTime) {
       const startTime = currentBattle.startTime.toDate();
@@ -405,19 +399,29 @@ export default function BattlegroundPage() {
     if (!currentBattle?.monsters) return [];
     
     // Augment with original HP for progress bar calculation
-    const augmentedMonsters = currentBattle.monsters.map(m => ({
-      ...m,
-      originalHp: m.hp > 0 ? m.hp : (currentBattle.participants?.[user?.uid ?? '']?.hp || m.hp) // A bit tricky, need better original HP source
-    }));
+    // This is a simple way, a better way would be to store originalHp in the monster data itself.
+    const augmentedMonsters = currentBattle.monsters.map(m => {
+      const originalHp = currentBattle.monsters.find(original => original.name === m.name)?.hp;
+      return {
+          ...m,
+          originalHp: originalHp || m.hp || 1, // Fallback
+      }
+    });
 
     if (!playerFaction) {
       return isWanderer ? [] : augmentedMonsters; // Wanderers see nothing until support, others see all if faction not loaded
     }
     return augmentedMonsters.filter(m => m.factionId === playerFaction);
-  }, [currentBattle, playerFaction, isWanderer, user]);
+  }, [currentBattle, playerFaction, isWanderer]);
 
 
   const isLoading = isUserLoading || isUserDataLoading || areItemsLoading || isBattleLoading;
+  
+  const handleCountdownFinished = useCallback(() => {
+    mutateBattle(); // Re-fetch the battle data
+  }, [mutateBattle]);
+
+  // --- Render Functions ---
 
   if (isLoading) {
     return <div className="grid grid-cols-3 gap-6"><Skeleton className="col-span-2 h-screen"/><Skeleton className="col-span-1 h-screen"/></div>
@@ -438,11 +442,10 @@ export default function BattlegroundPage() {
     <div className="grid grid-cols-3 gap-6">
         {/* Left Column: Battle Area */}
         <div className="col-span-2 space-y-4">
-            {/* Monsters */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {monstersToDisplay.map((monster) => (
+                {monstersToDisplay.map((monster, index) => (
                     <MonsterCard 
-                        key={monster.name}
+                        key={`${monster.name}-${index}`}
                         monster={monster}
                         isTargeted={selectedTarget === monster.name}
                         onSelectTarget={setSelectedTarget}
@@ -451,38 +454,31 @@ export default function BattlegroundPage() {
                 ))}
             </div>
 
-            {/* Wanderer Faction Support */}
-            {isWanderer && combatStatus !== 'ended' && (
+            {isWanderer && combatStatus !== 'ended' && !supportedFaction && (
                 <Card>
                     <CardHeader>
                         <CardTitle>流浪者支援選擇</CardTitle>
                         <CardDescription>選擇一個陣營進行支援。一旦選定，本次戰鬥中將無法更改。</CardDescription>
                     </CardHeader>
                     <CardContent className="flex gap-4">
-                        <Button onClick={() => handleSupportFaction('yelu')} variant={supportedFaction === 'yelu' ? 'default' : 'outline'} className="w-full" disabled={!!supportedFaction}>支援夜鷺</Button>
-                        <Button onClick={() => handleSupportFaction('association')} variant={supportedFaction === 'association' ? 'default' : 'outline'} className="w-full" disabled={!!supportedFaction}>支援協會</Button>
+                        <Button onClick={() => handleSupportFaction('yelu')} variant={'outline'} className="w-full">支援夜鷺</Button>
+                        <Button onClick={() => handleSupportFaction('association')} variant={'outline'} className="w-full">支援協會</Button>
                     </CardContent>
                 </Card>
             )}
 
-            {/* Action Bar */}
             <Card>
                 <CardHeader><CardTitle>行動</CardTitle></CardHeader>
-                <CardContent>
-                     <div className="grid grid-cols-3 gap-4">
-                        <Button size="lg" onClick={handleAttack} disabled={combatStatus !== 'active' || !selectedTarget || hasFallen || isOnCooldown || isAttacking || isBattleTimeOver}>
-                            {isAttacking ? '攻擊中...' : '攻擊'}
-                        </Button>
-                         <Button size="lg" variant="outline" disabled>技能</Button>
-                         <Button size="lg" variant="outline" disabled>道具</Button>
-                     </div>
-                </CardContent>
-                 <CardFooter>
+                <CardContent className="flex items-center gap-4">
+                     <Button size="lg" onClick={handleAttack} disabled={combatStatus !== 'active' || !selectedTarget || hasFallen || isOnCooldown || isAttacking || isBattleTimeOver}>
+                        {isAttacking ? '攻擊中...' : '攻擊'}
+                    </Button>
+                     <Button size="lg" variant="outline" disabled>技能</Button>
+                     <Button size="lg" variant="outline" disabled>道具</Button>
                      <ActionCooldown cooldown={actionCooldown} onCooldownEnd={() => setActionCooldown(0)} />
-                 </CardFooter>
+                </CardContent>
             </Card>
 
-            {/* Combat Log */}
             <Card>
                 <CardHeader><CardTitle>共鬥紀錄</CardTitle></CardHeader>
                 <CardContent>
@@ -505,7 +501,7 @@ export default function BattlegroundPage() {
         <div className="col-span-1 space-y-6">
             <BattleTimer battle={currentBattle} />
             
-            <PlayerStatus userData={userData} battleHP={battleHP} equippedItems={equippedItems} allItems={allItems} />
+            <PlayerStatus userData={userData} battleHP={localBattleHP} equippedItems={equippedItems} allItems={allItems} />
             
             <Tabs defaultValue="equipment" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
