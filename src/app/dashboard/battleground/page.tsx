@@ -18,7 +18,7 @@ import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@
 import { doc, collection, query, orderBy, limit, where, updateDoc } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import type { CombatEncounter, User, Item, Skill, Monster, CombatLog, AttributeEffect } from '@/lib/types';
+import type { CombatEncounter, User, Item, Skill, Monster, CombatLog, AttributeEffect, TriggeredEffect } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { performAttack } from '@/app/actions/perform-attack';
@@ -27,6 +27,36 @@ import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogClose } from '@/components/ui/dialog';
 
 // --- Sub-components for better organization ---
+
+function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
+    if ('attribute' in effect) { // AttributeEffect
+        const op = effect.operator === 'd' ? `${effect.value}` : `${effect.operator} ${effect.value}`;
+        return `${effect.attribute.toUpperCase()} ${op}`;
+    }
+    // TriggeredEffect
+    let desc = `${effect.probability}%機率`;
+    switch(effect.effectType) {
+        case 'hp_recovery':
+            desc += `恢復 ${effect.value} HP`;
+            break;
+        case 'damage_enemy':
+            desc += `造成 ${effect.value} 點傷害`;
+            break;
+        case 'atk_buff':
+            desc += `提升攻擊力 ${effect.value}%`;
+            break;
+        case 'def_buff':
+            desc += `提升防禦力 ${effect.value}%`;
+            break;
+        case 'hp_cost':
+            desc += `消耗 ${effect.value} HP`;
+            break;
+    }
+    if (effect.duration) {
+        desc += `，持續 ${effect.duration} 回合`;
+    }
+    return desc;
+}
 
 const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
     const [timeLeft, setTimeLeft] = useState('');
