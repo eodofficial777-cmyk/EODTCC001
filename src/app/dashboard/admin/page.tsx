@@ -86,6 +86,7 @@ import { createBattle, startBattle, endBattle, addMonsterToBattle } from '@/app/
 import { getBattleLogs } from '@/app/actions/get-battle-logs';
 import { awardBattleDamageRewards } from '@/app/actions/award-battle-damage-rewards';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 function AccountApproval() {
   const { toast } = useToast();
