@@ -602,7 +602,8 @@
           "properties": {
             "type": { "type": "string", "enum": ["honor_points", "currency", "tasks_submitted", "battles_participated", "battles_hp_zero", "item_used", "item_damage"] },
             "value": { "type": "number", "description": "The target value for the trigger type (e.g., 1000 for 1000 honor points)." },
-            "itemId": { "type": "string", "description": "The ID of the item for item-related triggers." }
+            "itemId": { "type": "string", "description": "The ID of the item for item-related triggers." },
+            "damageThreshold": { "type": "number", "description": "The damage threshold for item_damage triggers." }
           },
           "required": ["type", "value"]
         }
@@ -637,7 +638,7 @@
             "type": "array", "description": "Structured description of the skill's effects.",
             "items": { "type": "object", "properties": {
                     "effectType": { "type": "string", "enum": ["hp_recovery", "direct_damage", "atk_buff", "def_buff", "hp_cost", "probabilistic_damage"] },
-                    "value": { "type": "number" },
+                    "value": { "type": ["number", "string"] },
                     "probability": { "type": "number", "minimum": 0, "maximum": 100 },
                     "duration": { "type": "number" }
                 },

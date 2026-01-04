@@ -49,7 +49,7 @@ export async function updateTitle(payload: Partial<Title> & { _delete?: boolean 
     
     // If it's a manual title, remove the trigger field.
     if (data.isManual) {
-        delete data.trigger;
+        data.trigger = undefined;
     }
 
 

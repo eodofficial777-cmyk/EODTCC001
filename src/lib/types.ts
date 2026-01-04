@@ -2,6 +2,7 @@
 
 
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -123,6 +124,7 @@ export type TitleTrigger = {
   type: TitleTriggerType;
   value: number;
   itemId?: string; // For item-related triggers
+  damageThreshold?: number; // For item_damage trigger
 };
 
 

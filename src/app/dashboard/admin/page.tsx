@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import {
@@ -1267,7 +1265,13 @@ const skillEffectTypes: { value: SkillEffectType; label: string }[] = [
 
 function formatSkillEffects(effects: SkillEffect[]): string {
     if (!effects || effects.length === 0) return '無';
-    return effects.map(e => skillEffectTypes.find(t => t.value === e.effectType)?.label || e.effectType).join(', ');
+    return effects.map(e => {
+        const typeLabel = skillEffectTypes.find(t => t.value === e.effectType)?.label || e.effectType;
+        if (e.effectType === 'probabilistic_damage') {
+            return `${e.probability}%機率造成 ${e.value} 傷害`;
+        }
+        return `${typeLabel}: ${e.value}`;
+    }).join(', ');
 }
 
 
@@ -1316,7 +1320,7 @@ function SkillEditor({
     };
 
     const addEffect = () => {
-        const newEffect: SkillEffect = { effectType: 'hp_recovery', value: 0 };
+        const newEffect: SkillEffect = { effectType: 'hp_recovery', value: '0' };
         setEditedSkill({ ...editedSkill, effects: [...(editedSkill.effects || []), newEffect] });
     };
 
@@ -1373,12 +1377,12 @@ function SkillEditor({
                                     </SelectContent>
                                 </Select>
                                 {effect.effectType === 'probabilistic_damage' && (
-                                    <Input type="number" placeholder="機率 (0-100)%" value={effect.probability || ''} onChange={e => handleEffectChange(index, 'probability', e.target.value)} />
+                                    <Input type="number" placeholder="機率 (0-100)%" value={effect.probability || ''} onChange={e => handleEffectChange(index, 'probability', parseInt(e.target.value))} />
                                 )}
                             </div>
                             <Input placeholder="數值 (e.g. 1.5, -10, 2d6)" value={effect.value || ''} onChange={e => handleEffectChange(index, 'value', e.target.value)} />
                             {(effect.effectType === 'atk_buff' || effect.effectType === 'def_buff') && (
-                                <Input type="number" placeholder="持續回合數 (選填)" value={effect.duration || ''} onChange={e => handleEffectChange(index, 'duration', e.target.value)} />
+                                <Input type="number" placeholder="持續回合數 (選填)" value={effect.duration || ''} onChange={e => handleEffectChange(index, 'duration', parseInt(e.target.value))} />
                             )}
                         </div>
                     ))}
@@ -1523,14 +1527,14 @@ function SkillManagement() {
     );
 }
 
-const titleTriggerTypes: { value: TitleTriggerType, label: string, requiresItem: boolean, requiresDamage: boolean }[] = [
-    { value: 'honor_points', label: '榮譽點達到 X 點', requiresItem: false, requiresDamage: false },
-    { value: 'currency', label: '貨幣達到 X 點', requiresItem: false, requiresDamage: false },
-    { value: 'tasks_submitted', label: '提交任務達到 X 篇', requiresItem: false, requiresDamage: false },
-    { value: 'battles_participated', label: '參加共鬥 X 次', requiresItem: false, requiresDamage: false },
-    { value: 'battles_hp_zero', label: '共鬥血量歸零 X 次', requiresItem: false, requiresDamage: false },
-    { value: 'item_used', label: '使用道具 O X 次', requiresItem: true, requiresDamage: false },
-    { value: 'item_damage', label: '使用道具 O 造成 A 傷害共 X 次', requiresItem: true, requiresDamage: true },
+const titleTriggerTypes: { value: TitleTriggerType, label: string, requiresItem: boolean }[] = [
+    { value: 'honor_points', label: '榮譽點達到 X 點', requiresItem: false },
+    { value: 'currency', label: '貨幣達到 X 點', requiresItem: false },
+    { value: 'tasks_submitted', label: '提交任務達到 X 篇', requiresItem: false },
+    { value: 'battles_participated', label: '參加共鬥 X 次', requiresItem: false },
+    { value: 'battles_hp_zero', label: '共鬥血量歸零 X 次', requiresItem: false },
+    { value: 'item_used', label: '使用道具 O X 次', requiresItem: true },
+    { value: 'item_damage', label: '使用道具 O 造成 A 傷害共 X 次', requiresItem: true },
 ];
 
 function TitleEditor({ title, items, onSave, onCancel, isSaving }: { title: Partial<Title>, items: Item[], onSave: (data: Partial<Title>) => void, onCancel: () => void, isSaving: boolean }) {
@@ -1542,6 +1546,7 @@ function TitleEditor({ title, items, onSave, onCancel, isSaving }: { title: Part
         const triggerInfo = titleTriggerTypes.find(t => t.value === type);
         if (triggerInfo?.requiresItem) {
             newTrigger.itemId = items[0]?.id;
+            newTrigger.damageThreshold = 0;
         }
         setEditedTitle(prev => ({...prev, trigger: newTrigger}));
     };
@@ -1603,7 +1608,18 @@ function TitleEditor({ title, items, onSave, onCancel, isSaving }: { title: Part
                                 </SelectContent>
                             </Select>
                         )}
-                        <Input type="number" placeholder="目標數值 (例如: 100)" value={editedTitle.trigger?.value || ''} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, value: parseInt(e.target.value) || 0} : undefined}))}/>
+                        
+                        {editedTitle.trigger?.type === 'item_damage' && (
+                            <div className="space-y-2">
+                                <Label>每次所需傷害 (A)</Label>
+                                <Input type="number" placeholder="傷害閾值" value={editedTitle.trigger.damageThreshold || ''} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, damageThreshold: parseInt(e.target.value) || 0} : undefined}))}/>
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                             <Label>目標達成次數 / 數值 (X)</Label>
+                            <Input type="number" placeholder="目標數值 (例如: 100)" value={editedTitle.trigger?.value || ''} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, value: parseInt(e.target.value) || 0} : undefined}))}/>
+                        </div>
                     </div>
                 )}
             </CardContent>
@@ -1661,22 +1677,23 @@ function TitleManagement() {
 
     const getTriggerDescription = (title: Title) => {
         if (title.isManual || !title.trigger) return '手動發放';
+        
         const triggerInfo = titleTriggerTypes.find(t => t.value === title.trigger.type);
         if (!triggerInfo) return '未知條件';
         
         let desc = triggerInfo.label;
+        
         if (triggerInfo.requiresItem) {
             const itemName = items.find(i => i.id === title.trigger?.itemId)?.name || '未知道具';
             desc = desc.replace('O', `「${itemName}」`);
         }
         
+        if (title.trigger.type === 'item_damage') {
+             desc = desc.replace('A', (title.trigger.damageThreshold || 0).toString());
+        }
+
         // Always replace 'X' with the value
         desc = desc.replace('X', title.trigger.value.toString());
-
-        if (triggerInfo.requiresDamage) {
-            // Placeholder for second value if needed, for now it's part of the label
-            desc = desc.replace('A', title.trigger.value.toString());
-        }
 
         return desc;
     };
@@ -1943,7 +1960,7 @@ function RewardDistribution() {
 
              <Card className="mt-4">
                 <CardHeader>
-                    <CardTitle>3. 預覽與發放</CardTitle>
+                    <CardTitle>3. 預覽与發放</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <Button onClick={handlePreview} disabled={isProcessing} className="w-full">
