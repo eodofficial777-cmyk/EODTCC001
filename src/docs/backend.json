@@ -378,7 +378,7 @@
           "type": "object",
           "description": "The condition that automatically awards this title.",
           "properties": {
-            "type": { "type": "string", "enum": ["honor_points", "currency", "tasks_submitted", "battles_participated", "battles_hp_zero", "item_used", "item_damage"] },
+            "type": { "type": "string", "enum": ["honor_points", "currency", "tasks_submitted", "battles_participated", "battles_hp_zero", "item_used", "item_damage", "top_faction_damage"] },
             "value": { "type": "number", "description": "The target value for the trigger type (e.g., 1000 for 1000 honor points)." },
             "itemId": { "type": "string", "description": "The ID of the item for item-related triggers." },
             "damageThreshold": { "type": "number", "description": "The damage threshold for item_damage triggers." }
@@ -484,5 +484,3 @@
     ]
   }
 }
-
-    

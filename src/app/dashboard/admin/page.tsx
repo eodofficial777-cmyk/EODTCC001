@@ -85,6 +85,7 @@ import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
 import { createBattle, startBattle, endBattle, addMonsterToBattle } from '@/app/actions/manage-battle';
 import { getBattleLogs } from '@/app/actions/get-battle-logs';
 import { awardBattleDamageRewards } from '@/app/actions/award-battle-damage-rewards';
+import { Separator } from '@/components/ui/separator';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -2110,23 +2111,26 @@ function BattleLogViewer({ battleId, battleName }: { battleId: string, battleNam
     )
 }
 
-function DamageRewardDialog({ battleId, battleName, allTitles, onAwarded }: { battleId: string, battleName: string, allTitles: Title[], onAwarded: () => void}) {
+function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAwarded }: { battleId: string, battleName: string, allItems: Item[], allTitles: Title[], onAwarded: () => void}) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
-    const [damageThreshold, setDamageThreshold] = useState(1000);
-    const [titleId, setTitleId] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
 
+    const [thresholdReward, setThresholdReward] = useState({ enabled: true, damageThreshold: 1000, titleId: ''});
+    const [topYeluPlayerReward, setTopYeluPlayerReward] = useState({ enabled: false, titleId: '', itemId: '', honorPoints: 0, currency: 0 });
+    const [topAssociationPlayerReward, setTopAssociationPlayerReward] = useState({ enabled: false, titleId: '', itemId: '', honorPoints: 0, currency: 0 });
+
     const handleAward = async () => {
-        if (!titleId) {
-            toast({ variant: 'destructive', title: '錯誤', description: '請選擇要授予的稱號。' });
-            return;
-        }
         setIsProcessing(true);
         try {
-            const result = await awardBattleDamageRewards({ battleId, damageThreshold, titleId });
+            const result = await awardBattleDamageRewards({
+                battleId,
+                thresholdReward,
+                topYeluPlayerReward,
+                topAssociationPlayerReward
+            });
             if (result.error) throw new Error(result.error);
-            toast({ title: '成功', description: `已為 ${result.processedCount} 位玩家發放傷害成就獎勵。` });
+            toast({ title: '操作成功', description: result.message, duration: 8000 });
             onAwarded();
             setIsOpen(false);
         } catch (error: any) {
@@ -2141,25 +2145,84 @@ function DamageRewardDialog({ battleId, battleName, allTitles, onAwarded }: { ba
             <DialogTrigger asChild>
                 <Button variant="outline" size="sm"><Award className="h-4 w-4 mr-2"/>結算傷害獎勵</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-xl">
                 <DialogHeader>
-                    <DialogTitle>結算戰役傷害獎勵</DialogTitle>
-                    <DialogDescription>為在「{battleName}」中造成超過指定傷害的玩家授予稱號。</DialogDescription>
+                    <DialogTitle>結算戰役傷害獎勵: {battleName}</DialogTitle>
+                    <DialogDescription>為在此戰役中表現出色的玩家授予獎勵。</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="damage-threshold">傷害閾值</Label>
-                        <Input id="damage-threshold" type="number" value={damageThreshold} onChange={e => setDamageThreshold(parseInt(e.target.value) || 0)} />
+                <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto pr-4">
+                    {/* Threshold Reward */}
+                    <div className="p-4 border rounded-lg space-y-4">
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="threshold-enabled" className="text-base font-semibold flex items-center gap-2">
+                                <Award className="h-5 w-5"/> 傷害達標獎
+                            </Label>
+                            <Switch id="threshold-enabled" checked={thresholdReward.enabled} onCheckedChange={(c) => setThresholdReward(s => ({...s, enabled: c}))} />
+                        </div>
+                        <div className={cn("space-y-4", !thresholdReward.enabled && "opacity-50 pointer-events-none")}>
+                            <div className="space-y-2">
+                                <Label>傷害閾值</Label>
+                                <Input type="number" value={thresholdReward.damageThreshold} onChange={e => setThresholdReward(s => ({...s, damageThreshold: parseInt(e.target.value) || 0}))} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>授予稱號</Label>
+                                <Select value={thresholdReward.titleId} onValueChange={(v) => setThresholdReward(s => ({...s, titleId: v}))}>
+                                    <SelectTrigger><SelectValue placeholder="選擇一個稱號"/></SelectTrigger>
+                                    <SelectContent>
+                                        {allTitles.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
                     </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="title-select">授予稱號</Label>
-                        <Select value={titleId} onValueChange={setTitleId}>
-                            <SelectTrigger id="title-select"><SelectValue placeholder="選擇一個稱號"/></SelectTrigger>
-                            <SelectContent>
-                                {allTitles.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                     <Separator />
+                    {/* Top Player Rewards */}
+                    {[
+                        { faction: 'yelu', state: topYeluPlayerReward, setter: setTopYeluPlayerReward },
+                        { faction: 'association', state: topAssociationPlayerReward, setter: setTopAssociationPlayerReward }
+                    ].map(({ faction, state, setter }) => {
+                        const factionInfo = FACTIONS[faction as keyof typeof FACTIONS];
+                        return (
+                            <div key={faction} className="p-4 border rounded-lg space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor={`${faction}-mvp-enabled`} className="text-base font-semibold flex items-center gap-2" style={{color: factionInfo.color}}>
+                                        <Award className="h-5 w-5"/> {factionInfo.name} 傷害冠軍獎 (MVP)
+                                    </Label>
+                                    <Switch id={`${faction}-mvp-enabled`} checked={state.enabled} onCheckedChange={(c) => setter(s => ({...s, enabled: c}))} />
+                                </div>
+                                <div className={cn("grid grid-cols-2 gap-4", !state.enabled && "opacity-50 pointer-events-none")}>
+                                     <div className="space-y-2">
+                                        <Label>榮譽點</Label>
+                                        <Input type="number" value={state.honorPoints} onChange={e => setter(s => ({...s, honorPoints: parseInt(e.target.value) || 0}))} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>貨幣</Label>
+                                        <Input type="number" value={state.currency} onChange={e => setter(s => ({...s, currency: parseInt(e.target.value) || 0}))} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>獎勵道具</Label>
+                                         <Select value={state.itemId} onValueChange={(v) => setter(s => ({...s, itemId: v === 'none' ? undefined : v}))}>
+                                            <SelectTrigger><SelectValue placeholder="無"/></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">無</SelectItem>
+                                                {allItems.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>獎勵稱號</Label>
+                                         <Select value={state.titleId} onValueChange={(v) => setter(s => ({...s, titleId: v === 'none' ? undefined : v}))}>
+                                            <SelectTrigger><SelectValue placeholder="無"/></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">無</SelectItem>
+                                                {allTitles.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">取消</Button></DialogClose>
@@ -2439,7 +2502,7 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
                                     </Select>
                                 </div>
                                  <div className="space-y-2">
-                                    <Label>獎勵稱號 (選填)</Label>
+                                    <Label>獎勵称號 (選填)</Label>
                                      <Select onValueChange={v => setRewards(r => ({...r, titleId: v === 'none' ? undefined : v}))}>
                                         <SelectTrigger><SelectValue placeholder="選擇稱號"/></SelectTrigger>
                                         <SelectContent><SelectItem value="none">無</SelectItem>{allTitles?.map(t => <SelectItem value={t.id} key={t.id}>{t.name}</SelectItem>)}</SelectContent>
@@ -2477,7 +2540,7 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
                                             <BattleLogViewer battleId={b.id} battleName={b.name}/>
                                         </Dialog>
                                          {b.status === 'ended' && (
-                                            <DamageRewardDialog battleId={b.id} battleName={b.name} allTitles={allTitles} onAwarded={onRefresh} />
+                                            <DamageRewardDialog battleId={b.id} battleName={b.name} allItems={allItems} allTitles={allTitles} onAwarded={onRefresh} />
                                         )}
                                     </TableCell>
                                 </TableRow>
