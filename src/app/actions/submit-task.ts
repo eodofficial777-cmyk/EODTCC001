@@ -119,8 +119,12 @@ export async function submitTask(payload: SubmitTaskPayload) {
       };
       if (currencyToAward > 0) userUpdateData.currency = increment(currencyToAward);
       if (honorToAward > 0) userUpdateData.honorPoints = increment(honorToAward);
-      if (taskType.titleAwarded) userUpdateData.titles = arrayUnion(taskType.titleAwarded);
-      if (taskType.itemAwarded) userUpdateData.items = arrayUnion(taskType.itemAwarded);
+      if (taskType.titleAwarded) {
+        userUpdateData.titles = arrayUnion(taskType.titleAwarded);
+      }
+      if (taskType.itemAwarded) {
+        userUpdateData.items = arrayUnion(taskType.itemAwarded);
+      }
 
       transaction.update(userRef, userUpdateData);
 
