@@ -64,7 +64,7 @@ const formSchema = z.object({
   submissionUrl: z
     .string()
     .url('請輸入有效的網址')
-    .startsWith('https://www.plurk.com/', '任務網址必須是噗浪貼文'),
+    .startsWith('https://www.plurk.com/p/', '任務網址必須是噗浪的單一噗文網址 (開頭為 https://www.plurk.com/p/)'),
   title: z.string().min(1, '請輸入任務標題或描述'),
   factionContribution: z.string().optional(),
 });
@@ -88,7 +88,7 @@ function MissionSubmitForm({
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      submissionUrl: 'https://www.plurk.com/',
+      submissionUrl: 'https://www.plurk.com/p/',
       title: '',
     },
   });
@@ -180,7 +180,7 @@ function MissionSubmitForm({
         description: '您的任務已提交。',
       });
       form.reset({
-        submissionUrl: 'https://www.plurk.com/',
+        submissionUrl: 'https://www.plurk.com/p/',
         title: '',
         taskCategory: '',
         taskTypeId: '',
