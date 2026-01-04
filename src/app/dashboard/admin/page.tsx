@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -37,7 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History, Award } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History, Award, KeyRound } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -87,6 +88,67 @@ import { getBattleLogs } from '@/app/actions/get-battle-logs';
 import { awardBattleDamageRewards } from '@/app/actions/award-battle-damage-rewards';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { resetUserPassword } from '@/app/actions/reset-user-password';
+
+
+function PasswordResetDialog({ user, isOpen, onOpenChange }: { user: User, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
+    const { toast } = useToast();
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleReset = async () => {
+        if (newPassword.length < 6) {
+            toast({ variant: 'destructive', title: '錯誤', description: '新密碼長度至少需要 6 個字元。' });
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            toast({ variant: 'destructive', title: '錯誤', description: '兩次輸入的密碼不一致。' });
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const result = await resetUserPassword({ userId: user.id, newPassword });
+            if (result.error) throw new Error(result.error);
+            toast({ title: '成功', description: `玩家 ${user.roleName} 的密碼已成功重設。` });
+            setNewPassword('');
+            setConfirmPassword('');
+            onOpenChange(false);
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: '重設失敗', description: error.message });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>重設玩家密碼</DialogTitle>
+                    <DialogDescription>正在為玩家「{user.roleName}」設定新密碼。</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="new-password">新密碼 (至少6個字元)</Label>
+                        <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="confirm-password">確認新密碼</Label>
+                        <Input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
+                    <Button onClick={handleReset} disabled={isSaving}>
+                        {isSaving ? '處理中...' : '確認重設'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -94,6 +156,8 @@ function AccountApproval() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState<Record<string, boolean>>({});
+  const [resettingUser, setResettingUser] = useState<User | null>(null);
+
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -286,13 +350,18 @@ function AccountApproval() {
                       </SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="space-y-1">
                     <Button
                       size="sm"
                       onClick={() => handleUpdateUser(user.id)}
                       disabled={isUpdating[user.id]}
+                      className="w-full"
                     >
                       {isUpdating[user.id] ? '更新中...' : '更新'}
+                    </Button>
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => setResettingUser(user)}>
+                        <KeyRound className="mr-2 h-4 w-4" />
+                        重設密碼
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -301,6 +370,13 @@ function AccountApproval() {
           </TableBody>
         </Table>
       </div>
+      {resettingUser && (
+            <PasswordResetDialog 
+                user={resettingUser}
+                isOpen={!!resettingUser}
+                onOpenChange={(open) => !open && setResettingUser(null)}
+            />
+      )}
     </div>
   );
 }

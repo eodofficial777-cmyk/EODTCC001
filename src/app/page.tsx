@@ -213,7 +213,7 @@ export default function AuthPage() {
               <CardHeader className="p-2 pt-4 text-center">
                 <CardTitle className="text-2xl font-headline">登入</CardTitle>
                 <CardDescription>
-                  輸入您的憑證以存取您的帳戶
+                  輸入您的帳號以存取角色資訊
                 </CardDescription>
               </CardHeader>
               <Form {...loginForm}>

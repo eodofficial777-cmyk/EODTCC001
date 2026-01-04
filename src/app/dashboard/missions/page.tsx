@@ -304,7 +304,7 @@ function MissionSubmitForm({
                           <FormControl>
                             <RadioGroupItem value="none" />
                           </FormControl>
-                          <FormLabel className="font-normal">僅為自己</FormLabel>
+                          <FormLabel className="font-normal">僅為自己增加榮譽點</FormLabel>
                         </FormItem>
                       </RadioGroup>
                     </FormControl>
@@ -320,7 +320,7 @@ function MissionSubmitForm({
                 <FormItem>
                   <FormLabel>任務標題</FormLabel>
                   <FormControl>
-                    <Input placeholder="簡短描述您的創作..." {...field} />
+                    <Input placeholder="為作品取一個標題(選填)" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -380,7 +380,7 @@ function AllSubmissionsFeed({ tasks, isLoading, onRefresh, taskTypes, onFilterCh
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
                 <CardTitle className="font-headline">所有任務</CardTitle>
-                <CardDescription>看看大家最近在忙什麼。</CardDescription>
+                <CardDescription>看看大家的創作吧</CardDescription>
             </div>
             <Button variant="ghost" size="icon" onClick={onRefresh} disabled={isLoading}>
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
