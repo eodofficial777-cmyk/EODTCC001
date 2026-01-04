@@ -131,7 +131,8 @@ export async function getAdminData(): Promise<{
        return {
          ...data,
          id: doc.id,
-         startTime: (data.startTime as Timestamp)?.toDate().toISOString() || 'N/A',
+         startTime: (data.startTime as Timestamp)?.toDate().toISOString() || null,
+         preparationEndTime: (data.preparationEndTime as Timestamp)?.toDate().toISOString() || null,
          endTime: (data.endTime as Timestamp)?.toDate().toISOString() || null,
        } as CombatEncounter;
     });
