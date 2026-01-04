@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -1295,12 +1296,7 @@ function SkillEditor({
         const newEffects = [...(editedSkill.effects || [])];
         const effect = { ...newEffects[index] };
         
-        if (field === 'value' || field === 'probability' || field === 'duration') {
-             (effect as any)[field] = parseFloat(value) || 0;
-        } else {
-            (effect as any)[field] = value;
-        }
-
+        (effect as any)[field] = value;
 
         // Reset irrelevant fields when effectType changes
         if (field === 'effectType') {
@@ -1320,7 +1316,7 @@ function SkillEditor({
     };
 
     const addEffect = () => {
-        const newEffect: SkillEffect = { effectType: 'hp_recovery' };
+        const newEffect: SkillEffect = { effectType: 'hp_recovery', value: 0 };
         setEditedSkill({ ...editedSkill, effects: [...(editedSkill.effects || []), newEffect] });
     };
 
@@ -1380,7 +1376,7 @@ function SkillEditor({
                                     <Input type="number" placeholder="機率 (0-100)%" value={effect.probability || ''} onChange={e => handleEffectChange(index, 'probability', e.target.value)} />
                                 )}
                             </div>
-                            <Input type="number" placeholder="數值" value={effect.value || ''} onChange={e => handleEffectChange(index, 'value', e.target.value)} />
+                            <Input placeholder="數值 (e.g. 1.5, -10, 2d6)" value={effect.value || ''} onChange={e => handleEffectChange(index, 'value', e.target.value)} />
                             {(effect.effectType === 'atk_buff' || effect.effectType === 'def_buff') && (
                                 <Input type="number" placeholder="持續回合數 (選填)" value={effect.duration || ''} onChange={e => handleEffectChange(index, 'duration', e.target.value)} />
                             )}

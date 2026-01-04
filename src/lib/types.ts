@@ -1,6 +1,7 @@
 
 
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -101,7 +102,7 @@ export type SkillEffectType = 'hp_recovery' | 'direct_damage' | 'atk_buff' | 'de
 
 export type SkillEffect = {
     effectType: SkillEffectType;
-    value?: number;
+    value?: number | string;
     probability?: number;
     duration?: number;
 }

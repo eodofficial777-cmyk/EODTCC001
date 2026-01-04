@@ -394,7 +394,7 @@
         "itemTypeId": {
           "type": "string",
           "description": "Reference to the ItemType of the item.",
-          "enum": ["equipment", "consumable", "special"]
+          "enum": ["equipment", "consumable", "special", "stat_boost"]
         },
         "price": {
           "type": "number",
@@ -418,7 +418,7 @@
                         "properties": {
                             "attribute": { "type": "string", "enum": ["hp", "atk", "def"] },
                             "operator": { "type": "string", "enum": ["+", "*", "d"] },
-                            "value": { "type": "number" }
+                            "value": { "type": ["number", "string"] }
                         },
                         "required": ["attribute", "operator", "value"]
                     },
@@ -637,7 +637,7 @@
             "type": "array", "description": "Structured description of the skill's effects.",
             "items": { "type": "object", "properties": {
                     "effectType": { "type": "string", "enum": ["hp_recovery", "direct_damage", "atk_buff", "def_buff", "hp_cost", "probabilistic_damage"] },
-                    "value": { "type": "number" },
+                    "value": { "type": ["number", "string"] },
                     "probability": { "type": "number", "minimum": 0, "maximum": 100 },
                     "duration": { "type": "number" }
                 },
