@@ -159,7 +159,7 @@ function ChangeTitleDialog({ user, userData, allTitles, onTitleChanged }: { user
     );
 }
 
-const avatarSchema = z.object({
+const profileSchema = z.object({
   avatarUrl: z
     .string()
     .url('請輸入有效的網址')
@@ -167,25 +167,36 @@ const avatarSchema = z.object({
       'https://images.plurk.com/',
       '大頭貼必須以 https://images.plurk.com/ 開頭'
     ),
+  characterSheetUrl: z
+    .string()
+    .url('請輸入有效的網址')
+    .startsWith(
+        'https://images.plurk.com/',
+        '角色卡必須以 https://images.plurk.com/ 開頭'
+    ),
 });
 
-function ChangeAvatarDialog({ user, userData, onAvatarChanged }: { user: any, userData: any, onAvatarChanged: () => void }) {
+function EditProfileDialog({ user, userData, onProfileChanged }: { user: any, userData: any, onProfileChanged: () => void }) {
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   
-  const form = useForm<z.infer<typeof avatarSchema>>({
-    resolver: zodResolver(avatarSchema),
+  const form = useForm<z.infer<typeof profileSchema>>({
+    resolver: zodResolver(profileSchema),
     defaultValues: {
       avatarUrl: userData?.avatarUrl || '',
+      characterSheetUrl: userData?.characterSheetUrl || '',
     },
   });
 
-  const onSubmit = async (values: z.infer<typeof avatarSchema>) => {
+  const onSubmit = async (values: z.infer<typeof profileSchema>) => {
     try {
-      const result = await updateUser(user.uid, { avatarUrl: values.avatarUrl }, false);
+      const result = await updateUser(user.uid, { 
+          avatarUrl: values.avatarUrl,
+          characterSheetUrl: values.characterSheetUrl
+       }, false);
       if (result.error) throw new Error(result.error);
-      toast({ title: '成功', description: '您的大頭貼已更新！' });
-      onAvatarChanged();
+      toast({ title: '成功', description: '您的個人資料已更新！' });
+      onProfileChanged();
       setIsOpen(false);
     } catch (error: any) {
       toast({ variant: 'destructive', title: '更新失敗', description: error.message });
@@ -199,7 +210,7 @@ function ChangeAvatarDialog({ user, userData, onAvatarChanged }: { user: any, us
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>更換大頭貼</DialogTitle>
+          <DialogTitle>編輯個人資料</DialogTitle>
           <DialogDescription>
             請輸入新的噗浪圖床 (images.plurk.com) 網址。
           </DialogDescription>
@@ -212,6 +223,19 @@ function ChangeAvatarDialog({ user, userData, onAvatarChanged }: { user: any, us
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>大頭貼網址</FormLabel>
+                  <FormControl>
+                    <Input placeholder="https://images.plurk.com/..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="characterSheetUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>角色卡網址</FormLabel>
                   <FormControl>
                     <Input placeholder="https://images.plurk.com/..." {...field} />
                   </FormControl>
@@ -368,7 +392,7 @@ export default function DashboardPage() {
             </div>
           </CardContent>
           <CardFooter>
-             {user && userData && <ChangeAvatarDialog user={user} userData={userData} onAvatarChanged={mutate} />}
+             {user && userData && <EditProfileDialog user={user} userData={userData} onProfileChanged={mutate} />}
           </CardFooter>
         </Card>
       </div>
