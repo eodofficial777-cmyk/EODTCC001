@@ -40,7 +40,7 @@ import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Che
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus, Monster, CombatEncounter, EndOfBattleRewards, CombatLog } from '@/lib/types';
+import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus, Monster, CombatEncounter, CombatLog, EndOfBattleRewards } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -743,8 +743,8 @@ function ItemEditor({
           <Select value={editedItem.factionId} onValueChange={(value) => setEditedItem({ ...editedItem, factionId: value })}>
             <SelectTrigger id="item-faction"><SelectValue placeholder="選擇陣營" /></SelectTrigger>
             <SelectContent>
-              {Object.values(FACTIONS).map(f => (
-                <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+              {Object.entries(FACTIONS).map(([id, faction]) => (
+                 <SelectItem key={id} value={id}>{id === 'wanderer' ? `${faction.name} / 通用` : faction.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -1690,11 +1690,11 @@ function TitleManagement() {
         }
         
         if (title.trigger.type === 'item_damage') {
-             desc = desc.replace('A', (title.trigger.damageThreshold || 0).toString());
+             desc = desc.replace('A', (title.trigger.damageThreshold ?? 0).toString());
         }
 
         // Always replace 'X' with the value
-        desc = desc.replace('X', title.trigger.value.toString());
+        desc = desc.replace('X', (title.trigger.value ?? 0).toString());
 
         return desc;
     };

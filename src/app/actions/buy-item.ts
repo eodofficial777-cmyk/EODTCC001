@@ -49,8 +49,7 @@ export async function buyItem(payload: BuyItemPayload): Promise<{ success: boole
 
       const user = userDoc.data() as User;
       const item = itemDoc.data() as Item;
-      const userItems = user.items || [];
-
+      
       // 1. Check if user can afford the item
       if (user.currency < item.price) {
         throw new Error('您的貨幣不足。');
@@ -58,36 +57,40 @@ export async function buyItem(payload: BuyItemPayload): Promise<{ success: boole
 
       // 2. Check race requirement
       if (item.raceId !== 'all' && user.raceId !== item.raceId) {
-        throw new Error('您的種族不符合裝備此道具的條件。');
+        throw new Error('您的種族不符合購買此道具的條件。');
       }
       
-      // 3. Check faction requirement
+      // 3. Check faction requirement - 'wanderer' items are universal
       if (item.factionId !== 'wanderer' && user.factionId !== item.factionId) {
          throw new Error('您的陣營無法購買此道具。');
       }
 
       // 4. Check for unique equipment
-      if (item.itemTypeId === 'equipment' && userItems.includes(item.id)) {
+      if (item.itemTypeId === 'equipment' && (user.items || []).includes(item.id)) {
         throw new Error('您已經擁有此裝備，無法重複購買。');
       }
 
       // All checks passed, perform the updates
       const newCurrency = user.currency - item.price;
       
-      // Correctly handle stackable vs unique items
       let updatedItems;
+      const userItems = user.items || [];
+
       if (item.itemTypeId === 'equipment') {
-        // Use arrayUnion for unique items like equipment
+        // For unique items like equipment, we can still use arrayUnion
         updatedItems = arrayUnion(itemId);
+         transaction.update(userRef, {
+            currency: newCurrency,
+            items: updatedItems
+         });
       } else {
         // For stackable items, append to the array
         updatedItems = [...userItems, itemId];
+         transaction.update(userRef, {
+            currency: newCurrency,
+            items: updatedItems
+         });
       }
-
-      transaction.update(userRef, {
-        currency: newCurrency,
-        items: updatedItems,
-      });
       
       // Create an activity log entry
        const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
