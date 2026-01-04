@@ -117,10 +117,10 @@ export async function submitTask(payload: SubmitTaskPayload) {
 
       if (currencyToAward > 0) userUpdateData.currency = increment(currencyToAward);
       if (honorToAward > 0) userUpdateData.honorPoints = increment(honorToAward);
-      if (taskType.titleAwarded) {
+      if (!taskType.requiresApproval && taskType.titleAwarded) {
           userUpdateData.titles = arrayUnion(taskType.titleAwarded);
       }
-      if (taskType.itemAwarded) {
+      if (!taskType.requiresApproval && taskType.itemAwarded) {
           userUpdateData.items = arrayUnion(taskType.itemAwarded);
       }
 
@@ -164,3 +164,5 @@ export async function submitTask(payload: SubmitTaskPayload) {
     return { error: error.message || '任務提交失敗，請稍後再試。' };
   }
 }
+
+    

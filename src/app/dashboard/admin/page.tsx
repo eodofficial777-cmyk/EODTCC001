@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -1759,7 +1760,6 @@ function RewardDistribution() {
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [allItems, setAllItems] = useState<Item[]>([]);
     const [allTitles, setAllTitles] = useState<Title[]>([]);
-    const [allBattles, setAllBattles] = useState<CombatEncounter[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [mode, setMode] = useState<'filter' | 'single'>('filter');
     const [filters, setFilters] = useState<FilterCriteria>({});
@@ -1775,7 +1775,6 @@ function RewardDistribution() {
             if (data.users) setAllUsers(data.users);
             if (data.items) setAllItems(data.items);
             if (data.titles) setAllTitles(data.titles);
-            if (data.combatEncounters) setAllBattles(data.combatEncounters);
             setIsLoading(false);
         }
         fetchData();
@@ -1859,23 +1858,21 @@ function RewardDistribution() {
                     </RadioGroup>
                     
                     {mode === 'filter' && (
-                        <div className="p-4 border rounded-md bg-muted/30 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <Select onValueChange={v => setFilters(f => ({ ...f, factionId: v === 'all' ? undefined : v }))}>
-                                    <SelectTrigger><SelectValue placeholder="所有陣營" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">所有陣營</SelectItem>
-                                        {Object.values(FACTIONS).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                                 <Select onValueChange={v => setFilters(f => ({ ...f, raceId: v === 'all' ? undefined : v }))}>
-                                    <SelectTrigger><SelectValue placeholder="所有種族" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">所有種族</SelectItem>
-                                        {Object.values(RACES).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <div className="p-4 border rounded-md bg-muted/30 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Select onValueChange={v => setFilters(f => ({ ...f, factionId: v === 'all' ? undefined : v }))}>
+                                <SelectTrigger><SelectValue placeholder="所有陣營" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">所有陣營</SelectItem>
+                                    {Object.values(FACTIONS).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                             <Select onValueChange={v => setFilters(f => ({ ...f, raceId: v === 'all' ? undefined : v }))}>
+                                <SelectTrigger><SelectValue placeholder="所有種族" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">所有種族</SelectItem>
+                                    {Object.values(RACES).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                             <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">榮譽點</Label>
                                 <Select onValueChange={v => setFilters(f => ({ ...f, honorPoints_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
@@ -1889,20 +1886,28 @@ function RewardDistribution() {
                              <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">任務數</Label>
                                 <Select onValueChange={v => setFilters(f => ({ ...f, taskCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
-                                <Input type="number" placeholder="数量" onChange={e => setFilters(f => ({...f, taskCount_val: parseInt(e.target.value)}))}/>
+                                <Input type="number" placeholder="數量" onChange={e => setFilters(f => ({...f, taskCount_val: parseInt(e.target.value)}))}/>
                             </div>
-                             <div className="space-y-2">
-                                <Label>共鬥傷害</Label>
-                                <div className="flex gap-2 items-center">
-                                    <Select onValueChange={v => setFilters(f => ({ ...f, combatEncounterId: v === 'none' ? undefined : v }))}>
-                                        <SelectTrigger><SelectValue placeholder="選擇一場戰鬥"/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">無</SelectItem>
-                                            {allBattles.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    <Input type="number" placeholder="傷害 >" onChange={e => setFilters(f => ({...f, damageDealt_val: parseInt(e.target.value)}))} disabled={!filters.combatEncounterId}/>
-                                </div>
+                            <div className="flex gap-2 items-center">
+                                <Label className="shrink-0">共鬥次數</Label>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, participatedBattleCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="次數" onChange={e => setFilters(f => ({...f, participatedBattleCount_val: parseInt(e.target.value)}))}/>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                                <Label className="shrink-0">倒下次數</Label>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, hpZeroCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="次數" onChange={e => setFilters(f => ({...f, hpZeroCount_val: parseInt(e.target.value)}))}/>
+                            </div>
+                             <div className="flex gap-2 items-center">
+                                <Label className="shrink-0">道具使用</Label>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_id: v as any}))}>
+                                  <SelectTrigger><SelectValue placeholder="選擇道具"/></SelectTrigger>
+                                  <SelectContent>
+                                    {allItems.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="次數" onChange={e => setFilters(f => ({...f, itemUse_val: parseInt(e.target.value)}))}/>
                             </div>
                         </div>
                     )}
@@ -2532,3 +2537,5 @@ export default function AdminPage() {
     </div>
   );
 }
+
+    

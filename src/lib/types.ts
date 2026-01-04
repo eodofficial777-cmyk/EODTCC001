@@ -1,14 +1,4 @@
 
-
-
-
-
-
-
-
-
-
-
 export interface User {
   id: string;
   roleName: string;
@@ -216,3 +206,5 @@ export interface Faction {
     name: string;
     color: string;
 }
+
+    

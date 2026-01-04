@@ -1,7 +1,7 @@
 
 'use server';
 
-import { getFirestore, doc, setDoc, serverTimestamp, collection, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, serverTimestamp, collection, updateDoc, arrayUnion, getDoc, writeBatch, increment } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
@@ -179,3 +179,5 @@ export async function addMonsterToBattle(battleId: string, monsterData: Omit<Mon
         return { success: false, error: error.message || '增加災獸失敗。' };
     }
 }
+
+    
