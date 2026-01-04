@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import { Heart, Shield, Sword, Timer, CheckCircle2, Package, WandSparkles, Bird, Users, EyeOff, Sparkles, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
@@ -725,9 +726,10 @@ export default function BattlegroundPage() {
             <PlayerStatus userData={userData} battleHP={isBattleActive ? battleHP : userData?.attributes.hp} equippedItems={isBattleActive ? equippedItems : []} activeBuffs={isBattleActive ? activeBuffs : []} allItems={allItems} />
             
             <Tabs defaultValue="equipment" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="equipment">裝備</TabsTrigger>
                     <TabsTrigger value="items">道具</TabsTrigger>
+                    <TabsTrigger value="skills">技能</TabsTrigger>
                 </TabsList>
                 <TabsContent value="equipment" className="mt-4">
                      <Card>
@@ -784,6 +786,40 @@ export default function BattlegroundPage() {
                             </Tooltip></TooltipProvider>
                         )) : <p className="text-muted-foreground text-sm text-center py-4">沒有可用的戰鬥道具。</p>}
                      </CardContent></Card>
+                </TabsContent>
+                 <TabsContent value="skills" className="mt-4">
+                     <Card>
+                        <CardHeader>
+                            <CardTitle className='text-base'>技能列表</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-2">
+                             {availableSkills && availableSkills.length > 0 ? availableSkills.map(skill => {
+                                    const cooldownTurns = skillCooldowns[skill.id] || 0;
+                                    const isCoolingDown = cooldownTurns > 0;
+                                    return (
+                                        <TooltipProvider key={skill.id}><Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <div className="flex items-center justify-between p-2 border rounded-md">
+                                                    <span>{skill.name}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {isCoolingDown ? `冷卻中 (${cooldownTurns})` : `CD: ${skill.cooldown}`}
+                                                    </span>
+                                                </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="left" className="max-w-xs">
+                                                <p className="font-bold">{skill.name}</p>
+                                                <p className="text-xs text-muted-foreground mb-2">{skill.description}</p>
+                                                <div className="border-t pt-2 mt-2">
+                                                    {skill.effects.map((effect, i) => (
+                                                        <p key={i} className="text-xs">{formatEffect(effect)}</p>
+                                                    ))}
+                                                </div>
+                                            </TooltipContent>
+                                        </Tooltip></TooltipProvider>
+                                    )
+                                }) : <p className="text-muted-foreground text-sm text-center py-4">沒有可用的技能。</p>}
+                        </CardContent>
+                     </Card>
                 </TabsContent>
             </Tabs>
         </div>
