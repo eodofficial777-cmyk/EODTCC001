@@ -37,8 +37,9 @@ import {
 
 const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
     const [timeLeft, setTimeLeft] = useState('');
+    const firestore = useFirestore();
     const { mutate: mutateBattle } = useCollection<CombatEncounter>(
-        useMemoFirebase(() => collection(useFirestore(), 'combatEncounters'), [])
+        useMemoFirebase(() => collection(firestore, 'combatEncounters'), [firestore])
     );
      const onCountdownFinished = useCallback(() => {
         mutateBattle(); // Re-fetch the battle data
@@ -95,7 +96,7 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
 };
 
 
-const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }) => {
+const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userData: User | null; battleHP: number | undefined; equippedItems: string[]; allItems: Item[] | null }) => {
     const { finalAtkString, finalDefString } = useMemo(() => {
         if (!userData || !allItems) return { finalAtkString: '0', finalDefString: '0' };
 
@@ -167,7 +168,7 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }) => {
 
 const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { monster: Monster, isTargeted: boolean, onSelectTarget: (name: string) => void, isSelectable: boolean }) => {
   const isDefeated = monster.hp <= 0;
-  const maxHp = monster.originalHp || monster.hp;
+  const maxHp = monster.originalHp ?? monster.hp;
   
   return (
     <Card className={cn("overflow-hidden transition-all duration-300 flex flex-col", 
@@ -195,7 +196,7 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { mo
             <span className='flex items-center gap-1'><Heart className="h-3 w-3 text-red-400" /> HP</span>
             <span>{monster.hp.toLocaleString()} / {maxHp.toLocaleString()}</span>
           </div>
-          <Progress value={(monster.hp / maxHp) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
+          <Progress value={(monster.hp / (maxHp || 1)) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
         </div>
         <div className="text-xs font-mono flex items-center justify-between text-muted-foreground">
            <span className='flex items-center gap-1'><Sword className="h-3 w-3" /> ATK</span>
@@ -213,7 +214,7 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { mo
   )
 }
 
-const ActionCooldown = ({ cooldown, onCooldownEnd }) => {
+const ActionCooldown = ({ cooldown, onCooldownEnd }: { cooldown: number, onCooldownEnd: () => void }) => {
     const [progress, setProgress] = useState(100);
     const totalDuration = 20; // 20 seconds
 
@@ -288,10 +289,20 @@ export default function BattlegroundPage() {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [actionCooldown, setActionCooldown] = useState<number>(0);
   const [isAttacking, setIsAttacking] = useState(false);
+  const [battleHP, setBattleHP] = useState<number | undefined>(undefined);
   
   const participantData = useMemo(() => currentBattle?.participants?.[user?.uid ?? ''], [currentBattle, user]);
-  const battleHP = participantData?.hp;
   
+  useEffect(() => {
+    // Initialize or update battleHP when participantData or userData changes
+    if (participantData) {
+      setBattleHP(participantData.hp);
+    } else if (userData) {
+      setBattleHP(userData.attributes.hp);
+    }
+  }, [participantData, userData]);
+
+
   const supportedFaction = participantData?.supportedFaction;
   const equippedItems = participantData?.equippedItems || [];
   
@@ -325,15 +336,15 @@ export default function BattlegroundPage() {
 
     setIsAttacking(true);
     try {
-        const result = await performAttack({
+        const { success, error, logMessage } = await performAttack({
             userId: user.uid,
             battleId: currentBattle.id,
             targetMonsterName: selectedTarget,
             equippedItemIds: equippedItems,
-            supportedFaction: supportedFaction
+            supportedFaction: supportedFaction || null
         });
 
-        if (result.error) throw new Error(result.error);
+        if (error) throw new Error(error);
         
         setActionCooldown(Date.now());
     } catch (error: any) {
@@ -417,7 +428,7 @@ export default function BattlegroundPage() {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Battle Area */}
         <div className="lg:col-span-2 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {monstersToDisplay.map((monster, index) => (
                     <MonsterCard 
                         key={`${monster.name}-${index}`}
@@ -441,7 +452,7 @@ export default function BattlegroundPage() {
                     </CardContent>
                 </Card>
             )}
-
+            
             <Card>
                 <CardHeader><CardTitle>行動</CardTitle></CardHeader>
                 <CardContent className="flex items-center gap-4">
@@ -453,6 +464,7 @@ export default function BattlegroundPage() {
                      <ActionCooldown cooldown={actionCooldown} onCooldownEnd={() => setActionCooldown(0)} />
                 </CardContent>
             </Card>
+
 
             <Card>
                 <CardHeader><CardTitle>共鬥紀錄</CardTitle></CardHeader>
