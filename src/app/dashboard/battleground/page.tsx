@@ -5,9 +5,9 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -67,9 +67,9 @@ const PreparationCountdown = ({ preparationEndTime, battleName, onFinished }: { 
 };
 
 
-const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { monster: Monster, isTargeted: boolean, onSelectTarget: (id: string) => void, isSelectable: boolean }) => {
-  const monsterMaxHp = monster.hp; // This needs to be the original HP
-  const currentHp = monster.hp; // This is the current, changing HP
+const MonsterCard = ({ monster, originalHp, isTargeted, onSelectTarget, isSelectable }: { monster: Monster, originalHp: number, isTargeted: boolean, onSelectTarget: (name: string) => void, isSelectable: boolean }) => {
+  const currentHpPercentage = originalHp > 0 ? (monster.hp / originalHp) * 100 : 0;
+  
   return (
     <Card className={`overflow-hidden transition-all duration-300 ${isTargeted && isSelectable ? 'border-primary ring-2 ring-primary' : ''}`}>
        <div className="relative aspect-square w-full">
@@ -89,9 +89,9 @@ const MonsterCard = ({ monster, isTargeted, onSelectTarget, isSelectable }: { mo
         <div className="space-y-1">
           <div className="flex justify-between items-center text-xs font-mono">
             <span className='flex items-center gap-1'><Heart className="h-3 w-3 text-red-400" /> HP</span>
-            <span>{currentHp.toLocaleString()} / {monsterMaxHp.toLocaleString()}</span>
+            <span>{monster.hp.toLocaleString()} / {originalHp.toLocaleString()}</span>
           </div>
-          <Progress value={(currentHp / monsterMaxHp) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
+          <Progress value={currentHpPercentage} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
         </div>
         <div className="text-xs font-mono flex items-center justify-between text-muted-foreground">
            <span className='flex items-center gap-1'><Sword className="h-3 w-3" /> ATK</span>
@@ -141,6 +141,10 @@ const ActionCooldown = ({ cooldown, onCooldownEnd }: { cooldown: number, onCoold
 
     return (
         <div className="p-2">
+             <div className="flex justify-between text-xs font-mono text-muted-foreground mb-1 px-1">
+                <span>行動冷卻中...</span>
+                <span>{Math.max(0, totalDuration - ((Date.now() - cooldown) / 1000)).toFixed(1)}s</span>
+            </div>
             <Progress value={100 - progress} className="h-2" />
         </div>
     );
@@ -164,7 +168,7 @@ export default function BattlegroundPage() {
   const currentBattle = battleData?.[0];
 
   const battleLogsQuery = useMemoFirebase(
-    () => (firestore && currentBattle ? query(collection(firestore, `combatEncounters/${currentBattle.id}/combatLogs`), orderBy('timestamp', 'asc')) : null),
+    () => (firestore && currentBattle ? query(collection(firestore, `combatEncounters/${currentBattle.id}/combatLogs`), orderBy('timestamp', 'desc')) : null),
     [firestore, currentBattle]
   );
   const { data: battleLogs } = useCollection<CombatLog>(battleLogsQuery);
@@ -186,6 +190,7 @@ export default function BattlegroundPage() {
   const [equippedItems, setEquippedItems] = useState<string[]>([]);
   const [actionCooldown, setActionCooldown] = useState<number>(0);
   const [isAttacking, setIsAttacking] = useState(false);
+  const [originalMonsterHPs, setOriginalMonsterHPs] = useState<Record<string, number>>({});
   
   // --- Computed Values & Memos ---
   const isWanderer = userData?.factionId === 'wanderer';
@@ -235,10 +240,31 @@ export default function BattlegroundPage() {
 
   // --- Effects ---
   useEffect(() => {
-    if (userData?.attributes.hp && combatStatus === 'active') {
+    // Reset HP and cooldown when a new battle starts or when user data is loaded
+    if (userData?.attributes.hp) {
       setBattleHP(userData.attributes.hp);
+      setActionCooldown(0);
     }
-  }, [combatStatus, userData?.attributes.hp]);
+  }, [currentBattle?.id, userData?.attributes.hp]);
+
+  useEffect(() => {
+    // Store the original HP of monsters when the battle data is first loaded or changes
+    if (currentBattle?.monsters) {
+      const initialHPs = currentBattle.monsters.reduce((acc, monster) => {
+        if (!originalMonsterHPs[monster.name]) { // Only set if not already set
+            acc[monster.name] = monster.hp;
+        } else {
+            acc[monster.name] = originalMonsterHPs[monster.name];
+        }
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // We only set this once per battle to avoid issues with live updates
+      if (Object.keys(originalMonsterHPs).length === 0 || !originalMonsterHPs[currentBattle.monsters[0].name]) {
+          setOriginalMonsterHPs(initialHPs);
+      }
+    }
+  }, [currentBattle?.monsters, currentBattle?.id]);
 
   // --- Handlers ---
   const handleSupportFaction = (factionId: 'yelu' | 'association') => {
@@ -256,12 +282,13 @@ export default function BattlegroundPage() {
         if (prev.length < 2) {
             return [...prev, itemId];
         }
-        return prev; // Do nothing if already 2 items are equipped
+        toast({ variant: 'destructive', title: '裝備已滿', description: '最多只能裝備兩件物品。'})
+        return prev;
     });
   }
   
   const handleAttack = async () => {
-    if (!user || !currentBattle || !selectedTarget || isAttacking || isOnCooldown) return;
+    if (!user || !currentBattle || !selectedTarget || isAttacking || isOnCooldown || hasFallen) return;
 
     setIsAttacking(true);
     try {
@@ -274,10 +301,15 @@ export default function BattlegroundPage() {
 
         if (result.error) throw new Error(result.error);
         
-        toast({ title: "攻擊成功", description: "你對災獸造成了傷害，但也受到了反擊！" });
+        // Frontend state updates for immediate feedback
+        if(result.monsterDamageDealt) {
+            setBattleHP(prevHp => Math.max(0, prevHp - (result.monsterDamageDealt ?? 0)));
+        }
+        
+        // This will trigger a re-render with fresh data from the backend, including monster HP and new logs
+        mutateBattle(); 
+        
         setActionCooldown(Date.now());
-        mutateBattle(); // Re-fetch battle data to update monster HP
-        mutateUser();   // Re-fetch user data to update player HP (when implemented)
 
     } catch (error: any) {
         toast({ variant: 'destructive', title: '攻擊失敗', description: error.message });
@@ -309,7 +341,7 @@ export default function BattlegroundPage() {
          <Card>
             <CardHeader>
               <CardTitle>{FACTIONS[factionId]?.name} 災獸</CardTitle>
-              {combatStatus === 'active' && <CardDescription>當前回合：{currentBattle?.turn || 1}</CardDescription>}
+              {combatStatus === 'active' && <CardDescription>下一回合：20秒</CardDescription>}
             </CardHeader>
             <CardContent>
               {monsters.length > 0 ? (
@@ -318,6 +350,7 @@ export default function BattlegroundPage() {
                     <MonsterCard 
                       key={index} 
                       monster={monster}
+                      originalHp={originalMonsterHPs[monster.name] || monster.hp}
                       isTargeted={selectedTarget === monster.name}
                       onSelectTarget={() => setSelectedTarget(monster.name)}
                       isSelectable={combatStatus === 'active' && !hasFallen}
@@ -332,6 +365,35 @@ export default function BattlegroundPage() {
        )
   }
   
+  const renderLogOrCountdown = () => {
+    if (combatStatus === 'preparing' && preparationEndTime) {
+        return <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle?.name || ''} onFinished={handleCountdownFinished} />;
+    }
+    
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>共鬥紀錄</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <ScrollArea className="h-48">
+                <div className="space-y-3 text-sm font-mono">
+                    {battleLogs && battleLogs.length > 0 ? battleLogs.map(log => (
+                    <p key={log.id}>
+                        <span className="text-muted-foreground mr-2">[{new Date(log.timestamp?.toDate()).toLocaleTimeString()}]</span>
+                        {log.logData}
+                    </p>
+                    )) : (
+                    <p><span className="text-muted-foreground mr-2">[{new Date().toLocaleTimeString()}]</span> 戰鬥開始！</p>
+                    )}
+                    {hasFallen && <p className="text-red-500">[{new Date().toLocaleTimeString()}] 您的HP已歸零，無法繼續行動。</p>}
+                </div>
+                </ScrollArea>
+            </CardContent>
+        </Card>
+    );
+}
+
   const renderContent = (factionId: 'yelu' | 'association') => {
     if (isBattleLoading) {
       return (
@@ -356,30 +418,7 @@ export default function BattlegroundPage() {
     return (
       <div className="space-y-6">
         <div>{renderMonsters(factionId)}</div>
-        {combatStatus === 'preparing' && preparationEndTime ? (
-            <PreparationCountdown preparationEndTime={preparationEndTime} battleName={currentBattle.name} onFinished={handleCountdownFinished} />
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>共鬥紀錄</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-40">
-                <div className="space-y-3 text-sm font-mono">
-                  {battleLogs && battleLogs.length > 0 ? battleLogs.map(log => (
-                    <p key={log.id}>
-                      <span className="text-primary mr-2">[回合 {log.turn}]</span>
-                      {log.logData}
-                    </p>
-                  )) : (
-                     <p><span className="text-primary">[回合 {currentBattle.turn}]</span> 戰鬥開始！</p>
-                  )}
-                  {hasFallen && <p className="text-red-500">[系統] 您的HP已歸零，無法繼續行動。</p>}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        )}
+        {renderLogOrCountdown()}
          {combatStatus === 'preparing' && isWanderer && !supportedFaction && (
           <Alert className="mt-4">
             <Info className="h-4 w-4" />

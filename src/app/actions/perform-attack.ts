@@ -6,10 +6,8 @@ import {
   runTransaction,
   serverTimestamp,
   collection,
-  writeBatch,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
 import type { User, Item, CombatEncounter, Monster } from '@/lib/types';
 
@@ -28,8 +26,18 @@ interface PerformAttackPayload {
   equippedItemIds: string[];
 }
 
+export interface PerformAttackResult {
+    success: boolean;
+    error?: string;
+    playerDamageDealt?: number;
+    monsterDamageDealt?: number;
+    logMessage?: string;
+}
+
+
 // Helper function to parse dice notation like "1d6" or "2d10" and return the sum of rolls
 function rollDice(diceNotation: string): number {
+  if (!diceNotation || !diceNotation.includes('d')) return 0;
   const [numDice, numSides] = diceNotation.toLowerCase().split('d').map(Number);
   if (isNaN(numDice) || isNaN(numSides)) return 0;
   let total = 0;
@@ -41,6 +49,7 @@ function rollDice(diceNotation: string): number {
 
 // Helper function to parse ATK strings like "20+1d10"
 function parseAtk(atkString: string): number {
+  if(!atkString) return 0;
   const parts = atkString.split('+');
   let totalAtk = parseInt(parts[0], 10) || 0;
   if (parts[1]) {
@@ -50,7 +59,7 @@ function parseAtk(atkString: string): number {
 }
 
 
-export async function performAttack(payload: PerformAttackPayload): Promise<{ success: boolean; error?: string }> {
+export async function performAttack(payload: PerformAttackPayload): Promise<PerformAttackResult> {
   const { userId, battleId, targetMonsterName, equippedItemIds } = payload;
   if (!userId || !battleId || !targetMonsterName) {
     return { success: false, error: '缺少必要的戰鬥資訊。' };
@@ -60,7 +69,7 @@ export async function performAttack(payload: PerformAttackPayload): Promise<{ su
   const battleRef = doc(db, 'combatEncounters', battleId);
 
   try {
-    await runTransaction(db, async (transaction) => {
+    const { playerDamage, monsterDamage, logMessage } = await runTransaction(db, async (transaction) => {
       const userDoc = await transaction.get(userRef);
       const battleDoc = await transaction.get(battleRef);
 
@@ -69,9 +78,9 @@ export async function performAttack(payload: PerformAttackPayload): Promise<{ su
 
       const user = userDoc.data() as User;
       const battle = battleDoc.data() as CombatEncounter;
-      const playerCurrentHp = user.attributes.hp; // This will need to be tracked separately in a future update
-
-      if (playerCurrentHp <= 0) throw new Error('您的 HP 已歸零，無法行動。');
+      
+      // We will manage HP on the client-side for immediate feedback, so we don't need to read it here.
+      // But we must check the battle status.
       if (battle.status !== 'active') throw new Error('戰場目前不是戰鬥狀態。');
       
       const targetMonsterIndex = battle.monsters.findIndex(m => m.name === targetMonsterName);
@@ -82,7 +91,6 @@ export async function performAttack(payload: PerformAttackPayload): Promise<{ su
 
       // --- 1. Calculate Player Damage ---
       let playerBaseAtk = user.attributes.atk;
-      let playerDamageLog = `玩家 ${user.roleName} 的基礎攻擊力為 ${playerBaseAtk}。`;
 
       // Fetch equipped items and calculate bonuses
       if (equippedItemIds.length > 0) {
@@ -93,75 +101,41 @@ export async function performAttack(payload: PerformAttackPayload): Promise<{ su
                 item.effects.forEach(effect => {
                     if ('attribute' in effect && effect.attribute === 'atk' && effect.operator === '+') {
                         playerBaseAtk += effect.value;
-                        playerDamageLog += ` 裝備 ${item.name} 增加 ${effect.value} 攻擊力。`;
+                    }
+                     if ('attribute' in effect && effect.attribute === 'atk' && effect.operator === 'd') {
+                        playerBaseAtk += rollDice(`1d${effect.value}`);
                     }
                 });
             }
         });
       }
-      const playerFinalDamage = playerBaseAtk; // For now, no dice rolls on player side
-      playerDamageLog += ` 最終對 ${targetMonster.name} 造成 ${playerFinalDamage} 點傷害。`;
       
-      targetMonster.hp = Math.max(0, targetMonster.hp - playerFinalDamage);
-      playerDamageLog += ` ${targetMonster.name} 剩餘 HP: ${targetMonster.hp}。`;
-
+      const finalPlayerDamage = playerBaseAtk;
+      targetMonster.hp = Math.max(0, targetMonster.hp - finalPlayerDamage);
+      
       // --- 2. Calculate Monster Damage ---
       const monsterBaseAtkString = targetMonster.atk;
-      const monsterFinalDamage = parseAtk(monsterBaseAtkString);
-      const playerNewHp = Math.max(0, playerCurrentHp - monsterFinalDamage);
-      const monsterDamageLog = `災獸 ${targetMonster.name} 反擊，對 ${user.roleName} 造成 ${monsterFinalDamage} 點傷害。玩家剩餘 HP: ${playerNewHp}。`;
+      const finalMonsterDamage = parseAtk(monsterBaseAtkString);
 
-      // --- 3. Update Firestore Documents ---
+      // --- 3. Update Firestore Battle Document ---
       const updatedMonsters = [...battle.monsters];
       updatedMonsters[targetMonsterIndex] = targetMonster;
-      
       transaction.update(battleRef, { monsters: updatedMonsters });
-      // In a future update, we'll track battle-specific HP on the user or a subcollection.
-      // For now, we are not persisting player HP change.
       
-      // --- 4. Create Battle Log Entries ---
-      const logBatch = writeBatch(db);
-      const playerLogRef = doc(collection(battleRef, 'combatLogs'));
-      logBatch.set(playerLogRef, {
-        id: playerLogRef.id,
-        encounterId: battleId,
-        logData: playerDamageLog,
-        timestamp: serverTimestamp(),
-        turn: battle.turn,
-        type: 'player_attack'
-      });
-      
-      const monsterLogRef = doc(collection(battleRef, 'combatLogs'));
-      logBatch.set(monsterLogRef, {
-        id: monsterLogRef.id,
-        encounterId: battleId,
-        logData: monsterDamageLog,
-        timestamp: serverTimestamp(),
-        turn: battle.turn,
-        type: 'monster_attack'
+      // --- 4. Create a single, consolidated Battle Log Entry ---
+      const consolidatedLogMessage = `您對 ${targetMonster.name} 造成 ${finalPlayerDamage} 點傷害，並受到 ${finalMonsterDamage} 點反擊傷害。`;
+      const battleLogRef = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
+      transaction.set(battleLogRef, {
+           logData: consolidatedLogMessage,
+           timestamp: serverTimestamp(),
+           turn: battle.turn, // Turn can still be useful for other mechanics
+           type: 'player_attack'
       });
 
-      // This is a separate batch, but transactions guarantee it won't commit if the above fails.
-      // However, we need to commit this outside the transaction. We'll handle this in the calling function.
-      // For now, let's just create the logs. The transaction ensures we read consistent data.
-       const battleLogRefPlayer = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
-       transaction.set(battleLogRefPlayer, {
-           logData: playerDamageLog,
-           timestamp: serverTimestamp(),
-           turn: battle.turn,
-           type: 'player_attack'
-       });
-       
-       const battleLogRefMonster = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
-       transaction.set(battleLogRefMonster, {
-           logData: monsterDamageLog,
-           timestamp: serverTimestamp(),
-           turn: battle.turn,
-           type: 'monster_attack'
-       });
+      return { playerDamage: finalPlayerDamage, monsterDamage: finalMonsterDamage, logMessage: consolidatedLogMessage };
     });
 
-    return { success: true };
+    return { success: true, playerDamageDealt: playerDamage, monsterDamageDealt: monsterDamage, logMessage };
   } catch (error: any) {
     console.error('Attack failed:', error);
     return { success: false, error: error.message || '攻擊失敗，請稍後再試。' };
