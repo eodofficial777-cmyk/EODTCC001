@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, Item, CombatEncounter, Monster, AttributeEffect, ActiveBuff } from '@/lib/types';
+import type { User, Item, CombatEncounter, Monster, AttributeEffect, ActiveBuff, Participant } from '@/lib/types';
 
 let app: App;
 if (!getApps().length) {
@@ -184,16 +184,21 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       const updatedMonsters = [...battle.monsters];
       updatedMonsters[targetMonsterIndex] = targetMonster;
       
+      const updatedParticipantData: Participant = {
+        ...playerParticipantData,
+        hp: playerParticipantData.hp,
+        equippedItems: equippedItemIds,
+        activeBuffs: updatedBuffs,
+        skillCooldowns: updatedCooldowns,
+      };
+
+      if (user.factionId === 'wanderer' && supportedFaction) {
+        updatedParticipantData.supportedFaction = supportedFaction;
+      }
+      
       const updatedParticipants = {
           ...battle.participants,
-          [userId]: {
-              ...playerParticipantData,
-              hp: playerParticipantData.hp,
-              equippedItems: equippedItemIds,
-              supportedFaction: user.factionId === 'wanderer' ? supportedFaction : undefined,
-              activeBuffs: updatedBuffs,
-              skillCooldowns: updatedCooldowns,
-          }
+          [userId]: updatedParticipantData
       };
 
       transaction.update(battleRef, { 
