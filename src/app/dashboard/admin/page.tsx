@@ -1612,13 +1612,13 @@ function TitleEditor({ title, items, onSave, onCancel, isSaving }: { title: Part
                         {editedTitle.trigger?.type === 'item_damage' && (
                             <div className="space-y-2">
                                 <Label>每次所需傷害 (A)</Label>
-                                <Input type="number" placeholder="傷害閾值" value={editedTitle.trigger.damageThreshold || ''} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, damageThreshold: parseInt(e.target.value) || 0} : undefined}))}/>
+                                <Input type="number" placeholder="傷害閾值" value={editedTitle.trigger.damageThreshold ?? ''} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, damageThreshold: parseInt(e.target.value) || 0} : undefined}))}/>
                             </div>
                         )}
 
                         <div className="space-y-2">
                              <Label>目標達成次數 / 數值 (X)</Label>
-                            <Input type="number" placeholder="目標數值 (例如: 100)" value={editedTitle.trigger?.value || ''} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, value: parseInt(e.target.value) || 0} : undefined}))}/>
+                            <Input type="number" placeholder="目標數值 (例如: 100)" value={editedTitle.trigger?.value ?? ''} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, value: parseInt(e.target.value) || 0} : undefined}))}/>
                         </div>
                     </div>
                 )}
@@ -2119,7 +2119,7 @@ function BattleManagement() {
         setIsLoading(true);
         try {
             const allMonsters = [...yeluMonsters, ...associationMonsters, ...commonMonsters];
-            const result = await createBattle({ name: battleName, monsters: allMonsters as Omit<Monster, 'originalHp' | 'monsterId'>[], rewards });
+            const result = await createBattle({ name: battleName, monsters: allMonsters as Omit<Monster, 'monsterId' | 'originalHp'>[], rewards });
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: `戰場「${battleName}」已開啟！準備時間 30 分鐘。` });
             setBattleName('');
@@ -2354,7 +2354,7 @@ function BattleManagement() {
                 </CardContent>
                 <CardFooter>
                     <Button onClick={handleCreateBattle} disabled={isLoading || (!!currentBattle && currentBattle.status !== 'ended')} className="w-full">
-                        {isLoading ? "開啟中..." : (!!currentBattle && currentBattle.status !== 'ended') ? '有戰場正在進行中' : "確認並開啟戰場"}
+                        {isLoading ? "開啟中..." : (!!currentBattle && currentBattle.status !== 'ended') ? '有戰場正在進行中' : "確認并開啟戰場"}
                     </Button>
                 </CardFooter>
             </Card>
