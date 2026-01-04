@@ -1,4 +1,5 @@
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -137,6 +138,7 @@ export interface MaintenanceStatus {
 }
 
 export interface Monster {
+    monsterId: string;
     name: string;
     factionId: string;
     imageUrl: string;

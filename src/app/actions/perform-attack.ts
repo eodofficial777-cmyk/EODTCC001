@@ -22,7 +22,7 @@ const db = getFirestore(app);
 interface PerformAttackPayload {
   userId: string;
   battleId: string;
-  targetMonsterName: string;
+  targetMonsterId: string;
   equippedItemIds: string[];
   supportedFaction: 'yelu' | 'association' | null;
 }
@@ -31,6 +31,8 @@ export interface PerformAttackResult {
     success: boolean;
     error?: string;
     logMessage?: string;
+    monsterDamage?: number;
+    playerDamage?: number;
 }
 
 function rollDice(diceNotation: string): number {
@@ -59,8 +61,8 @@ function parseAtk(atkString: string | undefined): number {
 
 
 export async function performAttack(payload: PerformAttackPayload): Promise<PerformAttackResult> {
-  const { userId, battleId, targetMonsterName, equippedItemIds, supportedFaction } = payload;
-  if (!userId || !battleId || !targetMonsterName) {
+  const { userId, battleId, targetMonsterId, equippedItemIds, supportedFaction } = payload;
+  if (!userId || !battleId || !targetMonsterId) {
     return { success: false, error: '缺少必要的戰鬥資訊。' };
   }
 
@@ -68,7 +70,7 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
   const battleRef = doc(db, 'combatEncounters', battleId);
 
   try {
-    const { logMessage } = await runTransaction(db, async (transaction) => {
+    const { logMessage, playerDamage, monsterDamage } = await runTransaction(db, async (transaction) => {
       const userDoc = await transaction.get(userRef);
       const battleDoc = await transaction.get(battleRef);
 
@@ -80,7 +82,7 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       
       if (battle.status !== 'active') throw new Error('戰場目前不是戰鬥狀態。');
       
-      const targetMonsterIndex = battle.monsters.findIndex(m => m.name === targetMonsterName);
+      const targetMonsterIndex = battle.monsters.findIndex(m => m.monsterId === targetMonsterId);
       if (targetMonsterIndex === -1) throw new Error('找不到指定的目標。');
       
       const targetMonster = { ...battle.monsters[targetMonsterIndex] };
@@ -162,10 +164,10 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
            type: 'player_attack'
       });
 
-      return { logMessage: consolidatedLogMessage };
+      return { logMessage: consolidatedLogMessage, playerDamage: finalMonsterDamage, monsterDamage: finalPlayerDamage };
     });
 
-    return { success: true, logMessage };
+    return { success: true, logMessage, playerDamage: playerDamage, monsterDamage: monsterDamage };
   } catch (error: any) {
     console.error('Attack failed:', error);
     return { success: false, error: error.message || '攻擊失敗，請稍後再試。' };

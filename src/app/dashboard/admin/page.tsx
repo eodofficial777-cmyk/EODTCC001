@@ -2064,7 +2064,7 @@ function BattleManagement() {
         setIsLoading(true);
         try {
             const allMonsters = [...yeluMonsters.map(m => ({...m, factionId: 'yelu'})), ...associationMonsters.map(m => ({...m, factionId: 'association'}))];
-            const result = await createBattle({ name: battleName, monsters: allMonsters as Monster[] });
+            const result = await createBattle({ name: battleName, monsters: allMonsters as Omit<Monster, 'originalHp' | 'monsterId'>[] });
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: `戰場「${battleName}」已開啟！準備時間 30 分鐘。` });
             setBattleName('');

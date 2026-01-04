@@ -5,6 +5,8 @@ import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
 import type { CombatEncounter, Monster } from '@/lib/types';
+import { randomUUID } from 'crypto';
+
 
 const ADMIN_EMAIL = 'admin@eodtcc.com';
 const ADMIN_PASSWORD = 'password';
@@ -32,7 +34,7 @@ async function ensureAdminAuth() {
 
 interface CreateBattlePayload {
   name: string;
-  monsters: Omit<Monster, 'originalHp'>[];
+  monsters: Omit<Monster, 'originalHp' | 'monsterId'>[];
 }
 
 export async function createBattle(payload: CreateBattlePayload): Promise<{ success: boolean; error?: string }> {
@@ -48,6 +50,7 @@ export async function createBattle(payload: CreateBattlePayload): Promise<{ succ
     
     const processedMonsters: Monster[] = monsters.map(m => ({
         ...m,
+        monsterId: randomUUID(), // Assign a unique ID to each monster
         originalHp: m.hp, // Set originalHp to the initial HP
     }))
 

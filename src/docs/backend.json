@@ -594,6 +594,7 @@
       "type": "object",
       "description": "Represents a monster in a combat encounter.",
       "properties": {
+        "monsterId": { "type": "string" },
         "name": { "type": "string" },
         "factionId": { "type": "string" },
         "imageUrl": { "type": "string", "format": "uri" },
@@ -601,7 +602,7 @@
         "originalHp": { "type": "number" },
         "atk": { "type": "string" }
       },
-      "required": ["name", "factionId", "hp", "originalHp", "atk"]
+      "required": ["monsterId", "name", "factionId", "hp", "originalHp", "atk"]
     },
     "Title": {
       "$schema": "http://json-schema.org/draft-07/schema#",
