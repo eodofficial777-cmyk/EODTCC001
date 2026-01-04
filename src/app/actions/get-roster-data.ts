@@ -22,11 +22,29 @@ if (!getApps().length) {
 }
 const db = getFirestore(app);
 
+// In-memory cache for roster data
+let rosterCache: {
+  data: {
+    allUsers?: User[];
+    rosterByFaction?: Record<string, User[]>;
+  };
+  timestamp: number;
+} | null = null;
+
+
 export async function getRosterData(): Promise<{
   allUsers?: User[];
   rosterByFaction?: Record<string, User[]>;
   error?: string;
 }> {
+  const now = Date.now();
+  const oneHour = 60 * 60 * 1000;
+
+  // Check if cache is valid (not null and less than 1 hour old)
+  if (rosterCache && (now - rosterCache.timestamp < oneHour)) {
+    return rosterCache.data;
+  }
+  
   try {
     const usersQuery = query(
       collection(db, 'users'),
@@ -61,10 +79,18 @@ export async function getRosterData(): Promise<{
       }
     });
 
-    return {
+    const newData = {
       allUsers,
       rosterByFaction,
     };
+    
+    // Update the cache
+    rosterCache = {
+      data: newData,
+      timestamp: now,
+    };
+
+    return newData;
   } catch (error: any) {
     console.error('Error fetching roster data:', error);
     return { error: `無法獲取名冊資料：${error.message}` };
