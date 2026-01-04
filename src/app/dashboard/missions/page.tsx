@@ -55,7 +55,7 @@ import { getUserTasks } from '@/app/actions/get-user-tasks';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { RefreshCw, Gift, Award, Heart, Shield, Gem } from 'lucide-react';
-import type { TaskType } from '@/lib/types';
+import type { TaskType, Title, Item } from '@/lib/types';
 
 
 const formSchema = z.object({
@@ -73,11 +73,15 @@ function MissionSubmitForm({
   user,
   userData,
   taskTypes,
+  allItems,
+  allTitles,
   onTaskSubmitted,
 }: {
   user: any;
   userData: any;
   taskTypes: TaskType[];
+  allItems: Item[];
+  allTitles: Title[];
   onTaskSubmitted: () => void;
 }) {
   const { toast } = useToast();
@@ -92,7 +96,11 @@ function MissionSubmitForm({
   const isSubmitting = form.formState.isSubmitting;
   const isWanderer = userData?.factionId === 'wanderer';
 
-  const userSubmittedTaskIds = userData?.tasks || [];
+  const userSubmittedTaskTypeIds = React.useMemo(() => {
+    if (!userData?.tasks) return [];
+    return userData.tasks.map((t: any) => t.taskTypeId);
+  }, [userData?.tasks]);
+
 
   const taskCategories = React.useMemo(() => {
     if (!taskTypes) return [];
@@ -116,6 +124,17 @@ function MissionSubmitForm({
   });
 
   const selectedTaskType = taskTypes.find(t => t.id === selectedTaskTypeId);
+  
+  const titleAwardedName = React.useMemo(() => {
+      if (!selectedTaskType?.titleAwarded || !allTitles) return null;
+      return allTitles.find(t => t.id === selectedTaskType.titleAwarded)?.name;
+  }, [selectedTaskType, allTitles]);
+
+  const itemAwardedName = React.useMemo(() => {
+      if (!selectedTaskType?.itemAwarded || !allItems) return null;
+      return allItems.find(i => i.id === selectedTaskType.itemAwarded)?.name;
+  }, [selectedTaskType, allItems]);
+
 
   React.useEffect(() => {
     if (form.getValues('taskCategory')) {
@@ -134,7 +153,7 @@ function MissionSubmitForm({
       return;
     }
 
-    if (isWanderer && selectedTaskType && !values.factionContribution) {
+    if (isWanderer && selectedTaskType && selectedTaskType.honorPoints > 0 && !values.factionContribution) {
       form.setError('factionContribution', {
         message: '身為流浪者，請選擇要貢獻的對象。',
       });
@@ -230,10 +249,10 @@ function MissionSubmitForm({
                           <SelectItem
                             key={task.id}
                             value={task.id}
-                            disabled={task.singleSubmission && userSubmittedTaskIds.includes(task.id)}
+                            disabled={task.singleSubmission && userSubmittedTaskTypeIds.includes(task.id)}
                           >
                             {task.name}
-                            {task.singleSubmission && userSubmittedTaskIds.includes(task.id) && ' (已完成)'}
+                            {task.singleSubmission && userSubmittedTaskTypeIds.includes(task.id) && ' (已完成)'}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -250,13 +269,13 @@ function MissionSubmitForm({
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   <div className="flex items-center gap-2"><Shield className="h-4 w-4 text-primary" /> 榮譽點: {selectedTaskType.honorPoints}</div>
                   <div className="flex items-center gap-2"><Gem className="h-4 w-4 text-primary" /> 貨幣: {selectedTaskType.currency}</div>
-                  {selectedTaskType.titleAwarded && <div className="flex items-center gap-2"><Award className="h-4 w-4 text-primary" /> 稱號: {selectedTaskType.titleAwarded}</div>}
-                  {selectedTaskType.itemAwarded && <div className="flex items-center gap-2"><Gift className="h-4 w-4 text-primary" /> 物品: {selectedTaskType.itemAwarded}</div>}
+                  {titleAwardedName && <div className="flex items-center gap-2"><Award className="h-4 w-4 text-primary" /> 稱號: {titleAwardedName}</div>}
+                  {itemAwardedName && <div className="flex items-center gap-2"><Gift className="h-4 w-4 text-primary" /> 物品: {itemAwardedName}</div>}
                 </div>
               </Card>
             )}
 
-            {isWanderer && selectedTaskType && (
+            {isWanderer && selectedTaskType && selectedTaskType.honorPoints > 0 && (
               <FormField
                 control={form.control}
                 name="factionContribution"
@@ -548,6 +567,12 @@ export default function MissionsPage() {
     [firestore]
   );
   const { data: taskTypes, isLoading: areTaskTypesLoading } = useCollection<TaskType>(taskTypesQuery);
+  
+  const allItemsQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'items') : null), [firestore]);
+  const { data: allItems, isLoading: areItemsLoading } = useCollection<Item>(allItemsQuery);
+  
+  const allTitlesQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'titles') : null), [firestore]);
+  const { data: allTitles, isLoading: areTitlesLoading } = useCollection<Title>(allTitlesQuery);
 
   const { toast } = useToast();
 
@@ -580,8 +605,10 @@ export default function MissionsPage() {
     loadTasks();
   }, [loadTasks]);
 
-  const isLoading = isUserLoading || isUserDataLoading || areTaskTypesLoading;
+  const isLoading = isUserLoading || isUserDataLoading || areTaskTypesLoading || areItemsLoading || areTitlesLoading;
   const safeTaskTypes = taskTypes || [];
+  const safeAllItems = allItems || [];
+  const safeAllTitles = allTitles || [];
 
   return (
     <div className="w-full">
@@ -598,7 +625,14 @@ export default function MissionsPage() {
                     </CardContent>
                 </Card>
                 ) : user && userData && taskTypes ? (
-                <MissionSubmitForm user={user} userData={userData} taskTypes={safeTaskTypes} onTaskSubmitted={handleTaskSubmitted} />
+                <MissionSubmitForm 
+                    user={user} 
+                    userData={userData} 
+                    taskTypes={safeTaskTypes}
+                    allItems={safeAllItems}
+                    allTitles={safeAllTitles}
+                    onTaskSubmitted={handleTaskSubmitted} 
+                />
                 ) : (
                 <Card>
                     <CardHeader>
