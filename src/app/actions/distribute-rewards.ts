@@ -91,53 +91,79 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
     await ensureAdminAuth();
     const { targetUserIds, filters, rewards } = payload;
     let finalUserIds: string[] = [];
+    let finalUsersDataForPreview: { id: string; roleName: string }[] = [];
 
+    if (rewards.logMessage === 'Preview') {
+       if (targetUserIds && targetUserIds.length > 0) {
+            const userDocs = await Promise.all(targetUserIds.map(id => getDoc(doc(db, 'users', id))));
+            finalUsersDataForPreview = userDocs
+                .filter(snap => snap.exists())
+                .map(snap => ({ id: snap.id, roleName: (snap.data() as User).roleName }));
+        } else if (filters) {
+             const usersQuery = query(collection(db, 'users'), where('approved', '==', true));
+             const usersSnapshot = await getDocs(usersQuery);
+             const userPool = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+             
+             finalUsersDataForPreview = userPool.filter(user => {
+                if (user.isAdmin) return false;
+                if (filters.factionId && user.factionId !== filters.factionId) return false;
+                if (filters.raceId && user.raceId !== filters.raceId) return false;
+                if (filters.honorPoints_op === '>' && user.honorPoints <= (filters.honorPoints_val || 0)) return false;
+                if (filters.honorPoints_op === '<' && user.honorPoints >= (filters.honorPoints_val || 0)) return false;
+                if (filters.currency_op === '>' && user.currency <= (filters.currency_val || 0)) return false;
+                if (filters.currency_op === '<' && user.currency >= (filters.currency_val || 0)) return false;
+                if (filters.taskCount_op === '>' && (user.tasks || []).length <= (filters.taskCount_val || 0)) return false;
+                if (filters.taskCount_op === '<' && (user.tasks || []).length >= (filters.taskCount_val || 0)) return false;
+                if (filters.participatedBattleCount_op === '>' && (user.participatedBattleIds || []).length <= (filters.participatedBattleCount_val || 0)) return false;
+                if (filters.participatedBattleCount_op === '<' && (user.participatedBattleIds || []).length >= (filters.participatedBattleCount_val || 0)) return false;
+                if (filters.hpZeroCount_op === '>' && (user.hpZeroCount || 0) <= (filters.hpZeroCount_val || 0)) return false;
+                if (filters.hpZeroCount_op === '<' && (user.hpZeroCount || 0) >= (filters.hpZeroCount_val || 0)) return false;
+                if (filters.itemUse_id && filters.itemUse_op === '>' && (user.itemUseCount?.[filters.itemUse_id] || 0) <= (filters.itemUse_val || 0)) return false;
+                if (filters.itemUse_id && filters.itemUse_op === '<' && (user.itemUseCount?.[filters.itemUse_id] || 0) >= (filters.itemUse_val || 0)) return false;
+
+                return true;
+             }).map(user => ({ id: user.id, roleName: user.roleName }));
+        }
+       
+       return {
+            success: true,
+            processedCount: finalUsersDataForPreview.length,
+            processedUsers: finalUsersDataForPreview,
+       };
+    }
+
+    // Actual Distribution Logic
     if (targetUserIds && targetUserIds.length > 0) {
-      finalUserIds = targetUserIds;
-    } else if (filters) {
+        finalUserIds = targetUserIds;
+    } else {
+        // Re-fetch and re-filter for actual distribution to ensure data consistency
         const usersQuery = query(collection(db, 'users'), where('approved', '==', true));
         const usersSnapshot = await getDocs(usersQuery);
         const userPool = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
-      
-        const filtered = userPool.filter(user => {
-            if(user.isAdmin) return false;
-            if (filters.factionId && user.factionId !== filters.factionId) return false;
-            if (filters.raceId && user.raceId !== filters.raceId) return false;
-            if (filters.honorPoints_op === '>' && user.honorPoints <= (filters.honorPoints_val || 0)) return false;
-            if (filters.honorPoints_op === '<' && user.honorPoints >= (filters.honorPoints_val || 0)) return false;
-            if (filters.currency_op === '>' && user.currency <= (filters.currency_val || 0)) return false;
-            if (filters.currency_op === '<' && user.currency >= (filters.currency_val || 0)) return false;
-            if (filters.taskCount_op === '>' && (user.tasks || []).length <= (filters.taskCount_val || 0)) return false;
-            if (filters.taskCount_op === '<' && (user.tasks || []).length >= (filters.taskCount_val || 0)) return false;
-            if (filters.participatedBattleCount_op === '>' && (user.participatedBattleIds || []).length <= (filters.participatedBattleCount_val || 0)) return false;
-            if (filters.participatedBattleCount_op === '<' && (user.participatedBattleIds || []).length >= (filters.participatedBattleCount_val || 0)) return false;
-            if (filters.hpZeroCount_op === '>' && (user.hpZeroCount || 0) <= (filters.hpZeroCount_val || 0)) return false;
-            if (filters.hpZeroCount_op === '<' && (user.hpZeroCount || 0) >= (filters.hpZeroCount_val || 0)) return false;
-            if (filters.itemUse_id && filters.itemUse_op === '>' && (user.itemUseCount?.[filters.itemUse_id] || 0) <= (filters.itemUse_val || 0)) return false;
-            if (filters.itemUse_id && filters.itemUse_op === '<' && (user.itemUseCount?.[filters.itemUse_id] || 0) >= (filters.itemUse_val || 0)) return false;
+        finalUserIds = userPool.filter(user => {
+            if (user.isAdmin) return false;
+            if (filters) {
+                if (filters.factionId && user.factionId !== filters.factionId) return false;
+                if (filters.raceId && user.raceId !== filters.raceId) return false;
+                if (filters.honorPoints_op === '>' && user.honorPoints <= (filters.honorPoints_val || 0)) return false;
+                if (filters.honorPoints_op === '<' && user.honorPoints >= (filters.honorPoints_val || 0)) return false;
+                if (filters.currency_op === '>' && user.currency <= (filters.currency_val || 0)) return false;
+                if (filters.currency_op === '<' && user.currency >= (filters.currency_val || 0)) return false;
+                if (filters.taskCount_op === '>' && (user.tasks || []).length <= (filters.taskCount_val || 0)) return false;
+                if (filters.taskCount_op === '<' && (user.tasks || []).length >= (filters.taskCount_val || 0)) return false;
+                if (filters.participatedBattleCount_op === '>' && (user.participatedBattleIds || []).length <= (filters.participatedBattleCount_val || 0)) return false;
+                if (filters.participatedBattleCount_op === '<' && (user.participatedBattleIds || []).length >= (filters.participatedBattleCount_val || 0)) return false;
+                if (filters.hpZeroCount_op === '>' && (user.hpZeroCount || 0) <= (filters.hpZeroCount_val || 0)) return false;
+                if (filters.hpZeroCount_op === '<' && (user.hpZeroCount || 0) >= (filters.hpZeroCount_val || 0)) return false;
+                if (filters.itemUse_id && filters.itemUse_op === '>' && (user.itemUseCount?.[filters.itemUse_id] || 0) <= (filters.itemUse_val || 0)) return false;
+                if (filters.itemUse_id && filters.itemUse_op === '<' && (user.itemUseCount?.[filters.itemUse_id] || 0) >= (filters.itemUse_val || 0)) return false;
+            }
             return true;
-        });
-
-        finalUserIds = filtered.map(user => user.id);
-    }
-
-    if (finalUserIds.length === 0) {
-      return { success: true, processedCount: 0, processedUsers: [] };
+        }).map(user => user.id);
     }
     
-    const finalUsersData = await Promise.all(finalUserIds.map(id => getDoc(doc(db, 'users', id))));
-    const processedUsers = finalUsersData.filter(snap => snap.exists()).map(snap => {
-        const userData = snap.data() as User;
-        return { id: userData.id, roleName: userData.roleName };
-    });
-
-    // If this is just a preview, return the list of users without making changes.
-    if (rewards.logMessage === 'Preview') {
-      return {
-        success: true,
-        processedCount: processedUsers.length,
-        processedUsers: processedUsers,
-      };
+    if (finalUserIds.length === 0) {
+      return { success: true, processedCount: 0, processedUsers: [] };
     }
     
     let itemName = '';
@@ -198,11 +224,9 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
         processedCount += chunk.length;
     }
     
-    return { success: true, processedCount, processedUsers };
+    return { success: true, processedCount };
   } catch (error: any) {
     console.error('Reward distribution failed:', error);
     return { success: false, error: error.message || '發放獎勵時發生未知錯誤。' };
   }
 }
-
-    

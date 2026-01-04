@@ -37,7 +37,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History, Award } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -84,6 +84,7 @@ import { useDoc, useFirestore, useMemoFirebase, useCollection } from '@/firebase
 import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
 import { createBattle, startBattle, endBattle, addMonsterToBattle } from '@/app/actions/manage-battle';
 import { getBattleLogs } from '@/app/actions/get-battle-logs';
+import { awardBattleDamageRewards } from '@/app/actions/award-battle-damage-rewards';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -2109,6 +2110,66 @@ function BattleLogViewer({ battleId, battleName }: { battleId: string, battleNam
     )
 }
 
+function DamageRewardDialog({ battleId, battleName, allTitles, onAwarded }: { battleId: string, battleName: string, allTitles: Title[], onAwarded: () => void}) {
+    const { toast } = useToast();
+    const [isOpen, setIsOpen] = useState(false);
+    const [damageThreshold, setDamageThreshold] = useState(1000);
+    const [titleId, setTitleId] = useState<string>('');
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const handleAward = async () => {
+        if (!titleId) {
+            toast({ variant: 'destructive', title: '錯誤', description: '請選擇要授予的稱號。' });
+            return;
+        }
+        setIsProcessing(true);
+        try {
+            const result = await awardBattleDamageRewards({ battleId, damageThreshold, titleId });
+            if (result.error) throw new Error(result.error);
+            toast({ title: '成功', description: `已為 ${result.processedCount} 位玩家發放傷害成就獎勵。` });
+            onAwarded();
+            setIsOpen(false);
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: '操作失敗', description: error.message });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+    
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" size="sm"><Award className="h-4 w-4 mr-2"/>結算傷害獎勵</Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>結算戰役傷害獎勵</DialogTitle>
+                    <DialogDescription>為在「{battleName}」中造成超過指定傷害的玩家授予稱號。</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="damage-threshold">傷害閾值</Label>
+                        <Input id="damage-threshold" type="number" value={damageThreshold} onChange={e => setDamageThreshold(parseInt(e.target.value) || 0)} />
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="title-select">授予稱號</Label>
+                        <Select value={titleId} onValueChange={setTitleId}>
+                            <SelectTrigger id="title-select"><SelectValue placeholder="選擇一個稱號"/></SelectTrigger>
+                            <SelectContent>
+                                {allTitles.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="ghost">取消</Button></DialogClose>
+                    <Button onClick={handleAward} disabled={isProcessing}>{isProcessing ? '結算中...' : '確認發放'}</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh }: { allItems: Item[], allTitles: Title[], allCombatEncounters: CombatEncounter[], onRefresh: () => void }) {
     const { toast } = useToast();
     const [battleName, setBattleName] = useState('');
@@ -2408,13 +2469,16 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
                                     <TableCell><Badge variant={b.status === 'ended' ? 'outline' : 'default'}>{b.status}</Badge></TableCell>
                                     <TableCell>{b.startTime ? new Date(b.startTime).toLocaleString() : '-'}</TableCell>
                                     <TableCell>{b.endTime ? new Date(b.endTime).toLocaleString() : '-'}</TableCell>
-                                    <TableCell>
+                                    <TableCell className="space-x-2">
                                         <Dialog>
                                             <DialogTrigger asChild>
                                                 <Button variant="ghost" size="sm">查看 Log</Button>
                                             </DialogTrigger>
                                             <BattleLogViewer battleId={b.id} battleName={b.name}/>
                                         </Dialog>
+                                         {b.status === 'ended' && (
+                                            <DamageRewardDialog battleId={b.id} battleName={b.name} allTitles={allTitles} onAwarded={onRefresh} />
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             )) : <TableRow><TableCell colSpan={5} className="h-24 text-center">沒有任何歷史戰場紀錄</TableCell></TableRow>}
@@ -2537,5 +2601,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
-    
