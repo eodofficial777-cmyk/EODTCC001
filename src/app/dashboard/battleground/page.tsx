@@ -142,8 +142,8 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
         const diceAtkString = diceAtkParts.length > 0 ? `+${diceAtkParts.join('+')}` : '';
 
         return {
-            finalAtkString: `${totalAtk}${diceAtkString} (${baseAtk}+${equipAtk}${diceAtkString})`,
-            finalDefString: `${baseDef + equipDef} (${baseDef}+${equipDef})`
+            finalAtkString: `${totalAtk}${diceAtkString}`,
+            finalDefString: `${baseDef + equipDef}`
         };
     }, [userData, equippedItems, allItems]);
 
@@ -278,6 +278,7 @@ export default function BattlegroundPage() {
   );
   const { data: battleData, isLoading: isBattleLoading } = useCollection<CombatEncounter>(latestBattleQuery);
   const currentBattle = battleData?.[0];
+  const isBattleActiveForState = currentBattle && ['preparing', 'active'].includes(currentBattle.status);
 
   const battleLogsQuery = useMemoFirebase(
     () => (currentBattle ? query(collection(firestore, `combatEncounters/${currentBattle.id}/combatLogs`), orderBy('timestamp', 'desc')) : null),
@@ -298,7 +299,7 @@ export default function BattlegroundPage() {
   const [actionCooldown, setActionCooldown] = useState<number>(0);
   const [isProcessingAction, setIsProcessingAction] = useState(false);
   
-  const participantData = useMemo(() => currentBattle?.participants?.[user?.uid ?? ''], [currentBattle, user]);
+  const participantData = useMemo(() => isBattleActiveForState ? currentBattle?.participants?.[user?.uid ?? ''] : undefined, [currentBattle, user, isBattleActiveForState]);
   const battleHP = participantData?.hp;
   const supportedFaction = participantData?.supportedFaction;
   const equippedItems = participantData?.equippedItems || [];
