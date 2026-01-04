@@ -24,7 +24,7 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/comp
 import { performAttack } from '@/app/actions/perform-attack';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogClose } from '@/components/ui/dialog';
 
 // --- Sub-components for better organization ---
 
@@ -316,17 +316,18 @@ export default function BattlegroundPage() {
   
   const { inventoryEquipment, inventoryConsumables } = useMemo(() => {
     if (!userData?.items || !allItems) return { inventoryEquipment: [], inventoryConsumables: new Map() };
-    const userItemIds = userData.items;
     
-    const equipment = allItems.filter(item => userItemIds.includes(item.id) && item.itemTypeId === 'equipment');
+    const inventoryMap = new Map<string, number>();
+    userData.items.forEach(id => {
+      inventoryMap.set(id, (inventoryMap.get(id) || 0) + 1);
+    });
 
+    const equipment = allItems.filter(item => userData.items.includes(item.id) && item.itemTypeId === 'equipment');
+    
     const consumables = new Map<string, { item: Item, count: number }>();
     allItems.forEach(item => {
-      if (item.itemTypeId === 'consumable') {
-        const count = userItemIds.filter(id => id === item.id).length;
-        if (count > 0) {
-          consumables.set(item.id, { item, count });
-        }
+      if (item.itemTypeId === 'consumable' && inventoryMap.has(item.id)) {
+        consumables.set(item.id, { item, count: inventoryMap.get(item.id)! });
       }
     });
 
@@ -428,9 +429,9 @@ export default function BattlegroundPage() {
          {isBattleActive ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {monstersToDisplay.map((monster, index) => (
+                  {monstersToDisplay.map((monster) => (
                       <MonsterCard 
-                          key={`${monster.monsterId}-${index}`}
+                          key={monster.monsterId}
                           monster={monster}
                           isTargeted={false}
                           onSelect={() => {}}
@@ -466,8 +467,8 @@ export default function BattlegroundPage() {
                                   <DialogDescription>選擇一隻災獸進行攻擊。</DialogDescription>
                               </DialogHeader>
                               <div className="grid grid-cols-2 gap-4 py-4">
-                                  {monstersToDisplay.filter(m => m.hp > 0).map((monster, index) => (
-                                      <Button key={`${monster.monsterId}-${index}`} variant="outline" className="h-auto flex flex-col p-4 gap-2" onClick={() => handlePerformAction(monster.monsterId)}>
+                                  {monstersToDisplay.filter(m => m.hp > 0).map((monster) => (
+                                      <Button key={monster.monsterId} variant="outline" className="h-auto flex flex-col p-4 gap-2" onClick={() => handlePerformAction(monster.monsterId)}>
                                           <span className="font-bold">{monster.name}</span>
                                           <span className="text-xs text-muted-foreground">HP: {monster.hp.toLocaleString()}</span>
                                       </Button>
@@ -476,6 +477,9 @@ export default function BattlegroundPage() {
                                       <p className="col-span-2 text-center text-muted-foreground">沒有可攻擊的目標。</p>
                                   )}
                               </div>
+                               <DialogClose asChild>
+                                <Button type="button" variant="secondary" className="w-full">取消</Button>
+                              </DialogClose>
                           </DialogContent>
                       </Dialog>
                        <Button size="lg" variant="outline" disabled>技能</Button>

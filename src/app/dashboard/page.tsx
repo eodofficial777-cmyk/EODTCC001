@@ -269,8 +269,10 @@ export default function DashboardPage() {
         return acc;
     }, {} as { [id: string]: number });
 
+    const allItemsMap = new Map(allItems.map(item => [item.id, item]));
+
     return Object.keys(itemCounts).map(id => {
-        const itemData = allItems.find(item => item.id === id);
+        const itemData = allItemsMap.get(id);
         return {
             id: id,
             count: itemCounts[id],
