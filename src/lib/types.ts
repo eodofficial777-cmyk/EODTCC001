@@ -4,6 +4,7 @@
 
 
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -190,4 +191,11 @@ export interface CombatLog {
   timestamp: any;
   turn: number;
   type: 'player_attack' | 'monster_attack' | 'skill_used' | 'item_used' | 'system';
+}
+
+// Add this type to fix the error
+export interface Faction {
+    id: string;
+    name: string;
+    color: string;
 }

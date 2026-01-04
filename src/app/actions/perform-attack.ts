@@ -118,20 +118,21 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
                 const item = itemDoc.data() as Item;
                 item.effects?.forEach(effect => {
                     if ('attribute' in effect) {
+                         const value = Number(effect.value);
                          if (effect.attribute === 'atk') {
-                            if (effect.operator === '+') {
-                               playerBaseAtk += Number(effect.value);
-                            } else if (effect.operator === '*') {
-                               playerMultipliedAtk *= Number(effect.value);
+                            if (effect.operator === '+' && !isNaN(value)) {
+                               playerBaseAtk += value;
+                            } else if (effect.operator === '*' && !isNaN(value)) {
+                               playerMultipliedAtk *= value;
                             } else if (effect.operator === 'd') {
                                playerDiceDamage += rollDice(String(effect.value));
                             }
                          }
                          if(effect.attribute === 'def') {
-                             if(effect.operator === '+') {
-                                playerBaseDef += Number(effect.value);
-                             } else if (effect.operator === '*') {
-                                playerMultipliedDef *= Number(effect.value);
+                             if(effect.operator === '+' && !isNaN(value)) {
+                                playerBaseDef += value;
+                             } else if (effect.operator === '*' && !isNaN(value)) {
+                                playerMultipliedDef *= value;
                              }
                          }
                     }
@@ -140,11 +141,11 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
         });
       }
       
-      const finalPlayerAtk = Math.round(playerMultipliedAtk) + playerBaseAtk - user.attributes.atk;
+      const finalPlayerAtk = Math.round(playerMultipliedAtk);
       const finalPlayerDamage = finalPlayerAtk + playerDiceDamage;
       targetMonster.hp = Math.max(0, targetMonster.hp - finalPlayerDamage);
       
-      const finalPlayerDef = Math.round(playerMultipliedDef) + playerBaseDef - user.attributes.def;
+      const finalPlayerDef = Math.round(playerMultipliedDef);
 
       // --- 2. Calculate Monster Damage ---
       const monsterRawDamage = parseAtk(targetMonster.atk);

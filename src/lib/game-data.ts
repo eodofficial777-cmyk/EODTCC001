@@ -1,3 +1,5 @@
+import type { Faction } from './types';
+
 export const RACES = {
   corruptor: {
     id: 'corruptor',
@@ -22,7 +24,7 @@ export const RACES = {
   },
 };
 
-export const FACTIONS = {
+export const FACTIONS: { [key: string]: Faction } = {
   yelu: {
     id: 'yelu',
     name: '夜鷺',
@@ -63,4 +65,3 @@ export const TASK_TYPES = {
         currency: 40,
     },
 }
-

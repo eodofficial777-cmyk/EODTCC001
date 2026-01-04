@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Heart, Shield, Sword, Timer, CheckCircle2, Package, WandSparkles, Bird, Users } from 'lucide-react';
+import { Heart, Shield, Sword, Timer, CheckCircle2, Package, WandSparkles, Bird, Users, EyeOff } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, orderBy, limit, where, updateDoc } from 'firebase/firestore';
@@ -108,8 +108,8 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
 
 
 const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userData: User | null; battleHP: number | undefined; equippedItems: string[]; allItems: Item[] | null }) => {
-    const { finalAtkString, finalDefString } = useMemo(() => {
-        if (!userData || !allItems) return { finalAtkString: '0', finalDefString: '0' };
+    const { finalAtk, baseAtk, equipAtk, diceAtkString, finalDef, baseDef, equipDef } = useMemo(() => {
+        if (!userData || !allItems) return { finalAtk: 0, baseAtk: 0, equipAtk: 0, diceAtkString: '', finalDef: 0, baseDef: 0, equipDef: 0 };
 
         const baseAtk = userData.attributes.atk;
         const baseDef = userData.attributes.def;
@@ -123,15 +123,16 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
                 item.effects?.forEach(effect => {
                     if ('attribute' in effect) {
                         const attrEffect = effect as AttributeEffect;
+                        const value = Number(attrEffect.value);
                         if (attrEffect.attribute === 'atk') {
-                            if (attrEffect.operator === '+') {
-                                equipAtk += Number(attrEffect.value);
+                            if (attrEffect.operator === '+' && !isNaN(value)) {
+                                equipAtk += value;
                             } else if (attrEffect.operator === 'd') {
                                 diceAtkParts.push(String(attrEffect.value));
                             }
                         }
-                        if (attrEffect.attribute === 'def' && attrEffect.operator === '+') {
-                            equipDef += Number(attrEffect.value);
+                        if (attrEffect.attribute === 'def' && attrEffect.operator === '+' && !isNaN(value)) {
+                            equipDef += value;
                         }
                     }
                 });
@@ -142,11 +143,16 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
         const diceAtkString = diceAtkParts.length > 0 ? `+${diceAtkParts.join('+')}` : '';
 
         return {
-            finalAtkString: `${totalAtk}${diceAtkString}`,
-            finalDefString: `${baseDef + equipDef}`
+            finalAtk: totalAtk,
+            baseAtk: baseAtk,
+            equipAtk: equipAtk,
+            diceAtkString,
+            finalDef: baseDef + equipDef,
+            baseDef: baseDef,
+            equipDef: equipDef,
         };
     }, [userData, equippedItems, allItems]);
-
+    
     if (!userData) {
         return <Skeleton className="h-48 w-full" />;
     }
@@ -170,11 +176,11 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
                 <div className="grid grid-cols-1 gap-4">
                    <div className="flex flex-col gap-1 border p-2 rounded-md">
                         <div className="flex items-center gap-2 text-muted-foreground"><Sword className="h-4 w-4" /> 攻擊力</div>
-                        <div className="font-mono text-lg font-bold">{finalAtkString}</div>
+                        <div className="font-mono text-lg font-bold">{`${finalAtk}${diceAtkString}`} <span className="text-sm font-normal text-muted-foreground">({baseAtk} + {equipAtk})</span></div>
                     </div>
                     <div className="flex flex-col gap-1 border p-2 rounded-md">
                         <div className="flex items-center gap-2 text-muted-foreground"><Shield className="h-4 w-4" /> 防禦力</div>
-                        <div className="font-mono text-lg font-bold">{finalDefString}</div>
+                        <div className="font-mono text-lg font-bold">{finalDef} <span className="text-sm font-normal text-muted-foreground">({baseDef} + {equipDef})</span></div>
                     </div>
                 </div>
             </CardContent>
@@ -182,7 +188,7 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
     );
 };
 
-const MonsterCard = ({ monster, isTargeted, onSelect }: { monster: Monster; isTargeted: boolean; onSelect: () => void; }) => {
+const MonsterCard = ({ monster, isAttackable, onSelect }: { monster: Monster; isAttackable: boolean; onSelect: (monsterId: string) => void; }) => {
   const isDefeated = monster.hp <= 0;
   const maxHp = monster.originalHp ?? monster.hp;
   
@@ -191,7 +197,6 @@ const MonsterCard = ({ monster, isTargeted, onSelect }: { monster: Monster; isTa
         isDefeated && "grayscale opacity-50",
       )}
     >
-       {isTargeted && !isDefeated && <div className="absolute top-2 left-2 bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-full">已鎖定</div>}
        <div className="relative aspect-square w-full">
         {monster.imageUrl ? (
           <Image
@@ -204,6 +209,12 @@ const MonsterCard = ({ monster, isTargeted, onSelect }: { monster: Monster; isTa
         <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-white">
           <h4 className="font-bold">{monster.name}</h4>
         </div>
+        {!isAttackable && !isDefeated && (
+           <div className="absolute inset-0 bg-black/70 flex items-center justify-center flex-col gap-2 text-primary-foreground">
+             <EyeOff className="h-8 w-8" />
+             <span className="text-sm font-bold">無法攻擊</span>
+           </div>
+        )}
       </div>
       <CardContent className="p-3 space-y-2 flex-grow">
         <div className="space-y-1">
@@ -305,7 +316,7 @@ export default function BattlegroundPage() {
   const equippedItems = participantData?.equippedItems || [];
   
   const isWanderer = userData?.factionId === 'wanderer';
-  const playerFaction = isWanderer ? supportedFaction : userData?.factionId;
+  const playerTargetFaction = isWanderer ? supportedFaction : userData?.factionId;
   const combatStatus = currentBattle?.status;
   const hasFallen = battleHP !== undefined && battleHP <= 0;
   const isOnCooldown = actionCooldown > 0;
@@ -355,7 +366,6 @@ export default function BattlegroundPage() {
             });
             if (error) throw new Error(error);
         }
-        // Future: Handle item usage here
         
         setActionCooldown(Date.now());
     } catch (error: any) {
@@ -408,15 +418,14 @@ export default function BattlegroundPage() {
       await updateDoc(battleDocRef, { participants });
   }
   
-  const monstersToDisplay = useMemo(() => {
-    if (!currentBattle?.monsters) return [];
-    if (!playerFaction) {
-      return isWanderer ? [] : currentBattle.monsters.filter(m => m.factionId === 'common');
+  const { yeluMonsters, associationMonsters, commonMonsters } = useMemo(() => {
+    if (!currentBattle?.monsters) return { yeluMonsters: [], associationMonsters: [], commonMonsters: [] };
+    return {
+        yeluMonsters: currentBattle.monsters.filter(m => m.factionId === 'yelu'),
+        associationMonsters: currentBattle.monsters.filter(m => m.factionId === 'association'),
+        commonMonsters: currentBattle.monsters.filter(m => m.factionId === 'common'),
     }
-    const factionMonsters = currentBattle.monsters.filter(m => m.factionId === playerFaction);
-    const commonMonsters = currentBattle.monsters.filter(m => m.factionId === 'common');
-    return [...factionMonsters, ...commonMonsters];
-  }, [currentBattle, playerFaction, isWanderer]);
+  }, [currentBattle]);
 
 
   const isLoading = isUserLoading || isUserDataLoading || areItemsLoading || isBattleLoading;
@@ -433,16 +442,37 @@ export default function BattlegroundPage() {
         <div className="lg:col-span-2 space-y-4">
          {isBattleActive ? (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {monstersToDisplay.map((monster) => (
-                      <MonsterCard 
-                          key={monster.monsterId}
-                          monster={monster}
-                          isTargeted={false}
-                          onSelect={() => {}}
-                      />
-                  ))}
-              </div>
+              <Tabs defaultValue="yelu" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="yelu">夜鷺戰場</TabsTrigger>
+                    <TabsTrigger value="association">協會戰場</TabsTrigger>
+                </TabsList>
+                <TabsContent value="yelu" className="mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {[...yeluMonsters, ...commonMonsters].map((monster) => (
+                          <MonsterCard 
+                              key={monster.monsterId}
+                              monster={monster}
+                              isAttackable={playerTargetFaction === 'yelu'}
+                              onSelect={() => {}}
+                          />
+                      ))}
+                    </div>
+                </TabsContent>
+                <TabsContent value="association" className="mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                       {[...associationMonsters, ...commonMonsters].map((monster) => (
+                          <MonsterCard 
+                              key={monster.monsterId}
+                              monster={monster}
+                              isAttackable={playerTargetFaction === 'association'}
+                              onSelect={() => {}}
+                          />
+                      ))}
+                    </div>
+                </TabsContent>
+              </Tabs>
+
 
               {isWanderer && combatStatus !== 'ended' && !supportedFaction && (
                   <Card>
@@ -472,13 +502,15 @@ export default function BattlegroundPage() {
                                   <DialogDescription>選擇一隻災獸進行攻擊。</DialogDescription>
                               </DialogHeader>
                               <div className="grid grid-cols-2 gap-4 py-4">
-                                  {monstersToDisplay.filter(m => m.hp > 0).map((monster) => (
+                                  {[...yeluMonsters, ...associationMonsters, ...commonMonsters]
+                                      .filter(m => m.hp > 0 && (m.factionId === playerTargetFaction || m.factionId === 'common'))
+                                      .map((monster) => (
                                       <Button key={monster.monsterId} variant="outline" className="h-auto flex flex-col p-4 gap-2" onClick={() => handlePerformAction(monster.monsterId)}>
                                           <span className="font-bold">{monster.name}</span>
                                           <span className="text-xs text-muted-foreground">HP: {monster.hp.toLocaleString()}</span>
                                       </Button>
                                   ))}
-                                  {monstersToDisplay.filter(m => m.hp > 0).length === 0 && (
+                                  {[...yeluMonsters, ...associationMonsters, ...commonMonsters].filter(m => m.hp > 0 && m.factionId === playerTargetFaction).length === 0 && (
                                       <p className="col-span-2 text-center text-muted-foreground">沒有可攻擊的目標。</p>
                                   )}
                               </div>
@@ -541,7 +573,7 @@ export default function BattlegroundPage() {
                         <CardContent className="p-4 space-y-2">
                              <TooltipProvider>
                                 {inventoryEquipment.length > 0 ? inventoryEquipment.map(item => (
-                                    <Tooltip key={item.id}>
+                                    <Tooltip key={item.id} delayDuration={100}>
                                         <TooltipTrigger asChild>
                                             <div 
                                                 className={cn('flex items-center justify-between p-2 border rounded-md cursor-pointer transition-colors', equippedItems.includes(item.id) ? 'bg-primary/20 border-primary' : 'hover:bg-muted')}
@@ -557,6 +589,9 @@ export default function BattlegroundPage() {
                                         <TooltipContent side="left">
                                             <p className="font-bold">{item.name}</p>
                                             <p className="text-xs text-muted-foreground">{item.description}</p>
+                                            <div className="mt-2 text-xs">
+                                                {item.effects?.map((effect, i) => <div key={i}>{formatEffect(effect)}</div>)}
+                                            </div>
                                         </TooltipContent>
                                     </Tooltip>
                                 )) : <p className="text-muted-foreground text-sm text-center py-4">沒有可裝備的物品。</p>}
