@@ -11,6 +11,8 @@ import {
   collection,
   FieldValue,
   getDocs,
+  getDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
@@ -49,39 +51,47 @@ interface UpdateTaskStatusPayload {
 
 export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promise<{ success: boolean; error?: string }> {
   const { taskId, status } = payload;
+  
+  if (!taskId) {
+    return { success: false, error: '缺少任務 ID。' };
+  }
+
+  const taskRef = doc(db, 'tasks', taskId);
+  let userId: string | null = null;
 
   try {
     await ensureAdminAuth();
 
-    const allTitlesSnap = await getDocs(collection(db, 'titles'));
-    const allTitles = allTitlesSnap.docs.map(doc => doc.data() as Title);
-
     await runTransaction(db, async (transaction) => {
-      const taskRef = doc(db, 'tasks', taskId);
       const taskSnap = await transaction.get(taskRef);
 
       if (!taskSnap.exists()) throw new Error('找不到指定的任務。');
 
       const task = taskSnap.data() as Task;
       if (task.status !== 'pending') throw new Error(`此任務的狀態已經是「${task.status}」，無法重複審核。`);
+      
+      userId = task.userId;
+      const userRef = doc(db, 'users', userId);
 
       if (status === 'rejected') {
         transaction.update(taskRef, { status: 'rejected' });
+        // Early return if rejected, no further processing needed.
         return;
       }
       
-      const userRef = doc(db, 'users', task.userId);
+      // If approved, proceed with reward logic
       const userSnap = await transaction.get(userRef);
       if (!userSnap.exists()) throw new Error(`找不到提交任務的使用者 (ID: ${task.userId})`);
-      const user = userSnap.data() as User;
 
       const taskTypeRef = doc(db, 'taskTypes', task.taskTypeId);
       const taskTypeSnap = await transaction.get(taskTypeRef);
-       if (!taskTypeSnap.exists()) throw new Error(`找不到任務類型 (ID: ${task.taskTypeId})`);
+      if (!taskTypeSnap.exists()) throw new Error(`找不到任務類型 (ID: ${task.taskTypeId})`);
       const taskType = taskTypeSnap.data() as TaskType;
 
+      // Update task status
       transaction.update(taskRef, { status: 'approved' });
 
+      // Prepare user data update
       const userUpdateData: { [key: string]: any } = {};
       if(task.currencyAwarded > 0) userUpdateData.currency = increment(task.currencyAwarded);
       if(task.honorPointsAwarded > 0) userUpdateData.honorPoints = increment(task.honorPointsAwarded);
@@ -89,6 +99,7 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
       if (taskType.itemAwarded) userUpdateData.items = arrayUnion(taskType.itemAwarded);
       transaction.update(userRef, userUpdateData);
 
+      // Update war season score
       if (task.honorPointsAwarded > 0) {
         let factionToContributeTo = 'none';
         if (task.userFactionId === 'wanderer') {
@@ -107,6 +118,7 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
         }
       }
 
+      // Create activity log
       const activityLogRef = doc(collection(db, `users/${task.userId}/activityLogs`));
       const changeDescription = `+${task.honorPointsAwarded} 榮譽, +${task.currencyAwarded} 貨幣`;
       transaction.set(activityLogRef, {
@@ -116,26 +128,38 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
         description: `任務「${taskType.name}」審核通過`,
         change: changeDescription
       });
+    });
 
-      // Post-update: check for titles
-      const updatedUserData = { ...user, ...userUpdateData };
-      const newTitles = await checkAndAwardTitles(updatedUserData, allTitles);
+    // --- Post-transaction Title Check ---
+    if (status === 'approved' && userId) {
+      const userRef = doc(db, 'users', userId);
+      const updatedUserSnap = await getDoc(userRef);
 
-      if (newTitles.length > 0) {
+      if (updatedUserSnap.exists()) {
+        const updatedUserData = updatedUserSnap.data() as User;
+        const allTitlesSnap = await getDocs(collection(db, 'titles'));
+        const allTitles = allTitlesSnap.docs.map(doc => doc.data() as Title);
+        
+        const newTitles = await checkAndAwardTitles(updatedUserData, allTitles);
+
+        if (newTitles.length > 0) {
           const newTitleIds = newTitles.map(t => t.id);
           const newTitleNames = newTitles.map(t => t.name).join('、');
-          transaction.update(userRef, { titles: arrayUnion(...newTitleIds) });
           
-          const titleLogRef = doc(collection(db, `users/${task.userId}/activityLogs`));
-          transaction.set(titleLogRef, {
+          await updateDoc(userRef, { titles: arrayUnion(...newTitleIds) });
+          
+          const titleLogRef = doc(collection(db, `users/${userId}/activityLogs`));
+          await setDoc(titleLogRef, {
                id: titleLogRef.id,
-               userId: task.userId,
+               userId: userId,
                timestamp: serverTimestamp(),
                description: `達成了新的里程碑！`,
                change: `獲得稱號：${newTitleNames}`
           });
+        }
       }
-    });
+    }
+
 
     return { success: true };
   } catch (error: any) {
