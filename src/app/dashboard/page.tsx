@@ -261,7 +261,7 @@ export default function DashboardPage() {
   const currentTitleId = userData?.titles?.[0];
   const currentTitle = allTitles?.find(t => t.id === currentTitleId);
   
-  const processedInventory = useMemoFirebase(() => {
+  const processedInventory = useMemo(() => {
     if (!userData?.items || !allItems) return [];
     
     const itemCounts: { [id: string]: number } = userData.items.reduce((acc, id) => {

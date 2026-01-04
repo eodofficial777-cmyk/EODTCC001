@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Heart, Shield, Sword, Timer, CheckCircle2, Package, WandSparkles } from 'lucide-react';
+import { Heart, Shield, Sword, Timer, CheckCircle2, Package, WandSparkles, Bird, Users } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, orderBy, limit, where, updateDoc } from 'firebase/firestore';
@@ -138,8 +138,8 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
         const diceAtkString = diceAtkParts.length > 0 ? `+${diceAtkParts.join('+')}` : '';
 
         return {
-            finalAtkString: `${totalAtk}${diceAtkString}`,
-            finalDefString: `${baseDef + equipDef}`
+            finalAtkString: `${totalAtk}${diceAtkString} (${baseAtk}+${equipAtk}${diceAtkString})`,
+            finalDefString: `${baseDef + equipDef} (${baseDef}+${equipDef})`
         };
     }, [userData, equippedItems, allItems]);
 
@@ -185,9 +185,7 @@ const MonsterCard = ({ monster, isTargeted, onSelect }: { monster: Monster; isTa
   return (
     <Card className={cn("overflow-hidden transition-all duration-300 flex flex-col relative", 
         isDefeated && "grayscale opacity-50",
-        isTargeted && !isDefeated && "border-primary ring-2 ring-primary"
       )}
-      onClick={onSelect}
     >
        {isTargeted && !isDefeated && <div className="absolute top-2 left-2 bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-full">已鎖定</div>}
        <div className="relative aspect-square w-full">
@@ -207,7 +205,7 @@ const MonsterCard = ({ monster, isTargeted, onSelect }: { monster: Monster; isTa
         <div className="space-y-1">
           <div className="flex justify-between items-center text-xs font-mono">
             <span className='flex items-center gap-1'><Heart className="h-3 w-3 text-red-400" /> HP</span>
-            <span>{monster.hp.toLocaleString()} / {(maxHp).toLocaleString()}</span>
+            <span>{monster.hp.toLocaleString()} / {(maxHp || 0).toLocaleString()}</span>
           </div>
           <Progress value={(monster.hp / (maxHp > 0 ? maxHp : 1)) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
         </div>
@@ -317,12 +315,22 @@ export default function BattlegroundPage() {
   const isBattleTimeOver = battleEndTime ? new Date() > battleEndTime : false;
   
   const { inventoryEquipment, inventoryConsumables } = useMemo(() => {
-    if (!userData?.items || !allItems) return { inventoryEquipment: [], inventoryConsumables: [] };
-    const userItemIds = new Set(userData.items);
-    return {
-        inventoryEquipment: allItems.filter(item => userItemIds.has(item.id) && item.itemTypeId === 'equipment'),
-        inventoryConsumables: allItems.filter(item => userItemIds.has(item.id) && item.itemTypeId === 'consumable')
-    };
+    if (!userData?.items || !allItems) return { inventoryEquipment: [], inventoryConsumables: new Map() };
+    const userItemIds = userData.items;
+    
+    const equipment = allItems.filter(item => userItemIds.includes(item.id) && item.itemTypeId === 'equipment');
+
+    const consumables = new Map<string, { item: Item, count: number }>();
+    allItems.forEach(item => {
+      if (item.itemTypeId === 'consumable') {
+        const count = userItemIds.filter(id => id === item.id).length;
+        if (count > 0) {
+          consumables.set(item.id, { item, count });
+        }
+      }
+    });
+
+    return { inventoryEquipment: equipment, inventoryConsumables: consumables };
   }, [userData?.items, allItems]);
 
 
@@ -353,7 +361,7 @@ export default function BattlegroundPage() {
   }
 
   const handleToggleEquip = async (itemId: string) => {
-    if (!user || !currentBattle) return;
+    if (!user || !currentBattle || !firestore) return;
     
     let newEquipped = [...equippedItems];
     if (newEquipped.includes(itemId)) {
@@ -380,7 +388,7 @@ export default function BattlegroundPage() {
   }
   
   const handleSupportFaction = async (factionId: 'yelu' | 'association') => {
-      if (!isWanderer || combatStatus === 'ended' || supportedFaction || !user || !currentBattle) return;
+      if (!isWanderer || combatStatus === 'ended' || supportedFaction || !user || !currentBattle || !firestore) return;
 
       const participants = {
         ...(currentBattle.participants || {}),
@@ -397,7 +405,7 @@ export default function BattlegroundPage() {
   const monstersToDisplay = useMemo(() => {
     if (!currentBattle?.monsters) return [];
     if (!playerFaction) {
-      return isWanderer ? [] : currentBattle.monsters;
+      return isWanderer ? [] : currentBattle.monsters.filter(m => m.factionId === 'common');
     }
     const factionMonsters = currentBattle.monsters.filter(m => m.factionId === playerFaction);
     const commonMonsters = currentBattle.monsters.filter(m => m.factionId === 'common');
@@ -417,15 +425,15 @@ export default function BattlegroundPage() {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Battle Area */}
         <div className="lg:col-span-2 space-y-4">
-          {isBattleActive ? (
+         {isBattleActive ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {monstersToDisplay.map((monster, index) => (
                       <MonsterCard 
                           key={`${monster.monsterId}-${index}`}
                           monster={monster}
-                          isTargeted={false} // No global target selection
-                          onSelect={() => {}} // Not used for targeting anymore
+                          isTargeted={false}
+                          onSelect={() => {}}
                       />
                   ))}
               </div>
@@ -567,7 +575,7 @@ export default function BattlegroundPage() {
                 </TabsContent>
                  <TabsContent value="items" className="mt-4">
                      <Card><CardContent className="p-4 space-y-2">
-                        {inventoryConsumables.length > 0 ? inventoryConsumables.map(item => (
+                        {inventoryConsumables.size > 0 ? Array.from(inventoryConsumables.values()).map(({ item, count }) => (
                              <Tooltip key={item.id}>
                                 <TooltipTrigger asChild>
                                     <div className="flex items-center justify-between p-2 border rounded-md">
@@ -575,6 +583,7 @@ export default function BattlegroundPage() {
                                             {item.imageUrl && <Image src={item.imageUrl} alt={item.name} width={32} height={32} className="rounded-sm object-cover"/>}
                                             <span>{item.name}</span>
                                         </div>
+                                         <span className="text-sm text-muted-foreground font-mono">x{count}</span>
                                     </div>
                                 </TooltipTrigger>
                                 <TooltipContent side="left">
