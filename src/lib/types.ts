@@ -1,5 +1,6 @@
 
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -55,8 +56,8 @@ export interface TaskType {
 
 export type AttributeEffect = {
   attribute: 'hp' | 'atk' | 'def';
-  operator: '+' | '*' | 'd'; // d for dice roll, e.g., 1d6
-  value: number;
+  operator: '+' | '*' | 'd'; 
+  value: number | string;
 };
 
 export type TriggeredEffect = {
@@ -74,7 +75,7 @@ export interface Item {
     effects: Array<AttributeEffect | TriggeredEffect>;
     imageUrl: string;
     price: number;
-    itemTypeId: 'equipment' | 'consumable' | 'special';
+    itemTypeId: 'equipment' | 'consumable' | 'special' | 'stat_boost';
     factionId: string;
     raceId: string;
     isPublished: boolean;

@@ -50,6 +50,7 @@ export async function seedDatabase() {
       { id: 'equipment', name: '裝備', description: '可以穿戴以增強能力的物品。' },
       { id: 'consumable', name: '戰鬥道具', description: '在戰鬥中消耗以產生效果的物品。' },
       { id: 'special', name: '特殊道具', description: '具有特殊用途或劇情價值的物品。' },
+      { id: 'stat_boost', name: '提升數值道具', description: '使用後可永久提升角色能力的物品。' },
     ];
     for (const itemType of itemTypes) {
         const itemTypeRef = db.collection('itemTypes').doc(itemType.id);

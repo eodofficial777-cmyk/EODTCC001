@@ -1,3 +1,4 @@
+
 'use server';
 
 import {
@@ -36,8 +37,12 @@ export interface PerformAttackResult {
 }
 
 function rollDice(diceNotation: string): number {
-  if (!diceNotation || !diceNotation.toLowerCase().includes('d')) return 0;
-  const [numDice, numSides] = diceNotation.toLowerCase().split('d').map(part => parseInt(part, 10));
+  if (!diceNotation || typeof diceNotation !== 'string' || !diceNotation.toLowerCase().includes('d')) return 0;
+  
+  const [numDiceStr, numSidesStr] = diceNotation.toLowerCase().split('d');
+  const numDice = parseInt(numDiceStr, 10) || 1; // Default to 1 if not specified
+  const numSides = parseInt(numSidesStr, 10);
+  
   if (isNaN(numDice) || isNaN(numSides) || numDice <= 0 || numSides <= 0) return 0;
   
   let total = 0;
@@ -46,6 +51,7 @@ function rollDice(diceNotation: string): number {
   }
   return total;
 }
+
 
 function parseAtk(atkString: string | undefined): number {
   if(!atkString) return 0;
@@ -100,8 +106,10 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
 
       // --- 1. Calculate Player Damage ---
       let playerBaseAtk = user.attributes.atk;
+      let playerMultipliedAtk = playerBaseAtk;
       let playerDiceDamage = 0;
       let playerBaseDef = user.attributes.def;
+      let playerMultipliedDef = playerBaseDef;
 
       if (equippedItemIds.length > 0) {
         const itemDocs = await Promise.all(equippedItemIds.map(id => transaction.get(doc(db, 'items', id))));
@@ -112,13 +120,19 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
                     if ('attribute' in effect) {
                          if (effect.attribute === 'atk') {
                             if (effect.operator === '+') {
-                               playerBaseAtk += effect.value;
+                               playerBaseAtk += Number(effect.value);
+                            } else if (effect.operator === '*') {
+                               playerMultipliedAtk *= Number(effect.value);
                             } else if (effect.operator === 'd') {
-                               playerDiceDamage += rollDice(`1d${effect.value}`);
+                               playerDiceDamage += rollDice(String(effect.value));
                             }
                          }
-                         if(effect.attribute === 'def' && effect.operator === '+') {
-                             playerBaseDef += effect.value;
+                         if(effect.attribute === 'def') {
+                             if(effect.operator === '+') {
+                                playerBaseDef += Number(effect.value);
+                             } else if (effect.operator === '*') {
+                                playerMultipliedDef *= Number(effect.value);
+                             }
                          }
                     }
                 });
@@ -126,12 +140,15 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
         });
       }
       
-      const finalPlayerDamage = playerBaseAtk + playerDiceDamage;
+      const finalPlayerAtk = Math.round(playerMultipliedAtk) + playerBaseAtk - user.attributes.atk;
+      const finalPlayerDamage = finalPlayerAtk + playerDiceDamage;
       targetMonster.hp = Math.max(0, targetMonster.hp - finalPlayerDamage);
       
+      const finalPlayerDef = Math.round(playerMultipliedDef) + playerBaseDef - user.attributes.def;
+
       // --- 2. Calculate Monster Damage ---
       const monsterRawDamage = parseAtk(targetMonster.atk);
-      const finalMonsterDamage = Math.max(0, monsterRawDamage - playerBaseDef); // Subtract player defense
+      const finalMonsterDamage = Math.max(0, monsterRawDamage - finalPlayerDef);
       playerParticipantData.hp = Math.max(0, playerParticipantData.hp - finalMonsterDamage);
 
       // --- 3. Update Firestore Battle Document ---

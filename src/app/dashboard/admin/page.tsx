@@ -598,11 +598,12 @@ const itemTypeTranslations: { [key: string]: string } = {
   equipment: '裝備',
   consumable: '戰鬥道具',
   special: '特殊道具',
+  stat_boost: '能力提升'
 };
 
 function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
     if ('attribute' in effect) { // AttributeEffect
-        const op = effect.operator === 'd' ? `d${effect.value}` : `${effect.operator} ${effect.value}`;
+        const op = effect.operator === 'd' ? `${effect.value}` : `${effect.operator} ${effect.value}`;
         return `${effect.attribute.toUpperCase()} ${op}`;
     }
     // TriggeredEffect
@@ -659,7 +660,43 @@ function ItemEditor({
   
   const isEquipment = editedItem.itemTypeId === 'equipment';
   const isConsumable = editedItem.itemTypeId === 'consumable';
+  const isStatBoost = editedItem.itemTypeId === 'stat_boost';
 
+  const handleEffectChange = (index: number, field: keyof AttributeEffect, value: any) => {
+    setEditedItem(prev => {
+        const newEffects = [...(prev.effects || [])];
+        const effect = { ...newEffects[index] } as AttributeEffect;
+        (effect as any)[field] = value;
+        newEffects[index] = effect;
+        return { ...prev, effects: newEffects };
+    });
+  };
+  
+  const handleTriggeredEffectChange = (index: number, field: keyof TriggeredEffect, value: any) => {
+    setEditedItem(prev => {
+        const newEffects = [...(prev.effects || [])];
+        const effect = { ...newEffects[index] } as TriggeredEffect;
+        (effect as any)[field] = value;
+        newEffects[index] = effect;
+        return { ...prev, effects: newEffects };
+    });
+  };
+
+  const addEffect = () => {
+    let newEffect: AttributeEffect | TriggeredEffect;
+    if (isEquipment || isStatBoost) {
+        newEffect = { attribute: 'atk', operator: '+', value: 0 };
+    } else if (isConsumable) {
+        newEffect = { trigger: 'on_use', probability: 100, effectType: 'hp_recovery', value: 0 };
+    } else {
+        return;
+    }
+    setEditedItem(prev => ({ ...prev, effects: [...(prev.effects || []), newEffect] }));
+  };
+
+  const removeEffect = (index: number) => {
+    setEditedItem(prev => ({...prev, effects: prev.effects?.filter((_, i) => i !== index)}));
+  };
 
   return (
     <Card className="mt-4 bg-muted/30">
@@ -688,7 +725,7 @@ function ItemEditor({
         {/* Categorization and Price */}
         <div className="space-y-2">
           <Label htmlFor="item-type">類型</Label>
-          <Select value={editedItem.itemTypeId} onValueChange={(value) => setEditedItem({ ...editedItem, itemTypeId: value as Item['itemTypeId'] })}>
+          <Select value={editedItem.itemTypeId} onValueChange={(value) => setEditedItem({ ...editedItem, itemTypeId: value as Item['itemTypeId'], effects: [] })}>
             <SelectTrigger id="item-type"><SelectValue placeholder="選擇類型" /></SelectTrigger>
             <SelectContent>
               {Object.entries(itemTypeTranslations).map(([id, name]) => (
@@ -729,16 +766,16 @@ function ItemEditor({
         <div className="md:col-span-2 space-y-4">
             <div className="flex justify-between items-center">
                 <Label>效果</Label>
-                { (isEquipment || isConsumable) && <Button size="sm" variant="outline" onClick={() => setEditedItem(prev => ({ ...prev, effects: [...(prev.effects || []), isEquipment ? { attribute: 'atk', operator: '+', value: 0 } : { trigger: 'on_use', probability: 100, effectType: 'hp_recovery', value: 0 }] }))}><Plus className="mr-2 h-4 w-4"/>新增效果</Button>}
+                 <Button size="sm" variant="outline" onClick={addEffect}><Plus className="mr-2 h-4 w-4"/>新增效果</Button>
             </div>
 
-            { (editedItem.effects || []).map((effect, index) => (
+            {(editedItem.effects || []).map((effect, index) => (
                 <div key={index} className="p-3 border rounded-md bg-background/50 space-y-4 relative">
-                    <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => setEditedItem(prev => ({ ...prev, effects: prev.effects?.filter((_, i) => i !== index) }))}><X className="h-4 w-4"/></Button>
+                    <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => removeEffect(index)}><X className="h-4 w-4"/></Button>
                    
-                    {isEquipment && 'attribute' in effect && (
+                    {(isEquipment || isStatBoost) && 'attribute' in effect && (
                         <div className="grid grid-cols-3 gap-2">
-                            <Select value={effect.attribute} onValueChange={v => setEditedItem(prev => ({...prev, effects: prev.effects?.map((e, i) => i === index ? {...e, attribute: v} : e)}))}>
+                            <Select value={effect.attribute} onValueChange={v => handleEffectChange(index, 'attribute', v)}>
                                 <SelectTrigger><SelectValue/></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="atk">ATK</SelectItem>
@@ -746,7 +783,7 @@ function ItemEditor({
                                     <SelectItem value="hp">HP</SelectItem>
                                 </SelectContent>
                             </Select>
-                             <Select value={effect.operator} onValueChange={v => setEditedItem(prev => ({...prev, effects: prev.effects?.map((e, i) => i === index ? {...e, operator: v} : e)}))}>
+                             <Select value={effect.operator} onValueChange={v => handleEffectChange(index, 'operator', v)}>
                                 <SelectTrigger><SelectValue/></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="+">+</SelectItem>
@@ -754,14 +791,18 @@ function ItemEditor({
                                     <SelectItem value="d">d (骰)</SelectItem>
                                 </SelectContent>
                             </Select>
-                            <Input type="number" value={effect.value} onChange={e => setEditedItem(prev => ({...prev, effects: prev.effects?.map((ef, i) => i === index ? {...ef, value: parseFloat(e.target.value) || 0} : ef)}))} />
+                            <Input
+                                placeholder="數值或 1d6"
+                                value={effect.value}
+                                onChange={e => handleEffectChange(index, 'value', e.target.value)}
+                            />
                         </div>
                     )}
 
                     {isConsumable && 'trigger' in effect && (
-                        <div className="space-y-3">
+                         <div className="space-y-3">
                            <div className="grid grid-cols-3 gap-2">
-                             <Select value={effect.effectType} onValueChange={v => setEditedItem(prev => ({...prev, effects: prev.effects?.map((e, i) => i === index ? {...e, effectType: v} : e)}))}>
+                             <Select value={effect.effectType} onValueChange={v => handleTriggeredEffectChange(index, 'effectType', v)}>
                                 <SelectTrigger><SelectValue placeholder="效果類型"/></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="hp_recovery">恢復HP</SelectItem>
@@ -771,10 +812,10 @@ function ItemEditor({
                                     <SelectItem value="hp_cost">扣除HP</SelectItem>
                                 </SelectContent>
                             </Select>
-                             <Input type="number" placeholder="數值" value={effect.value} onChange={e => setEditedItem(prev => ({...prev, effects: prev.effects?.map((ef, i) => i === index ? {...ef, value: parseFloat(e.target.value) || 0} : ef)}))} />
-                             <Input type="number" placeholder="機率 (0-100)%" value={effect.probability} onChange={e => setEditedItem(prev => ({...prev, effects: prev.effects?.map((ef, i) => i === index ? {...ef, probability: parseFloat(e.target.value) || 0} : ef)}))} />
+                             <Input type="number" placeholder="數值" value={effect.value} onChange={e => handleTriggeredEffectChange(index, 'value', parseInt(e.target.value) || 0)} />
+                             <Input type="number" placeholder="機率 (0-100)%" value={effect.probability} onChange={e => handleTriggeredEffectChange(index, 'probability', parseInt(e.target.value) || 0)} />
                            </div>
-                           <Input type="number" placeholder="持續回合數 (選填)" value={effect.duration} onChange={e => setEditedItem(prev => ({...prev, effects: prev.effects?.map((ef, i) => i === index ? {...ef, duration: parseInt(e.target.value) || undefined} : ef)}))} />
+                           <Input type="number" placeholder="持續回合數 (選填)" value={effect.duration || ''} onChange={e => handleTriggeredEffectChange(index, 'duration', parseInt(e.target.value) || undefined)} />
                         </div>
                     )}
                 </div>

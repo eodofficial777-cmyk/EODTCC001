@@ -1,3 +1,4 @@
+
 'use client';
 
 import Image from 'next/image';
@@ -13,9 +14,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { Shield, Gem, ScrollText, Package, Check } from 'lucide-react';
+import { Shield, Gem, ScrollText, Package, Check, Hammer } from 'lucide-react';
 import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection } from '@/firebase';
-import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
+import { doc, collection, query, orderBy, limit, runTransaction } from 'firebase/firestore';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Item, AttributeEffect, TriggeredEffect, Title } from '@/lib/types';
@@ -53,11 +54,12 @@ import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { updateUser } from '../actions/update-user';
 import { useToast } from '@/hooks/use-toast';
+import { useItem } from '../actions/use-item';
 
 
 function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
     if ('attribute' in effect) { // AttributeEffect
-        const op = effect.operator === 'd' ? `d${effect.value}` : `${effect.operator} ${effect.value}`;
+        const op = effect.operator === 'd' ? `${effect.value}` : `${effect.operator} ${effect.value}`;
         return `${effect.attribute.toUpperCase()} ${op}`;
     }
     // TriggeredEffect
@@ -89,6 +91,7 @@ const itemTypeTranslations: { [key in Item['itemTypeId']]: { name: string; color
   equipment: { name: '裝備', color: 'bg-blue-600' },
   consumable: { name: '戰鬥道具', color: 'bg-green-600' },
   special: { name: '特殊道具', color: 'bg-purple-600' },
+  stat_boost: { name: '能力提升', color: 'bg-yellow-500' },
 };
 
 function ChangeTitleDialog({ user, userData, allTitles, onTitleChanged }: { user: any, userData: any, allTitles: Title[], onTitleChanged: () => void }) {
@@ -235,6 +238,8 @@ function ChangeAvatarDialog({ user, userData, onAvatarChanged }: { user: any, us
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
+  const [isUsingItem, setIsUsingItem] = useState<string | null>(null);
 
   const userDocRef = useMemoFirebase(
     () => (user ? doc(firestore, `users/${user.uid}`) : null),
@@ -280,6 +285,28 @@ export default function DashboardPage() {
         }
     }).filter(item => item.data); // Filter out items that might not exist in allItems yet
   }, [userData?.items, allItems]);
+  
+  const handleUseItem = async (itemId: string) => {
+    if (!user) return;
+    setIsUsingItem(itemId);
+    try {
+      const result = await useItem({ userId: user.uid, itemId });
+      if (result.error) throw new Error(result.error);
+      toast({
+        title: '使用成功！',
+        description: result.message,
+      });
+      mutate();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '使用失敗',
+        description: error.message,
+      });
+    } finally {
+      setIsUsingItem(null);
+    }
+  };
 
 
   const isLoading = isUserLoading || isUserDataLoading || areItemsLoading || areTitlesLoading;
@@ -378,32 +405,38 @@ export default function DashboardPage() {
              <TooltipProvider>
                 {isLoading ? (
                   <div className="space-y-2">
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
                   </div>
                 ) : processedInventory.length > 0 ? (
                   <ul className="space-y-2 text-sm">
                     {processedInventory.map(({ id, count, data }) => {
-                       const itemTypeInfo = data?.itemTypeId ? itemTypeTranslations[data.itemTypeId] : { name: '道具', color: 'bg-gray-500' };
+                       if (!data) return null;
+                       const itemTypeInfo = data.itemTypeId ? itemTypeTranslations[data.itemTypeId] : { name: '道具', color: 'bg-gray-500' };
                        return (
                           <Tooltip key={id}>
                             <TooltipTrigger asChild>
                               <li className="flex items-center justify-between bg-card-foreground/5 p-2 rounded-md cursor-default">
                                 <div className="flex items-center gap-3">
                                   <Badge className={`${itemTypeInfo.color} text-white`}>{itemTypeInfo.name}</Badge>
-                                  <span>{data?.name || '未知物品'}</span>
+                                  <span>{data.name}</span>
+                                  <span className="font-mono text-muted-foreground">x{count}</span>
                                 </div>
-                                <span className="font-mono text-muted-foreground">x{count}</span>
+                                {data.itemTypeId === 'stat_boost' && (
+                                   <Button size="sm" onClick={() => handleUseItem(id)} disabled={isUsingItem === id}>
+                                     {isUsingItem === id ? '使用中...' : '使用'}
+                                   </Button>
+                                )}
                               </li>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs">
-                              <p className="font-bold">{data?.name}</p>
-                              <p className="text-xs text-muted-foreground mb-2">{data?.description}</p>
+                              <p className="font-bold">{data.name}</p>
+                              <p className="text-xs text-muted-foreground mb-2">{data.description}</p>
                               <Separator/>
                                <div className="mt-2 text-primary-foreground/80 bg-primary/20 p-2 rounded-md space-y-1">
                                 <span className="font-semibold text-foreground">效果：</span>
-                                {data?.effects && data.effects.length > 0 ? (
+                                {data.effects && data.effects.length > 0 ? (
                                     <ul className="list-disc pl-4 text-foreground/90">
                                         {data.effects.map((effect, index) => (
                                             <li key={index}>{formatEffect(effect)}</li>
