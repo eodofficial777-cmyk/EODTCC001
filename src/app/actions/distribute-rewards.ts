@@ -12,7 +12,8 @@ import {
   increment,
   arrayUnion,
   doc,
-  runTransaction
+  runTransaction,
+  getDoc,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';

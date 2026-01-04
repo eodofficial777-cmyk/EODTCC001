@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -40,7 +41,7 @@ import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Che
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus, Monster, CombatEncounter } from '@/lib/types';
+import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus, Monster, CombatEncounter, EndOfBattleRewards } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -81,7 +82,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { updateMaintenanceStatus } from '@/app/actions/update-maintenance-status';
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
-import { createBattle, startBattle } from '@/app/actions/manage-battle';
+import { createBattle, startBattle, endBattle, addMonsterToBattle } from '@/app/actions/manage-battle';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -1777,7 +1778,7 @@ function RewardDistribution() {
         setIsProcessing(true);
         try {
             const result = await distributeRewards({
-                targetUserIds: mode === 'single' ? [selectedUser] : preview?.users.map(u => u.id),
+                targetUserIds: mode === 'single' ? (selectedUser ? [selectedUser] : []) : preview?.users.map(u => u.id),
                 rewards: {
                     honorPoints: rewards.honorPoints || undefined,
                     currency: rewards.currency || undefined,
@@ -2013,7 +2014,13 @@ function BattleManagement() {
     const [battleName, setBattleName] = useState('');
     const [yeluMonsters, setYeluMonsters] = useState<Partial<Monster>[]>([]);
     const [associationMonsters, setAssociationMonsters] = useState<Partial<Monster>[]>([]);
+    const [commonMonsters, setCommonMonsters] = useState<Partial<Monster>[]>([]);
+    const [rewards, setRewards] = useState<EndOfBattleRewards>({ honorPoints: 0, currency: 0, logMessage: '' });
     const [isLoading, setIsLoading] = useState(false);
+    
+    const [newMonster, setNewMonster] = useState<Partial<Omit<Monster, 'monsterId' | 'originalHp'>>>({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: 'https://images.plurk.com/' });
+    const [isAddingMonster, setIsAddingMonster] = useState(false);
+
 
     const latestBattleQuery = useMemoFirebase(
       () => (firestore ? query(collection(firestore, 'combatEncounters'), orderBy('startTime', 'desc'), limit(1)) : null),
@@ -2022,33 +2029,27 @@ function BattleManagement() {
     const { data: battleData, isLoading: isBattleLoading, mutate } = useCollection<CombatEncounter>(latestBattleQuery);
     const currentBattle = battleData?.[0];
 
-    const addMonster = (faction: 'yelu' | 'association') => {
-        const newMonster: Partial<Monster> = { name: '', imageUrl: 'https://images.plurk.com/', hp: 1000, atk: '10+1D6' };
-        if (faction === 'yelu') {
-            setYeluMonsters([...yeluMonsters, newMonster]);
-        } else {
-            setAssociationMonsters([...associationMonsters, newMonster]);
-        }
+    const { data: allItems } = useCollection<Item>(useMemoFirebase(() => collection(firestore, 'items'), [firestore]));
+    const { data: allTitles } = useCollection<Title>(useMemoFirebase(() => collection(firestore, 'titles'), [firestore]));
+
+
+    const addMonster = (faction: 'yelu' | 'association' | 'common') => {
+        const newMonster: Partial<Monster> = { name: '', imageUrl: 'https://images.plurk.com/', hp: 1000, atk: '10+1D6', factionId: faction };
+        if (faction === 'yelu') setYeluMonsters([...yeluMonsters, newMonster]);
+        else if (faction === 'association') setAssociationMonsters([...associationMonsters, newMonster]);
+        else setCommonMonsters([...commonMonsters, newMonster]);
     };
 
-    const updateMonster = (faction: 'yelu' | 'association', index: number, field: keyof Monster, value: any) => {
-        if (faction === 'yelu') {
-            const updated = [...yeluMonsters];
+    const updateMonsterList = (setter: React.Dispatch<React.SetStateAction<Partial<Monster>[]>>, index: number, field: keyof Monster, value: any) => {
+        setter(prev => {
+            const updated = [...prev];
             updated[index] = { ...updated[index], [field]: value };
-            setYeluMonsters(updated);
-        } else {
-            const updated = [...associationMonsters];
-            updated[index] = { ...updated[index], [field]: value };
-            setAssociationMonsters(updated);
-        }
+            return updated;
+        });
     };
     
-    const removeMonster = (faction: 'yelu' | 'association', index: number) => {
-       if (faction === 'yelu') {
-            setYeluMonsters(yeluMonsters.filter((_, i) => i !== index));
-        } else {
-            setAssociationMonsters(associationMonsters.filter((_, i) => i !== index));
-        }
+    const removeMonsterFromList = (setter: React.Dispatch<React.SetStateAction<Partial<Monster>[]>>, index: number) => {
+       setter(prev => prev.filter((_, i) => i !== index));
     }
 
     const handleCreateBattle = async () => {
@@ -2056,20 +2057,22 @@ function BattleManagement() {
             toast({ variant: 'destructive', title: '錯誤', description: '請為戰場命名。' });
             return;
         }
-        if (yeluMonsters.length === 0 && associationMonsters.length === 0) {
-            toast({ variant: 'destructive', title: '錯誤', description: '請至少為一個陣營新增一隻災獸。' });
+        if (yeluMonsters.length === 0 && associationMonsters.length === 0 && commonMonsters.length === 0) {
+            toast({ variant: 'destructive', title: '錯誤', description: '請至少新增一隻災獸。' });
             return;
         }
         
         setIsLoading(true);
         try {
-            const allMonsters = [...yeluMonsters.map(m => ({...m, factionId: 'yelu'})), ...associationMonsters.map(m => ({...m, factionId: 'association'}))];
-            const result = await createBattle({ name: battleName, monsters: allMonsters as Omit<Monster, 'originalHp' | 'monsterId'>[] });
+            const allMonsters = [...yeluMonsters, ...associationMonsters, ...commonMonsters];
+            const result = await createBattle({ name: battleName, monsters: allMonsters as Omit<Monster, 'originalHp' | 'monsterId'>[], rewards });
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: `戰場「${battleName}」已開啟！準備時間 30 分鐘。` });
             setBattleName('');
             setYeluMonsters([]);
             setAssociationMonsters([]);
+            setCommonMonsters([]);
+            setRewards({ honorPoints: 0, currency: 0, logMessage: '' });
             mutate();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '開啟失敗', description: error.message });
@@ -2093,8 +2096,43 @@ function BattleManagement() {
         }
     }
 
-    const renderMonsterForm = (faction: 'yelu' | 'association', monsters: Partial<Monster>[]) => {
-        const factionInfo = FACTIONS[faction];
+    const handleEndBattle = async () => {
+        if (!currentBattle) return;
+        setIsLoading(true);
+        try {
+            const result = await endBattle(currentBattle.id);
+            if (result.error) throw new Error(result.error);
+            toast({ title: '操作成功', description: result.message });
+            mutate();
+        } catch (error: any) {
+             toast({ variant: 'destructive', title: '操作失敗', description: error.message });
+        } finally {
+            setIsLoading(false);
+        }
+    }
+    
+    const handleAddMonster = async () => {
+        if (!currentBattle || !newMonster.name) {
+             toast({ variant: 'destructive', title: '錯誤', description: '請填寫災獸名稱。' });
+            return;
+        }
+        setIsAddingMonster(true);
+        try {
+            const result = await addMonsterToBattle(currentBattle.id, newMonster as Omit<Monster, 'monsterId' | 'originalHp'>);
+            if (result.error) throw new Error(result.error);
+            toast({ title: '成功', description: `已將「${newMonster.name}」增援至戰場！` });
+            setNewMonster({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: 'https://images.plurk.com/' });
+            mutate();
+        } catch (error: any) {
+             toast({ variant: 'destructive', title: '增援失敗', description: error.message });
+        } finally {
+            setIsAddingMonster(false);
+        }
+    };
+
+
+    const renderMonsterForm = (faction: 'yelu' | 'association' | 'common', monsters: Partial<Monster>[], setter: React.Dispatch<React.SetStateAction<Partial<Monster>[]>>) => {
+        const factionInfo = faction === 'common' ? { name: '通用', color: 'hsl(var(--primary))' } : FACTIONS[faction];
         return (
             <Card style={{borderColor: factionInfo.color}}>
                 <CardHeader className="flex-row items-center justify-between">
@@ -2104,28 +2142,28 @@ function BattleManagement() {
                 <CardContent className="space-y-4">
                     {monsters.map((monster, index) => (
                         <div key={index} className="p-4 border rounded-md space-y-3 relative bg-card/50">
-                            <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-muted-foreground" onClick={() => removeMonster(faction, index)}><X className="h-4 w-4"/></Button>
+                            <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-muted-foreground" onClick={() => removeMonsterFromList(setter, index)}><X className="h-4 w-4"/></Button>
                             <div className="space-y-1">
                                 <Label>災獸名稱</Label>
-                                <Input value={monster.name} onChange={(e) => updateMonster(faction, index, 'name', e.target.value)} />
+                                <Input value={monster.name} onChange={(e) => updateMonsterList(setter, index, 'name', e.target.value)} />
                             </div>
                              <div className="space-y-1">
                                 <Label>圖片網址</Label>
-                                <Input value={monster.imageUrl} onChange={(e) => updateMonster(faction, index, 'imageUrl', e.target.value)} />
+                                <Input value={monster.imageUrl} onChange={(e) => updateMonsterList(setter, index, 'imageUrl', e.target.value)} />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                     <Label>HP</Label>
-                                    <Input type="number" value={monster.hp} onChange={(e) => updateMonster(faction, index, 'hp', parseInt(e.target.value))} />
+                                    <Input type="number" value={monster.hp} onChange={(e) => updateMonsterList(setter, index, 'hp', parseInt(e.target.value))} />
                                 </div>
                                 <div className="space-y-1">
                                     <Label>ATK (格式: 20+1D10)</Label>
-                                    <Input value={monster.atk} onChange={(e) => updateMonster(faction, index, 'atk', e.target.value)} />
+                                    <Input value={monster.atk} onChange={(e) => updateMonsterList(setter, index, 'atk', e.target.value)} />
                                 </div>
                             </div>
                         </div>
                     ))}
-                    {monsters.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">此陣營尚無災獸</p>}
+                    {monsters.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">此分類尚無災獸</p>}
                 </CardContent>
             </Card>
         )
@@ -2146,32 +2184,68 @@ function BattleManagement() {
                       </CardDescription>
                   </CardHeader>
                   <CardContent>
-                      <h4 className="font-semibold mb-2">災獸資訊</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {Object.values(FACTIONS).map(f => {
-                              const factionMonsters = currentBattle.monsters.filter(m => m.factionId === f.id);
-                              if (factionMonsters.length === 0) return null;
-                              return (
-                                  <div key={f.id}>
-                                      <h5 className="font-bold mb-2" style={{color: f.color}}>{f.name}</h5>
-                                      <div className="space-y-2">
-                                        {factionMonsters.map((monster, i) => (
-                                          <div key={i} className="flex justify-between items-center text-sm p-2 border rounded-md">
-                                              <span>{monster.name}</span>
-                                              <span className="font-mono text-muted-foreground">HP: {monster.hp} / ATK: {monster.atk}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                  </div>
-                              )
-                          })}
-                      </div>
+                    <div className="space-y-4">
+                        <div>
+                             <h4 className="font-semibold mb-2">災獸資訊</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {currentBattle.monsters.map((monster, i) => (
+                                    <div key={i} className="flex justify-between items-center text-sm p-2 border rounded-md">
+                                        <span>{monster.name} ({monster.factionId})</span>
+                                        <span className="font-mono text-muted-foreground">HP: {monster.hp} / ATK: {monster.atk}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                         <Dialog>
+                            <DialogTrigger asChild>
+                                <Button variant="outline"><Plus className="h-4 w-4 mr-2"/>增援災獸</Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader><DialogTitle>新增災獸至目前戰場</DialogTitle></DialogHeader>
+                                <div className="space-y-4 py-4">
+                                    <div className="space-y-2"><Label>災獸名稱</Label><Input value={newMonster.name} onChange={e => setNewMonster({...newMonster, name: e.target.value})}/></div>
+                                    <div className="space-y-2"><Label>圖片網址</Label><Input value={newMonster.imageUrl} onChange={e => setNewMonster({...newMonster, imageUrl: e.target.value})}/></div>
+                                    <div className="space-y-2"><Label>HP</Label><Input type="number" value={newMonster.hp} onChange={e => setNewMonster({...newMonster, hp: parseInt(e.target.value)})}/></div>
+                                    <div className="space-y-2"><Label>ATK (格式: 20+1d10)</Label><Input value={newMonster.atk} onChange={e => setNewMonster({...newMonster, atk: e.target.value})}/></div>
+                                    <div className="space-y-2"><Label>所屬陣營</Label>
+                                     <Select value={newMonster.factionId} onValueChange={(v) => setNewMonster({ ...newMonster, factionId: v as any })}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="yelu">夜鷺</SelectItem>
+                                            <SelectItem value="association">協會</SelectItem>
+                                            <SelectItem value="common">通用</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <DialogClose asChild><Button variant="ghost">取消</Button></DialogClose>
+                                    <Button onClick={handleAddMonster} disabled={isAddingMonster}>{isAddingMonster ? '新增中...' : '確認新增'}</Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                   </CardContent>
-                  {currentBattle.status === 'preparing' && (
-                    <CardFooter>
-                        <Button onClick={handleStartBattle} disabled={isLoading} variant="destructive">手動開始戰鬥</Button>
-                    </CardFooter>
-                  )}
+                  <CardFooter className="gap-2">
+                        {currentBattle.status === 'preparing' && (
+                            <Button onClick={handleStartBattle} disabled={isLoading} variant="destructive">手動開始戰鬥</Button>
+                        )}
+                         <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" disabled={isLoading}>結束戰場並發放獎勵</Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>確認結束戰場？</AlertDialogTitle>
+                                <AlertDialogDescription>此操作將會結束當前戰場，並根據設定發放獎勵給所有參與者。此動作無法復原。</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>取消</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleEndBattle}>確認結束</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                  </CardFooter>
               </Card>
             )}
             <Card className="mt-4">
@@ -2183,9 +2257,45 @@ function BattleManagement() {
                         <Label htmlFor="battle-name">戰場名稱</Label>
                         <Input id="battle-name" value={battleName} onChange={(e) => setBattleName(e.target.value)} placeholder="例如：月度BOSS戰、緊急討伐任務"/>
                     </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {renderMonsterForm('yelu', yeluMonsters)}
-                        {renderMonsterForm('association', associationMonsters)}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        {renderMonsterForm('yelu', yeluMonsters, setYeluMonsters)}
+                        {renderMonsterForm('association', associationMonsters, setAssociationMonsters)}
+                        {renderMonsterForm('common', commonMonsters, setCommonMonsters)}
+                    </div>
+                    <div>
+                        <Label className="text-base font-semibold">結束戰場獎勵</Label>
+                        <div className="p-4 mt-2 border rounded-lg space-y-4">
+                           <div className="space-y-2">
+                             <Label>活動日誌訊息</Label>
+                             <Input placeholder="例如：成功討伐ＯＯＯ獎勵" value={rewards.logMessage} onChange={e => setRewards(r => ({ ...r, logMessage: e.target.value }))} />
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                               <div className="space-y-2">
+                                <Label>榮譽點</Label>
+                                <Input type="number" value={rewards.honorPoints} onChange={e => setRewards(r => ({ ...r, honorPoints: parseInt(e.target.value) || 0}))} />
+                               </div>
+                               <div className="space-y-2">
+                                <Label>貨幣</Label>
+                                <Input type="number" value={rewards.currency} onChange={e => setRewards(r => ({ ...r, currency: parseInt(e.target.value) || 0}))} />
+                               </div>
+                           </div>
+                             <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>獎勵道具 (選填)</Label>
+                                    <Select onValueChange={v => setRewards(r => ({...r, itemId: v === 'none' ? undefined : v}))}>
+                                        <SelectTrigger><SelectValue placeholder="選擇道具"/></SelectTrigger>
+                                        <SelectContent><SelectItem value="none">無</SelectItem>{allItems?.map(i => <SelectItem value={i.id} key={i.id}>{i.name}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                                 <div className="space-y-2">
+                                    <Label>獎勵稱號 (選填)</Label>
+                                     <Select onValueChange={v => setRewards(r => ({...r, titleId: v === 'none' ? undefined : v}))}>
+                                        <SelectTrigger><SelectValue placeholder="選擇稱號"/></SelectTrigger>
+                                        <SelectContent><SelectItem value="none">無</SelectItem>{allTitles?.map(t => <SelectItem value={t.id} key={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                           </div>
+                        </div>
                     </div>
                 </CardContent>
                 <CardFooter>

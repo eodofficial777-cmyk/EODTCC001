@@ -140,7 +140,7 @@ export interface MaintenanceStatus {
 export interface Monster {
     monsterId: string;
     name: string;
-    factionId: string;
+    factionId: 'yelu' | 'association' | 'common';
     imageUrl: string;
     hp: number;
     originalHp: number;
@@ -155,6 +155,14 @@ export interface Participant {
     supportedFaction?: 'yelu' | 'association';
 }
 
+export interface EndOfBattleRewards {
+  honorPoints?: number;
+  currency?: number;
+  itemId?: string;
+  titleId?: string;
+  logMessage?: string;
+}
+
 export interface CombatEncounter {
     id: string;
     name: string;
@@ -167,6 +175,7 @@ export interface CombatEncounter {
     participants?: {
         [userId: string]: Participant;
     }
+    endOfBattleRewards?: EndOfBattleRewards;
 }
 
 export interface CombatLog {

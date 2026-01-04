@@ -1,11 +1,13 @@
+
 'use server';
 
-import { getFirestore, doc, setDoc, serverTimestamp, collection, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, serverTimestamp, collection, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { CombatEncounter, Monster } from '@/lib/types';
+import type { CombatEncounter, Monster, EndOfBattleRewards } from '@/lib/types';
 import { randomUUID } from 'crypto';
+import { distributeRewards } from './distribute-rewards';
 
 
 const ADMIN_EMAIL = 'admin@eodtcc.com';
@@ -35,13 +37,14 @@ async function ensureAdminAuth() {
 interface CreateBattlePayload {
   name: string;
   monsters: Omit<Monster, 'originalHp' | 'monsterId'>[];
+  rewards: EndOfBattleRewards;
 }
 
 export async function createBattle(payload: CreateBattlePayload): Promise<{ success: boolean; error?: string }> {
   try {
     await ensureAdminAuth();
 
-    const { name, monsters } = payload;
+    const { name, monsters, rewards } = payload;
     const now = new Date();
     const prepTimeMinutes = 30;
     const preparationEndTime = new Date(now.getTime() + prepTimeMinutes * 60000);
@@ -50,9 +53,9 @@ export async function createBattle(payload: CreateBattlePayload): Promise<{ succ
     
     const processedMonsters: Monster[] = monsters.map(m => ({
         ...m,
-        monsterId: randomUUID(), // Assign a unique ID to each monster
-        originalHp: m.hp, // Set originalHp to the initial HP
-    }))
+        monsterId: randomUUID(),
+        originalHp: m.hp,
+    }));
 
     const newBattle: CombatEncounter = {
       id: newBattleRef.id,
@@ -62,6 +65,7 @@ export async function createBattle(payload: CreateBattlePayload): Promise<{ succ
       preparationEndTime: preparationEndTime,
       monsters: processedMonsters,
       turn: 0,
+      endOfBattleRewards: rewards,
     };
 
     await setDoc(newBattleRef, newBattle);
@@ -76,18 +80,85 @@ export async function createBattle(payload: CreateBattlePayload): Promise<{ succ
 export async function startBattle(battleId: string): Promise<{ success: boolean; error?: string }> {
   try {
     await ensureAdminAuth();
-    if (!battleId) {
-      throw new Error('缺少戰場 ID。');
-    }
+    if (!battleId) throw new Error('缺少戰場 ID。');
     
     const battleRef = doc(db, 'combatEncounters', battleId);
-    await updateDoc(battleRef, {
-      status: 'active',
-    });
+    await updateDoc(battleRef, { status: 'active' });
     
     return { success: true };
   } catch (error: any) {
     console.error('Failed to start battle:', error);
     return { success: false, error: error.message || '開始戰場失敗。' };
   }
+}
+
+export async function endBattle(battleId: string): Promise<{ success: boolean; error?: string; message?: string }> {
+  try {
+    await ensureAdminAuth();
+    if (!battleId) throw new Error('缺少戰場 ID。');
+
+    const battleRef = doc(db, 'combatEncounters', battleId);
+    const battleSnap = await getDoc(battleRef);
+
+    if (!battleSnap.exists()) throw new Error('找不到指定的戰場。');
+    
+    const battleData = battleSnap.data() as CombatEncounter;
+    
+    if (battleData.status === 'ended') {
+      return { success: false, error: '戰場已經結束。' };
+    }
+
+    await updateDoc(battleRef, { status: 'ended', endTime: serverTimestamp() });
+
+    // Distribute rewards if they exist
+    const participants = Object.keys(battleData.participants || {});
+    const rewards = battleData.endOfBattleRewards;
+
+    if (rewards && participants.length > 0) {
+      const distributionResult = await distributeRewards({
+        targetUserIds: participants,
+        rewards: {
+          honorPoints: rewards.honorPoints,
+          currency: rewards.currency,
+          itemId: rewards.itemId,
+          titleId: rewards.titleId,
+          logMessage: rewards.logMessage || `參與戰役「${battleData.name}」獎勵`,
+        }
+      });
+      if (distributionResult.error) {
+        throw new Error(`戰場已結束，但獎勵發放失敗：${distributionResult.error}`);
+      }
+      return { success: true, message: `戰場已結束，並已向 ${distributionResult.processedCount} 位玩家發放獎勵。` };
+    }
+
+    return { success: true, message: '戰場已結束，沒有設定獎勵或無人參與。' };
+  } catch (error: any) {
+    console.error('Failed to end battle:', error);
+    return { success: false, error: error.message || '結束戰場失敗。' };
+  }
+}
+
+export async function addMonsterToBattle(battleId: string, monsterData: Omit<Monster, 'originalHp' | 'monsterId'>): Promise<{ success: boolean; error?: string }> {
+    try {
+        await ensureAdminAuth();
+        if (!battleId) throw new Error('缺少戰場 ID。');
+        if (!monsterData) throw new Error('缺少災獸資料。');
+
+        const battleRef = doc(db, 'combatEncounters', battleId);
+        
+        const newMonster: Monster = {
+            ...monsterData,
+            monsterId: randomUUID(),
+            originalHp: monsterData.hp,
+        };
+
+        await updateDoc(battleRef, {
+            monsters: arrayUnion(newMonster)
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        console.error('Failed to add monster to battle:', error);
+        return { success: false, error: error.message || '增加災獸失敗。' };
+    }
 }
