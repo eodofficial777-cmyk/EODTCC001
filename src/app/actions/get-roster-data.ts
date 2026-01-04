@@ -31,6 +31,7 @@ export async function getRosterData(): Promise<{
     const usersQuery = query(
       collection(db, 'users'),
       where('approved', '==', true),
+      where('isAdmin', '!=', true),
       orderBy('honorPoints', 'desc')
     );
 
