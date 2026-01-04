@@ -95,8 +95,12 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
       const userUpdateData: { [key: string]: any } = {};
       if(task.currencyAwarded > 0) userUpdateData.currency = increment(task.currencyAwarded);
       if(task.honorPointsAwarded > 0) userUpdateData.honorPoints = increment(task.honorPointsAwarded);
-      if (taskType.titleAwarded) userUpdateData.titles = arrayUnion(taskType.titleAwarded);
-      if (taskType.itemAwarded) userUpdateData.items = arrayUnion(taskType.itemAwarded);
+      if (taskType.titleAwarded) {
+        userUpdateData.titles = arrayUnion(taskType.titleAwarded);
+      }
+      if (taskType.itemAwarded) {
+        userUpdateData.items = arrayUnion(taskType.itemAwarded);
+      }
       transaction.update(userRef, userUpdateData);
 
       // Update war season score
