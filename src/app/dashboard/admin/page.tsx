@@ -1547,7 +1547,6 @@ function TitleEditor({ title, items, onSave, onCancel, isSaving }: { title: Part
         const triggerInfo = titleTriggerTypes.find(t => t.value === type);
         if (triggerInfo?.requiresItem) {
             newTrigger.itemId = items[0]?.id;
-            newTrigger.damageThreshold = 0;
         }
         setEditedTitle(prev => ({...prev, trigger: newTrigger}));
     };
@@ -2289,7 +2288,7 @@ function BattleManagement() {
                              <h4 className="font-semibold mb-2">災獸資訊</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {currentBattle.monsters.map((monster, i) => (
-                                    <div key={i} className="flex justify-between items-center text-sm p-2 border rounded-md">
+                                    <div key={monster.monsterId} className="flex justify-between items-center text-sm p-2 border rounded-md">
                                         <span>{monster.name} ({monster.factionId})</span>
                                         <span className="font-mono text-muted-foreground">HP: {monster.hp} / ATK: {monster.atk}</span>
                                     </div>
@@ -2416,7 +2415,7 @@ function BattleManagement() {
                                 <TableRow key={b.id}>
                                     <TableCell>{b.name}</TableCell>
                                     <TableCell><Badge variant={b.status === 'ended' ? 'outline' : 'default'}>{b.status}</Badge></TableCell>
-                                    <TableCell>{new Date(b.startTime).toLocaleString()}</TableCell>
+                                    <TableCell>{b.startTime ? new Date(b.startTime).toLocaleString() : '-'}</TableCell>
                                     <TableCell>{b.endTime ? new Date(b.endTime).toLocaleString() : '-'}</TableCell>
                                     <TableCell>
                                         <Dialog>

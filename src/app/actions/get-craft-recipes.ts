@@ -32,7 +32,10 @@ export async function getCraftRecipes(): Promise<{ recipes?: CraftRecipe[], erro
       return { recipes: [] };
     }
 
-    const recipes = snapshot.docs.map(doc => doc.data() as CraftRecipe);
+    const recipes = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as CraftRecipe));
     
     return { recipes };
 
