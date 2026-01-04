@@ -533,9 +533,34 @@
         "roleName": { "type": "string" },
         "factionId": { "type": "string" },
         "equippedItems": { "type": "array", "items": { "type": "string" } },
-        "supportedFaction": { "type": "string", "enum": ["yelu", "association"] }
+        "supportedFaction": { "type": "string", "enum": ["yelu", "association"] },
+        "activeBuffs": {
+          "type": "array",
+          "description": "List of active buffs on the participant.",
+          "items": {
+            "$ref": "#/entities/ActiveBuff"
+          }
+        },
+        "skillCooldowns": {
+          "type": "object",
+          "description": "A map of skill IDs to the number of turns remaining for cooldown.",
+          "additionalProperties": { "type": "number" }
+        }
       },
       "required": ["hp", "roleName", "factionId"]
+    },
+     "ActiveBuff": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "ActiveBuff",
+        "type": "object",
+        "description": "Represents a temporary buff or debuff on a participant.",
+        "properties": {
+          "effectType": { "type": "string" },
+          "value": { "type": ["number", "string"] },
+          "duration": { "type": "number" },
+          "turnsLeft": { "type": "number" }
+        },
+        "required": ["effectType", "turnsLeft"]
     },
     "EndOfBattleRewards": {
       "$schema": "http://json-schema.org/draft-07/schema#",

@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, Item, CombatEncounter, Monster, AttributeEffect } from '@/lib/types';
+import type { User, Item, CombatEncounter, Monster, AttributeEffect, ActiveBuff } from '@/lib/types';
 
 let app: App;
 if (!getApps().length) {
@@ -95,12 +95,18 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       if (targetMonster.hp <= 0) throw new Error('目標已經被擊敗了。');
 
       // --- Get or initialize player's participant data ---
-      const participants = battle.participants || {};
-      const playerParticipantData = participants[userId] || {
+      let playerParticipantData = battle.participants?.[userId];
+       if (!playerParticipantData) {
+        playerParticipantData = {
           hp: user.attributes.hp,
           roleName: user.roleName,
           factionId: user.factionId,
-      };
+          equippedItems: equippedItemIds,
+          activeBuffs: [],
+          skillCooldowns: {},
+        };
+      }
+
 
       if (playerParticipantData.hp <= 0) throw new Error('您的HP已歸零，無法行動。');
 
@@ -111,6 +117,7 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       let playerBaseDef = user.attributes.def;
       let playerDefMultiplier = 1;
 
+      // Apply item effects
       if (equippedItemIds.length > 0) {
         const itemDocs = await Promise.all(equippedItemIds.map(id => transaction.get(doc(db, 'items', id))));
         itemDocs.forEach(itemDoc => {
@@ -141,6 +148,17 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
         });
       }
       
+      // Apply active skill buffs
+      const activeBuffs = playerParticipantData.activeBuffs || [];
+      activeBuffs.forEach(buff => {
+        if (buff.effectType === 'atk_buff') {
+          playerAtkMultiplier *= Number(buff.value);
+        }
+        if (buff.effectType === 'def_buff') {
+          playerDefMultiplier *= Number(buff.value);
+        }
+      });
+      
       const finalPlayerAtk = Math.round(playerBaseAtk * playerAtkMultiplier);
       const finalPlayerDamage = finalPlayerAtk + playerDiceDamage;
       targetMonster.hp = Math.max(0, targetMonster.hp - finalPlayerDamage);
@@ -152,16 +170,29 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       const finalMonsterDamage = Math.max(0, monsterRawDamage - finalPlayerDef);
       playerParticipantData.hp = Math.max(0, playerParticipantData.hp - finalMonsterDamage);
 
-      // --- 3. Update Firestore Battle Document ---
+      // --- 3. Update buffs and cooldowns ---
+      const updatedBuffs = (playerParticipantData.activeBuffs || [])
+        .map(buff => ({ ...buff, turnsLeft: buff.turnsLeft - 1 }))
+        .filter(buff => buff.turnsLeft > 0);
+        
+      const updatedCooldowns = { ...playerParticipantData.skillCooldowns };
+      for (const skillId in updatedCooldowns) {
+        updatedCooldowns[skillId] = Math.max(0, updatedCooldowns[skillId] - 1);
+      }
+
+      // --- 4. Update Firestore Battle Document ---
       const updatedMonsters = [...battle.monsters];
       updatedMonsters[targetMonsterIndex] = targetMonster;
       
       const updatedParticipants = {
-          ...participants,
+          ...battle.participants,
           [userId]: {
               ...playerParticipantData,
-              equippedItems: equippedItemIds, // Persist equipped items
-              supportedFaction: user.factionId === 'wanderer' ? supportedFaction : undefined, // Persist wanderer choice
+              hp: playerParticipantData.hp,
+              equippedItems: equippedItemIds,
+              supportedFaction: user.factionId === 'wanderer' ? supportedFaction : undefined,
+              activeBuffs: updatedBuffs,
+              skillCooldowns: updatedCooldowns,
           }
       };
 
@@ -170,7 +201,7 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
           participants: updatedParticipants,
       });
       
-      // --- 4. Create a single, consolidated Battle Log Entry ---
+      // --- 5. Create a single, consolidated Battle Log Entry ---
       const consolidatedLogMessage = `${user.roleName} 對 ${targetMonster.name} 造成 ${finalPlayerDamage} 點傷害，並受到 ${finalMonsterDamage} 點反擊傷害。`;
       const battleLogRef = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
       transaction.set(battleLogRef, {
@@ -191,4 +222,3 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
     return { success: false, error: error.message || '攻擊失敗，請稍後再試。' };
   }
 }
-

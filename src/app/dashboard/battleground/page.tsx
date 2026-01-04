@@ -12,30 +12,36 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Heart, Shield, Sword, Timer, CheckCircle2, Package, WandSparkles, Bird, Users, EyeOff } from 'lucide-react';
+import { Heart, Shield, Sword, Timer, CheckCircle2, Package, WandSparkles, Bird, Users, EyeOff, Sparkles, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, orderBy, limit, where, updateDoc } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import type { CombatEncounter, User, Item, Skill, Monster, CombatLog, AttributeEffect, TriggeredEffect } from '@/lib/types';
+import type { CombatEncounter, User, Item, Skill, Monster, CombatLog, AttributeEffect, TriggeredEffect, ActiveBuff } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { performAttack } from '@/app/actions/perform-attack';
+import { useSkill } from '@/app/actions/use-skill';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogClose } from '@/components/ui/dialog';
 
 // --- Sub-components for better organization ---
 
-function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
+function formatEffect(effect: AttributeEffect | TriggeredEffect | ActiveBuff): string {
     if ('attribute' in effect) { // AttributeEffect
-        const op = effect.operator === 'd' ? `${effect.value}` : `${effect.operator} ${effect.value}`;
+        const op = effect.operator === 'd' ? `d${effect.value}` : `${effect.operator} ${effect.value}`;
         return `${effect.attribute.toUpperCase()} ${op}`;
     }
-    // TriggeredEffect
-    let desc = `${effect.probability}%機率`;
-    switch(effect.effectType) {
+    // TriggeredEffect / ActiveBuff
+    const effectType = 'effectType' in effect ? effect.effectType : 'unknown';
+    let desc = '';
+    if ('probability' in effect) {
+      desc = `${effect.probability}%機率`;
+    }
+
+    switch(effectType) {
         case 'hp_recovery':
             desc += `恢復 ${effect.value} HP`;
             break;
@@ -43,10 +49,10 @@ function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
             desc += `造成 ${effect.value} 點傷害`;
             break;
         case 'atk_buff':
-            desc += `提升攻擊力 ${effect.value}%`;
+            desc += `提升攻擊力 ${Number(effect.value) * 100}%`;
             break;
         case 'def_buff':
-            desc += `提升防禦力 ${effect.value}%`;
+            desc += `提升防禦力 ${Number(effect.value) * 100}%`;
             break;
         case 'hp_cost':
             desc += `消耗 ${effect.value} HP`;
@@ -54,6 +60,9 @@ function formatEffect(effect: AttributeEffect | TriggeredEffect): string {
     }
     if (effect.duration) {
         desc += `，持續 ${effect.duration} 回合`;
+    }
+     if ('turnsLeft' in effect) {
+        desc += ` (剩餘 ${effect.turnsLeft} 回合)`;
     }
     return desc;
 }
@@ -137,19 +146,18 @@ const BattleTimer = ({ battle }: { battle: CombatEncounter | null }) => {
 };
 
 
-const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userData: User | null; battleHP: number | undefined; equippedItems: string[]; allItems: Item[] | null }) => {
+const PlayerStatus = ({ userData, battleHP, equippedItems, activeBuffs, allItems }: { userData: User | null; battleHP: number | undefined; equippedItems: string[]; activeBuffs: ActiveBuff[], allItems: Item[] | null }) => {
     const { finalAtk, baseAtk, equipAtk, atkMultiplier, diceAtkString, finalDef, baseDef, equipDef, defMultiplier } = useMemo(() => {
         if (!userData || !allItems) {
              return { finalAtk: 0, baseAtk: 0, equipAtk: 0, atkMultiplier: 1, diceAtkString: '', finalDef: 0, baseDef: 0, equipDef: 0, defMultiplier: 1 };
         }
 
-        const baseAtk = userData.attributes.atk;
-        const baseDef = userData.attributes.def;
+        let baseAtk = userData.attributes.atk;
+        let baseDef = userData.attributes.def;
         let equipAtk = 0;
         let atkMultiplier = 1;
         let equipDef = 0;
         let defMultiplier = 1;
-
         let diceAtkParts: string[] = [];
 
         (equippedItems || []).forEach(itemId => {
@@ -159,55 +167,59 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, allItems }: { userDat
                     if ('attribute' in effect) {
                         const attrEffect = effect as AttributeEffect;
                         if (attrEffect.attribute === 'atk') {
-                            if (attrEffect.operator === '+') {
-                                equipAtk += Number(attrEffect.value);
-                            } else if (attrEffect.operator === '*') {
-                                atkMultiplier *= Number(attrEffect.value);
-                            } else if (attrEffect.operator === 'd') {
-                                diceAtkParts.push(String(attrEffect.value));
-                            }
+                            if (attrEffect.operator === '+') equipAtk += Number(attrEffect.value);
+                            else if (attrEffect.operator === '*') atkMultiplier *= Number(attrEffect.value);
+                            else if (attrEffect.operator === 'd') diceAtkParts.push(String(attrEffect.value));
                         }
                         if (attrEffect.attribute === 'def') {
-                             if (attrEffect.operator === '+') {
-                                equipDef += Number(attrEffect.value);
-                            } else if (attrEffect.operator === '*') {
-                                defMultiplier *= Number(attrEffect.value);
-                            }
+                             if (attrEffect.operator === '+') equipDef += Number(attrEffect.value);
+                             else if (attrEffect.operator === '*') defMultiplier *= Number(attrEffect.value);
                         }
                     }
                 });
             }
         });
         
+        (activeBuffs || []).forEach(buff => {
+            if (buff.effectType === 'atk_buff') atkMultiplier *= Number(buff.value);
+            if (buff.effectType === 'def_buff') defMultiplier *= Number(buff.value);
+        });
+
         const totalAtk = (baseAtk + equipAtk) * atkMultiplier;
         const diceAtkString = diceAtkParts.length > 0 ? `+${diceAtkParts.join('+')}` : '';
 
         return {
-            finalAtk: Math.round(totalAtk),
-            baseAtk,
-            equipAtk,
-            atkMultiplier,
-            diceAtkString,
-            finalDef: Math.round((baseDef + equipDef) * defMultiplier),
-            baseDef,
-            equipDef,
-            defMultiplier,
+            finalAtk: Math.round(totalAtk), baseAtk, equipAtk, atkMultiplier, diceAtkString,
+            finalDef: Math.round((baseDef + equipDef) * defMultiplier), baseDef, equipDef, defMultiplier,
         };
-    }, [userData, equippedItems, allItems]);
+    }, [userData, equippedItems, allItems, activeBuffs]);
     
     if (!userData) {
         return <Skeleton className="h-48 w-full" />;
     }
 
     const maxHP = userData.attributes.hp;
-    const currentHP = battleHP ?? maxHP;
+    const currentHP = battleHP !== undefined ? battleHP : maxHP;
 
     return (
         <Card>
             <CardHeader>
                 <CardTitle>玩家狀態</CardTitle>
+                <CardDescription>您目前的戰鬥數值</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+                {activeBuffs.length > 0 && (
+                    <div className="space-y-2">
+                        <h4 className="text-sm font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-yellow-400" />目前效果</h4>
+                        <div className="flex flex-wrap gap-2">
+                            {activeBuffs.map((buff, i) => (
+                                <TooltipProvider key={i}><Tooltip><TooltipTrigger asChild>
+                                    <Badge variant="outline">{formatEffect(buff)}</Badge>
+                                </TooltipTrigger><TooltipContent><p>{formatEffect(buff)}</p></TooltipContent></Tooltip></TooltipProvider>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 <div className="space-y-1">
                     <div className="flex justify-between items-center text-sm">
                         <span className="font-medium text-green-400">HP</span>
@@ -335,7 +347,7 @@ export default function BattlegroundPage() {
     () => (firestore ? query(collection(firestore, 'combatEncounters'), orderBy('startTime', 'desc'), limit(1)) : null),
     [firestore]
   );
-  const { data: battleData, isLoading: isBattleLoading } = useCollection<CombatEncounter>(latestBattleQuery);
+  const { data: battleData, isLoading: isBattleLoading, mutate: mutateBattle } = useCollection<CombatEncounter>(latestBattleQuery);
   const currentBattle = battleData?.[0];
   const isBattleActiveForState = currentBattle && ['preparing', 'active'].includes(currentBattle.status);
 
@@ -354,7 +366,7 @@ export default function BattlegroundPage() {
   }, [firestore, userData]);
   const { data: availableSkills } = useCollection<Skill>(skillsQuery);
 
-  const [actionContext, setActionContext] = useState<{type: 'attack' | 'item', itemId?: string} | null>(null);
+  const [actionContext, setActionContext] = useState<{type: 'attack' | 'item' | 'skill', itemId?: string} | null>(null);
   const [actionCooldown, setActionCooldown] = useState<number>(0);
   const [isProcessingAction, setIsProcessingAction] = useState(false);
   
@@ -362,6 +374,8 @@ export default function BattlegroundPage() {
   const battleHP = participantData?.hp;
   const supportedFaction = participantData?.supportedFaction;
   const equippedItems = participantData?.equippedItems || [];
+  const activeBuffs = participantData?.activeBuffs || [];
+  const skillCooldowns = participantData?.skillCooldowns || {};
   
   const isWanderer = userData?.factionId === 'wanderer';
   const playerTargetFaction = isWanderer ? supportedFaction : userData?.factionId;
@@ -399,30 +413,47 @@ export default function BattlegroundPage() {
   }, [userData?.items, allItems]);
 
 
-  const handlePerformAction = async (targetMonsterId: string) => {
-    if (!user || !currentBattle || !actionContext || isProcessingAction || isOnCooldown || hasFallen || isBattleTimeOver) return;
+  const handlePerformAttack = async (targetMonsterId: string) => {
+    if (!user || !currentBattle || isProcessingAction || isOnCooldown || hasFallen || isBattleTimeOver) return;
 
     setIsProcessingAction(true);
     try {
-        if (actionContext.type === 'attack') {
-             const { success, error } = await performAttack({
-                userId: user.uid,
-                battleId: currentBattle.id,
-                targetMonsterId: targetMonsterId,
-                equippedItemIds: equippedItems,
-                supportedFaction: supportedFaction || null
-            });
-            if (error) throw new Error(error);
-        }
-        
+        const { success, error } = await performAttack({
+            userId: user.uid,
+            battleId: currentBattle.id,
+            targetMonsterId: targetMonsterId,
+            equippedItemIds: equippedItems,
+            supportedFaction: supportedFaction || null
+        });
+        if (error) throw new Error(error);
         setActionCooldown(Date.now());
     } catch (error: any) {
-        toast({ variant: 'destructive', title: '行動失敗', description: error.message });
+        toast({ variant: 'destructive', title: '攻擊失敗', description: error.message });
     } finally {
         setIsProcessingAction(false);
         setActionContext(null);
     }
   }
+
+  const handleUseSkill = async (skill: Skill) => {
+    if (!user || !currentBattle || isProcessingAction || isOnCooldown || hasFallen || isBattleTimeOver || skillCooldowns[skill.id] > 0) return;
+    
+    setIsProcessingAction(true);
+    try {
+      const result = await useSkill({
+        userId: user.uid,
+        battleId: currentBattle.id,
+        skillId: skill.id,
+      });
+      if (result.error) throw new Error(result.error);
+      toast({ title: '技能已使用', description: result.logMessage });
+      setActionCooldown(Date.now());
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: '技能使用失敗', description: error.message });
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
 
   const handleToggleEquip = async (itemId: string) => {
     if (!user || !currentBattle || !firestore) return;
@@ -538,7 +569,7 @@ export default function BattlegroundPage() {
               <Card>
                   <CardHeader><CardTitle>行動</CardTitle></CardHeader>
                   <CardContent className="flex items-center gap-4">
-                       <Dialog open={!!actionContext} onOpenChange={(isOpen) => !isOpen && setActionContext(null)}>
+                       <Dialog open={actionContext?.type === 'attack'} onOpenChange={(isOpen) => !isOpen && setActionContext(null)}>
                           <DialogTrigger asChild>
                               <Button size="lg" onClick={() => setActionContext({type: 'attack'})} disabled={combatStatus !== 'active' || hasFallen || isOnCooldown || isProcessingAction || isBattleTimeOver}>
                                   {isProcessingAction ? '處理中...' : '攻擊'}
@@ -553,7 +584,7 @@ export default function BattlegroundPage() {
                                   {[...yeluMonsters, ...associationMonsters, ...commonMonsters]
                                       .filter(m => m.hp > 0 && (m.factionId === playerTargetFaction || m.factionId === 'common'))
                                       .map((monster) => (
-                                      <Button key={monster.monsterId} variant="outline" className="h-auto flex flex-col p-4 gap-2" onClick={() => handlePerformAction(monster.monsterId)}>
+                                      <Button key={monster.monsterId} variant="outline" className="h-auto flex flex-col p-4 gap-2" onClick={() => handlePerformAttack(monster.monsterId)}>
                                           <span className="font-bold">{monster.name}</span>
                                           <span className="text-xs text-muted-foreground">HP: {monster.hp.toLocaleString()}</span>
                                       </Button>
@@ -567,7 +598,7 @@ export default function BattlegroundPage() {
                               </DialogClose>
                           </DialogContent>
                       </Dialog>
-                       <Button size="lg" variant="outline" disabled>技能</Button>
+                       <Button size="lg" variant="outline" disabled={combatStatus !== 'active' || hasFallen || isOnCooldown || isProcessingAction || isBattleTimeOver}>技能</Button>
                        <Button size="lg" variant="outline" disabled>道具</Button>
                        <ActionCooldown cooldown={actionCooldown} onCooldownEnd={() => setActionCooldown(0)} />
                   </CardContent>
@@ -604,7 +635,7 @@ export default function BattlegroundPage() {
         <div className="lg:col-span-1 space-y-6">
             <BattleTimer battle={currentBattle} />
             
-            <PlayerStatus userData={userData} battleHP={battleHP} equippedItems={equippedItems} allItems={allItems} />
+            <PlayerStatus userData={userData} battleHP={battleHP} equippedItems={equippedItems} activeBuffs={activeBuffs} allItems={allItems} />
             
             <Tabs defaultValue="equipment" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
@@ -649,20 +680,36 @@ export default function BattlegroundPage() {
                 </TabsContent>
                 <TabsContent value="skills" className="mt-4">
                      <Card><CardContent className="p-4 space-y-2">
-                        {availableSkills && availableSkills.length > 0 ? availableSkills.map(skill => (
-                            <Tooltip key={skill.id}>
-                                <TooltipTrigger asChild>
-                                    <div className="flex items-center justify-between p-2 border rounded-md">
-                                        <span>{skill.name}</span>
-                                        <span className="text-xs text-muted-foreground">CD: {skill.cooldown}</span>
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="left">
-                                    <p className="font-bold">{skill.name}</p>
-                                    <p className="text-xs text-muted-foreground">{skill.description}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        )) : <p className="text-muted-foreground text-sm text-center py-4">沒有可用的技能。</p>}
+                        {availableSkills && availableSkills.length > 0 ? availableSkills.map(skill => {
+                            const cooldownTurns = skillCooldowns[skill.id] || 0;
+                            const isCoolingDown = cooldownTurns > 0;
+                            return (
+                                <Tooltip key={skill.id}>
+                                    <TooltipTrigger asChild>
+                                        <Button 
+                                            variant="outline" 
+                                            className="w-full justify-between"
+                                            onClick={() => handleUseSkill(skill)}
+                                            disabled={isCoolingDown || hasFallen || isOnCooldown || isProcessingAction}
+                                        >
+                                            <span>{skill.name}</span>
+                                            <span className="text-xs text-muted-foreground">
+                                                {isCoolingDown ? `冷卻中 (${cooldownTurns})` : `CD: ${skill.cooldown}`}
+                                            </span>
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="max-w-xs">
+                                        <p className="font-bold">{skill.name}</p>
+                                        <p className="text-xs text-muted-foreground mb-2">{skill.description}</p>
+                                        <div className="border-t pt-2 mt-2">
+                                            {skill.effects.map((effect, i) => (
+                                                <p key={i} className="text-xs">{formatEffect(effect)}</p>
+                                            ))}
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            )
+                        }) : <p className="text-muted-foreground text-sm text-center py-4">沒有可用的技能。</p>}
                      </CardContent></Card>
                 </TabsContent>
                  <TabsContent value="items" className="mt-4">
@@ -691,4 +738,3 @@ export default function BattlegroundPage() {
     </div>
   );
 }
-

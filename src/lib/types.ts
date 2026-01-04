@@ -5,6 +5,7 @@
 
 
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -153,12 +154,18 @@ export interface Monster {
     atk: string; // e.g. "20+1D10"
 }
 
+export interface ActiveBuff extends SkillEffect {
+    turnsLeft: number;
+}
+
 export interface Participant {
     hp: number;
     roleName: string;
     factionId: string;
     equippedItems?: string[];
     supportedFaction?: 'yelu' | 'association';
+    activeBuffs?: ActiveBuff[];
+    skillCooldowns?: { [skillId: string]: number };
 }
 
 export interface EndOfBattleRewards {
