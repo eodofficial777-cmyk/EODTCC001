@@ -1,7 +1,7 @@
 
 'use server';
 
-import { getFirestore, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, deleteDoc, FieldValue, deleteField } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
@@ -47,13 +47,17 @@ export async function updateTitle(payload: Partial<Title> & { _delete?: boolean 
         return { success: true };
     }
     
-    // If it's a manual title, remove the trigger field.
-    if (data.isManual) {
-        data.trigger = undefined;
+    // Create a mutable copy to work with
+    const updateData: { [key: string]: any } = { ...data };
+
+    // If it's a manual title, ensure the trigger field is removed before saving.
+    // Firestore's `deleteField()` is the canonical way to remove a field during an update.
+    if (updateData.isManual) {
+        updateData.trigger = deleteField();
     }
 
 
-    await setDoc(docRef, data, { merge: true });
+    await setDoc(docRef, updateData, { merge: true });
 
     return { success: true };
   } catch (error: any) {
