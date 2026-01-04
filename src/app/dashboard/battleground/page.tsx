@@ -187,9 +187,9 @@ const MonsterCard = ({ monster }: { monster: Monster }) => {
         <div className="space-y-1">
           <div className="flex justify-between items-center text-xs font-mono">
             <span className='flex items-center gap-1'><Heart className="h-3 w-3 text-red-400" /> HP</span>
-            <span>{monster.hp.toLocaleString()} / {maxHp.toLocaleString()}</span>
+            <span>{monster.hp.toLocaleString()} / {(monster.originalHp ?? monster.hp).toLocaleString()}</span>
           </div>
-          <Progress value={(monster.hp / (maxHp || 1)) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
+          <Progress value={(monster.hp / (maxHp > 0 ? maxHp : 1)) * 100} className="h-2 bg-red-500/20 [&>div]:bg-red-500" />
         </div>
         <div className="text-xs font-mono flex items-center justify-between text-muted-foreground">
            <span className='flex items-center gap-1'><Sword className="h-3 w-3" /> ATK</span>
@@ -404,7 +404,7 @@ export default function BattlegroundPage() {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Battle Area */}
         <div className="lg:col-span-2 space-y-4">
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {monstersToDisplay.map((monster, index) => (
                     <MonsterCard 
                         key={`${monster.name}-${index}`}
@@ -441,8 +441,8 @@ export default function BattlegroundPage() {
                                 <DialogDescription>選擇一隻災獸進行攻擊。</DialogDescription>
                             </DialogHeader>
                             <div className="grid grid-cols-2 gap-4 py-4">
-                                {monstersToDisplay.filter(m => m.hp > 0).map(monster => (
-                                    <Button key={monster.name} variant="outline" className="h-auto flex flex-col p-4 gap-2" onClick={() => handlePerformAction(monster.name)}>
+                                {monstersToDisplay.filter(m => m.hp > 0).map((monster, index) => (
+                                    <Button key={`${monster.name}-${index}`} variant="outline" className="h-auto flex flex-col p-4 gap-2" onClick={() => handlePerformAction(monster.name)}>
                                         <span className="font-bold">{monster.name}</span>
                                         <span className="text-xs text-muted-foreground">HP: {monster.hp.toLocaleString()}</span>
                                     </Button>
