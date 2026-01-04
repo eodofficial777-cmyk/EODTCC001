@@ -18,7 +18,8 @@ import {
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, Item, Title } from '@/lib/types';
+import type { User, Item, Title, CombatLog } from '@/lib/types';
+import { parse } from 'path';
 
 const ADMIN_EMAIL = 'admin@eodtcc.com';
 const ADMIN_PASSWORD = 'password';
@@ -61,6 +62,8 @@ export interface FilterCriteria {
   currency_val?: number;
   taskCount_op?: '>' | '<';
   taskCount_val?: number;
+  combatEncounterId?: string;
+  damageDealt_val?: number;
 }
 
 export interface DistributionPayload {
@@ -69,12 +72,50 @@ export interface DistributionPayload {
     rewards: RewardPayload;
 }
 
+async function getDamageDealtInBattle(battleId: string, damageThreshold: number): Promise<string[]> {
+    const logsQuery = query(
+        collection(db, `combatEncounters/${battleId}/combatLogs`),
+        where('type', '==', 'player_attack')
+    );
+    const logsSnapshot = await getDocs(logsQuery);
+    
+    const damageByUser: { [userName: string]: number } = {};
+
+    logsSnapshot.docs.forEach(doc => {
+        const log = doc.data() as CombatLog;
+        // Example logData: "角色名稱 對 災獸名稱 造成 123 點傷害..."
+        const match = log.logData.match(/^(.*?) 對 .* 造成 (\d+) 點傷害/);
+        if (match) {
+            const userName = match[1];
+            const damage = parseInt(match[2], 10);
+            damageByUser[userName] = (damageByUser[userName] || 0) + damage;
+        }
+    });
+
+    const usersQuery = query(collection(db, 'users'));
+    const usersSnapshot = await getDocs(usersQuery);
+    const allUsers = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+    const userNameToIdMap = new Map(allUsers.map(u => [u.roleName, u.id]));
+
+    const qualifyingUserIds: string[] = [];
+    for (const userName in damageByUser) {
+        if (damageByUser[userName] > damageThreshold) {
+            const userId = userNameToIdMap.get(userName);
+            if (userId) {
+                qualifyingUserIds.push(userId);
+            }
+        }
+    }
+    
+    return qualifyingUserIds;
+}
+
 
 export async function distributeRewards(payload: DistributionPayload): Promise<{
     success: boolean;
     error?: string;
     processedCount?: number;
-    processedUsers?: { id: string; roleName: string }[];
+    processedUsers?: { id: string; roleName: string }[]
 }> {
   try {
     await ensureAdminAuth();
@@ -97,23 +138,33 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
     if (targetUserIds && targetUserIds.length > 0) {
       finalUserIds = targetUserIds;
     } else if (filters) {
-      // Fetch all approved users and filter in backend
-      const usersQuery = query(collection(db, 'users'), where('approved', '==', true));
-      const usersSnapshot = await getDocs(usersQuery);
-      const allUsers = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+        let userPool: User[] = [];
 
-      const filtered = allUsers.filter(user => {
-        if (filters.factionId && user.factionId !== filters.factionId) return false;
-        if (filters.raceId && user.raceId !== filters.raceId) return false;
-        if (filters.honorPoints_op === '>' && user.honorPoints <= (filters.honorPoints_val || 0)) return false;
-        if (filters.honorPoints_op === '<' && user.honorPoints >= (filters.honorPoints_val || 0)) return false;
-        if (filters.currency_op === '>' && user.currency <= (filters.currency_val || 0)) return false;
-        if (filters.currency_op === '<' && user.currency >= (filters.currency_val || 0)) return false;
-        if (filters.taskCount_op === '>' && (user.tasks || []).length <= (filters.taskCount_val || 0)) return false;
-        if (filters.taskCount_op === '<' && (user.tasks || []).length >= (filters.taskCount_val || 0)) return false;
-        return true;
-      });
-      finalUserIds = filtered.map(user => user.id);
+        // If filtering by battle damage, get that user list first.
+        if (filters.combatEncounterId && filters.damageDealt_val) {
+            const damageUserIds = await getDamageDealtInBattle(filters.combatEncounterId, filters.damageDealt_val);
+            const userSnaps = await Promise.all(damageUserIds.map(id => getDoc(doc(db, 'users', id))));
+            userPool = userSnaps.map(snap => ({ ...snap.data(), id: snap.id } as User));
+        } else {
+            const usersQuery = query(collection(db, 'users'), where('approved', '==', true));
+            const usersSnapshot = await getDocs(usersQuery);
+            userPool = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+        }
+      
+        const filtered = userPool.filter(user => {
+            if (filters.factionId && user.factionId !== filters.factionId) return false;
+            if (filters.raceId && user.raceId !== filters.raceId) return false;
+            if (filters.honorPoints_op === '>' && user.honorPoints <= (filters.honorPoints_val || 0)) return false;
+            if (filters.honorPoints_op === '<' && user.honorPoints >= (filters.honorPoints_val || 0)) return false;
+            if (filters.currency_op === '>' && user.currency <= (filters.currency_val || 0)) return false;
+            if (filters.currency_op === '<' && user.currency >= (filters.currency_val || 0)) return false;
+            if (filters.taskCount_op === '>' && (user.tasks || []).length <= (filters.taskCount_val || 0)) return false;
+            if (filters.taskCount_op === '<' && (user.tasks || []).length >= (filters.taskCount_val || 0)) return false;
+            // The battle damage filter is already applied by pre-filtering userPool
+            return true;
+        });
+
+        finalUserIds = filtered.map(user => user.id);
     }
 
     if (finalUserIds.length === 0) {
@@ -169,10 +220,10 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
     }
 
     // For the summary, fetch the user data of the processed IDs
-    const finalUsersData = await Promise.all(finalUserIds.map(id => getDocs(query(collection(db, 'users'), where('id', '==', id)))));
+    const finalUsersData = await Promise.all(finalUserIds.map(id => getDoc(doc(db, 'users', id))));
     const processedUsers = finalUsersData.map(snap => {
-        if (snap.docs.length === 0) return { id: 'unknown', roleName: 'Unknown User' };
-        const userData = snap.docs[0].data() as User;
+        if (!snap.exists()) return { id: snap.id, roleName: 'Unknown User' };
+        const userData = snap.data() as User;
         return { id: userData.id, roleName: userData.roleName };
     })
     

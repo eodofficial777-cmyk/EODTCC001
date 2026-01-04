@@ -1,11 +1,11 @@
 
 'use server';
 
-import { getFirestore, collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, orderBy, query, where, Timestamp } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { User, Task, TaskType, CraftRecipe, Skill, Title, Item } from '@/lib/types';
+import type { User, Task, TaskType, CraftRecipe, Skill, Title, Item, CombatEncounter } from '@/lib/types';
 
 // IMPORTANT: Use a dedicated admin service account credentials in a real production app.
 // For this development environment, we will sign in as a pre-defined admin user.
@@ -33,7 +33,8 @@ async function ensureAdminAuth() {
           // In a real app, you would have a script to create this user.
           console.log('Admin user not found, creating a new one...');
           try {
-             await import('firebase/auth').then(fb_auth => fb_auth.createUserWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD));
+             const { createUserWithEmailAndPassword } = await import('firebase/auth');
+             await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
              await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
           } catch(creationError) {
              console.error('Failed to create admin user:', creationError);
@@ -47,7 +48,17 @@ async function ensureAdminAuth() {
   }
 }
 
-export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: TaskType[]; items?: Item[], titles?: any[], craftRecipes?: CraftRecipe[], skills?: Skill[], pendingTasks?: Task[], error?: string }> {
+export async function getAdminData(): Promise<{ 
+    users?: User[]; 
+    taskTypes?: TaskType[]; 
+    items?: Item[], 
+    titles?: any[], 
+    craftRecipes?: CraftRecipe[], 
+    skills?: Skill[], 
+    pendingTasks?: Task[], 
+    combatEncounters?: CombatEncounter[],
+    error?: string 
+}> {
   try {
     await ensureAdminAuth();
 
@@ -59,9 +70,10 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
     const craftRecipesPromise = getDocs(collection(db, 'craftRecipes'));
     const skillsPromise = getDocs(collection(db, 'skills'));
     const pendingTasksPromise = getDocs(query(collection(db, 'tasks'), where('status', '==', 'pending'), orderBy('submissionDate', 'asc')));
+    const combatEncountersPromise = getDocs(query(collection(db, 'combatEncounters'), orderBy('startTime', 'desc')));
 
 
-    const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot, craftRecipesSnapshot, skillsSnapshot, pendingTasksSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise, craftRecipesPromise, skillsPromise, pendingTasksPromise]);
+    const [usersSnapshot, taskTypesSnapshot, itemsSnapshot, titlesSnapshot, craftRecipesSnapshot, skillsSnapshot, pendingTasksSnapshot, combatEncountersSnapshot] = await Promise.all([usersPromise, taskTypesPromise, itemsPromise, titlesPromise, craftRecipesPromise, skillsPromise, pendingTasksPromise, combatEncountersPromise]);
 
     // Process users
     const users = usersSnapshot.docs.map(doc => {
@@ -112,8 +124,20 @@ export async function getAdminData(): Promise<{ users?: User[]; taskTypes?: Task
             submissionDate: data.submissionDate?.toDate().toISOString() || new Date().toISOString(),
         } as Task;
     });
+    
+    // Process combat encounters
+    const combatEncounters = combatEncountersSnapshot.docs.map(doc => {
+       const data = doc.data();
+       return {
+         ...data,
+         id: doc.id,
+         startTime: (data.startTime as Timestamp)?.toDate().toISOString() || 'N/A',
+         endTime: (data.endTime as Timestamp)?.toDate().toISOString() || null,
+       } as CombatEncounter;
+    });
 
-    return { users, taskTypes, items, titles, craftRecipes, skills, pendingTasks };
+
+    return { users, taskTypes, items, titles, craftRecipes, skills, pendingTasks, combatEncounters };
   } catch (error: any) {
     console.error('Error fetching admin data:', error);
     let errorMessage = '無法獲取管理員資料。';

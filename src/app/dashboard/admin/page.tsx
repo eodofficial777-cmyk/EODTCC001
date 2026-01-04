@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { getAdminData } from '@/app/actions/get-admin-data';
 import { updateUser } from '@/app/actions/update-user';
 import {
@@ -36,11 +36,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus, Monster, CombatEncounter, EndOfBattleRewards } from '@/lib/types';
+import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus, Monster, CombatEncounter, EndOfBattleRewards, CombatLog } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -82,6 +82,7 @@ import { updateMaintenanceStatus } from '@/app/actions/update-maintenance-status
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
 import { createBattle, startBattle, endBattle, addMonsterToBattle } from '@/app/actions/manage-battle';
+import { getBattleLogs } from '@/app/actions/get-battle-logs';
 
 function AccountApproval() {
   const { toast } = useToast();
@@ -1612,13 +1613,13 @@ function TitleEditor({ title, items, onSave, onCancel, isSaving }: { title: Part
                         {editedTitle.trigger?.type === 'item_damage' && (
                             <div className="space-y-2">
                                 <Label>每次所需傷害 (A)</Label>
-                                <Input type="number" placeholder="傷害閾值" value={editedTitle.trigger.damageThreshold ?? ''} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, damageThreshold: parseInt(e.target.value) || 0} : undefined}))}/>
+                                <Input type="number" placeholder="傷害閾值" value={editedTitle.trigger.damageThreshold ?? 0} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, damageThreshold: parseInt(e.target.value) || 0} : undefined}))}/>
                             </div>
                         )}
 
                         <div className="space-y-2">
                              <Label>目標達成次數 / 數值 (X)</Label>
-                            <Input type="number" placeholder="目標數值 (例如: 100)" value={editedTitle.trigger?.value ?? ''} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, value: parseInt(e.target.value) || 0} : undefined}))}/>
+                            <Input type="number" placeholder="目標數值 (例如: 100)" value={editedTitle.trigger?.value ?? 0} onChange={e => setEditedTitle(prev => ({...prev, trigger: prev.trigger ? {...prev.trigger, value: parseInt(e.target.value) || 0} : undefined}))}/>
                         </div>
                     </div>
                 )}
@@ -1759,6 +1760,7 @@ function RewardDistribution() {
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [allItems, setAllItems] = useState<Item[]>([]);
     const [allTitles, setAllTitles] = useState<Title[]>([]);
+    const [allBattles, setAllBattles] = useState<CombatEncounter[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [mode, setMode] = useState<'filter' | 'single'>('filter');
     const [filters, setFilters] = useState<FilterCriteria>({});
@@ -1774,6 +1776,7 @@ function RewardDistribution() {
             if (data.users) setAllUsers(data.users);
             if (data.items) setAllItems(data.items);
             if (data.titles) setAllTitles(data.titles);
+            if (data.combatEncounters) setAllBattles(data.combatEncounters);
             setIsLoading(false);
         }
         fetchData();
@@ -1784,38 +1787,23 @@ function RewardDistribution() {
         setPreview(null);
         try {
             const payload = {
-                targetUserIds: mode === 'single' ? [selectedUser] : undefined,
+                targetUserIds: mode === 'single' ? (selectedUser ? [selectedUser] : undefined) : undefined,
                 filters: mode === 'filter' ? filters : undefined,
                 rewards: { logMessage: "Preview" },
             };
-            // Use a "dry-run" concept with the backend if possible, for now we simulate it.
-            // This is a simplified frontend simulation of the backend logic.
-            let targetUsers: User[] = [];
-            if (mode === 'single' && selectedUser) {
-                const user = allUsers.find(u => u.id === selectedUser);
-                if (user) targetUsers = [user];
-            } else if (mode === 'filter') {
-                 targetUsers = allUsers.filter(user => {
-                    if (filters.factionId && user.factionId !== filters.factionId) return false;
-                    if (filters.raceId && user.raceId !== filters.raceId) return false;
-                    if (filters.honorPoints_op === '>' && user.honorPoints <= (filters.honorPoints_val || 0)) return false;
-                    if (filters.honorPoints_op === '<' && user.honorPoints >= (filters.honorPoints_val || 0)) return false;
-                    if (filters.currency_op === '>' && user.currency <= (filters.currency_val || 0)) return false;
-                    if (filters.currency_op === '<' && user.currency >= (filters.currency_val || 0)) return false;
-                    if (filters.taskCount_op === '>' && (user.tasks || []).length <= (filters.taskCount_val || 0)) return false;
-                    if (filters.taskCount_op === '<' && (user.tasks || []).length >= (filters.taskCount_val || 0)) return false;
-                    return true;
+            
+            const result = await distributeRewards(payload);
+            if (result.error) throw new Error(result.error);
+            
+            if (!result.processedUsers || result.processedUsers.length === 0) {
+                 toast({ variant: 'destructive', title: '預覽結果', description: '沒有任何玩家符合條件。'});
+                 setPreview({ count: 0, users: [] });
+            } else {
+                setPreview({
+                    count: result.processedCount || 0,
+                    users: result.processedUsers || [],
                 });
             }
-            
-            if (targetUsers.length === 0) {
-                 toast({ variant: 'destructive', title: '預覽結果', description: '沒有任何玩家符合條件。'});
-            }
-
-            setPreview({
-                count: targetUsers.length,
-                users: targetUsers.map(u => ({ id: u.id, roleName: u.roleName })),
-            });
         } catch (e: any) {
             toast({ variant: 'destructive', title: '預覽失敗', description: e.message });
         } finally {
@@ -1833,6 +1821,7 @@ function RewardDistribution() {
         try {
             const result = await distributeRewards({
                 targetUserIds: mode === 'single' ? (selectedUser ? [selectedUser] : []) : preview?.users.map(u => u.id),
+                filters: mode === 'single' ? undefined : filters,
                 rewards: {
                     honorPoints: rewards.honorPoints || undefined,
                     currency: rewards.currency || undefined,
@@ -1865,7 +1854,7 @@ function RewardDistribution() {
                     <CardTitle>1. 選擇目標</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <RadioGroup value={mode} onValueChange={(v) => setMode(v as any)} className="mb-4">
+                    <RadioGroup value={mode} onValueChange={(v) => { setMode(v as any); setFilters({}); setPreview(null); }} className="mb-4">
                         <div className="flex items-center space-x-2"><RadioGroupItem value="filter" id="filter" /><Label htmlFor="filter">複合篩選</Label></div>
                         <div className="flex items-center space-x-2"><RadioGroupItem value="single" id="single" /><Label htmlFor="single">指定單一玩家</Label></div>
                     </RadioGroup>
@@ -1902,6 +1891,19 @@ function RewardDistribution() {
                                 <Label className="shrink-0">任務數</Label>
                                 <Select onValueChange={v => setFilters(f => ({ ...f, taskCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
                                 <Input type="number" placeholder="数量" onChange={e => setFilters(f => ({...f, taskCount_val: parseInt(e.target.value)}))}/>
+                            </div>
+                             <div className="space-y-2">
+                                <Label>共鬥傷害</Label>
+                                <div className="flex gap-2 items-center">
+                                    <Select onValueChange={v => setFilters(f => ({ ...f, combatEncounterId: v === 'none' ? undefined : v }))}>
+                                        <SelectTrigger><SelectValue placeholder="選擇一場戰鬥"/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">無</SelectItem>
+                                            {allBattles.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <Input type="number" placeholder="傷害 >" onChange={e => setFilters(f => ({...f, damageDealt_val: parseInt(e.target.value)}))} disabled={!filters.combatEncounterId}/>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -2062,9 +2064,50 @@ function DatabaseManagement() {
     );
 }
 
+function BattleLogViewer({ battleId, battleName }: { battleId: string, battleName: string }) {
+    const [logs, setLogs] = useState<CombatLog[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchLogs = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        const result = await getBattleLogs(battleId);
+        if (result.error) {
+            setError(result.error);
+        } else {
+            setLogs(result.logs || []);
+        }
+        setIsLoading(false);
+    }, [battleId]);
+
+    useEffect(() => {
+        fetchLogs();
+    }, [fetchLogs]);
+
+    return (
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>戰鬥紀錄: {battleName}</DialogTitle>
+                <DialogDescription>此戰場的所有事件紀錄。</DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="h-[60vh] mt-4 pr-4">
+                {isLoading && <Skeleton className="h-full w-full" />}
+                {error && <Alert variant="destructive"><AlertTitle>錯誤</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+                {!isLoading && !error && logs.length === 0 && <p className="text-muted-foreground text-center py-8">沒有紀錄</p>}
+                <div className="space-y-2 font-mono text-sm">
+                    {logs.map(log => (
+                        <p key={log.id}><span className="text-muted-foreground mr-2">[{new Date(log.timestamp).toLocaleString()}]</span>{log.logData}</p>
+                    ))}
+                </div>
+            </ScrollArea>
+        </DialogContent>
+    )
+}
+
 function BattleManagement() {
     const { toast } = useToast();
-    const firestore = useFirestore();
+    const [adminData, setAdminData] = useState<Awaited<ReturnType<typeof getAdminData>>>({});
     const [battleName, setBattleName] = useState('');
     const [yeluMonsters, setYeluMonsters] = useState<Partial<Monster>[]>([]);
     const [associationMonsters, setAssociationMonsters] = useState<Partial<Monster>[]>([]);
@@ -2074,18 +2117,21 @@ function BattleManagement() {
     
     const [newMonster, setNewMonster] = useState<Partial<Omit<Monster, 'monsterId' | 'originalHp'>>>({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: 'https://images.plurk.com/' });
     const [isAddingMonster, setIsAddingMonster] = useState(false);
+    
+    const { allItems, allTitles, combatEncounters } = adminData;
 
+    const currentBattle = useMemo(() => combatEncounters?.[0] && combatEncounters[0].status !== 'closed' ? combatEncounters[0] : null, [combatEncounters]);
+    
+    const fetchAdminData = useCallback(async () => {
+        setIsLoading(true);
+        const data = await getAdminData();
+        setAdminData(data);
+        setIsLoading(false);
+    }, []);
 
-    const latestBattleQuery = useMemoFirebase(
-      () => (firestore ? query(collection(firestore, 'combatEncounters'), orderBy('startTime', 'desc'), limit(1)) : null),
-      [firestore]
-    );
-    const { data: battleData, isLoading: isBattleLoading, mutate } = useCollection<CombatEncounter>(latestBattleQuery);
-    const currentBattle = battleData?.[0];
-
-    const { data: allItems } = useCollection<Item>(useMemoFirebase(() => collection(firestore, 'items'), [firestore]));
-    const { data: allTitles } = useCollection<Title>(useMemoFirebase(() => collection(firestore, 'titles'), [firestore]));
-
+    useEffect(() => {
+        fetchAdminData();
+    }, [fetchAdminData]);
 
     const addMonster = (faction: 'yelu' | 'association' | 'common') => {
         const newMonster: Partial<Monster> = { name: '', imageUrl: 'https://images.plurk.com/', hp: 1000, atk: '10+1D6', factionId: faction };
@@ -2127,7 +2173,7 @@ function BattleManagement() {
             setAssociationMonsters([]);
             setCommonMonsters([]);
             setRewards({ honorPoints: 0, currency: 0, logMessage: '' });
-            mutate();
+            fetchAdminData();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '開啟失敗', description: error.message });
         } finally {
@@ -2142,7 +2188,7 @@ function BattleManagement() {
             const result = await startBattle(currentBattle.id);
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: '戰場已正式開始！' });
-            mutate();
+            fetchAdminData();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '操作失敗', description: error.message });
         } finally {
@@ -2157,7 +2203,7 @@ function BattleManagement() {
             const result = await endBattle(currentBattle.id);
             if (result.error) throw new Error(result.error);
             toast({ title: '操作成功', description: result.message });
-            mutate();
+            fetchAdminData();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '操作失敗', description: error.message });
         } finally {
@@ -2176,7 +2222,7 @@ function BattleManagement() {
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: `已將「${newMonster.name}」增援至戰場！` });
             setNewMonster({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: 'https://images.plurk.com/' });
-            mutate();
+            fetchAdminData();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '增援失敗', description: error.message });
         } finally {
@@ -2229,7 +2275,7 @@ function BattleManagement() {
             <p className="text-muted-foreground mt-2">
                 開啟新的共鬥戰場，設定災獸屬性，並查看過去的戰鬥紀錄。
             </p>
-            {isBattleLoading ? <Skeleton className="h-48 w-full mt-4" /> : currentBattle && currentBattle.status !== 'ended' && (
+            {isLoading ? <Skeleton className="h-48 w-full mt-4" /> : currentBattle && currentBattle.status !== 'ended' && (
               <Card className="mt-4 border-primary">
                   <CardHeader>
                       <CardTitle>當前戰場：{currentBattle.name}</CardTitle>
@@ -2358,6 +2404,34 @@ function BattleManagement() {
                     </Button>
                 </CardFooter>
             </Card>
+
+            <div className="mt-8">
+                 <h3 className="text-lg font-semibold flex items-center gap-2 mb-4"><History /> 歷史戰場紀錄</h3>
+                 <div className="border rounded-md">
+                     <Table>
+                        <TableHeader><TableRow><TableHead>名稱</TableHead><TableHead>狀態</TableHead><TableHead>開始時間</TableHead><TableHead>結束時間</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {isLoading ? <TableRow><TableCell colSpan={5}><Skeleton className="w-full h-10"/></TableCell></TableRow>
+                            : combatEncounters && combatEncounters.length > 0 ? combatEncounters.map(b => (
+                                <TableRow key={b.id}>
+                                    <TableCell>{b.name}</TableCell>
+                                    <TableCell><Badge variant={b.status === 'ended' ? 'outline' : 'default'}>{b.status}</Badge></TableCell>
+                                    <TableCell>{new Date(b.startTime).toLocaleString()}</TableCell>
+                                    <TableCell>{b.endTime ? new Date(b.endTime).toLocaleString() : '-'}</TableCell>
+                                    <TableCell>
+                                        <Dialog>
+                                            <DialogTrigger asChild>
+                                                <Button variant="ghost" size="sm">查看 Log</Button>
+                                            </DialogTrigger>
+                                            <BattleLogViewer battleId={b.id} battleName={b.name}/>
+                                        </Dialog>
+                                    </TableCell>
+                                </TableRow>
+                            )) : <TableRow><TableCell colSpan={5} className="h-24 text-center">沒有任何歷史戰場紀錄</TableCell></TableRow>}
+                        </TableBody>
+                     </Table>
+                 </div>
+            </div>
         </div>
     );
 }
