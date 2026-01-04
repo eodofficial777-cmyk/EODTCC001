@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -29,12 +29,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import { getRosterData } from '@/app/actions/get-roster-data';
-import type { User } from '@/lib/types';
+import type { User, Title } from '@/lib/types';
 import { RefreshCw, Terminal, Crown, Shield, User as UserIcon, WandSparkles, Bird, Users } from 'lucide-react';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
 
-function CharacterCard({ user }: { user: User }) {
+function CharacterCard({ user, titlesById }: { user: User; titlesById: Map<string, Title> }) {
   const race = RACES[user.raceId as keyof typeof RACES];
-  const title = user.titles?.[0] || '無';
+  const titleId = user.titles?.[0];
+  const titleName = titleId ? titlesById.get(titleId)?.name || '無' : '無';
   const faction = FACTIONS[user.factionId as keyof typeof FACTIONS];
 
   return (
@@ -72,7 +75,7 @@ function CharacterCard({ user }: { user: User }) {
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-2">
             <div className="flex items-center gap-1"><span>{race?.name || user.raceId}</span></div>
-            <Badge variant="outline">{title}</Badge>
+            <Badge variant="outline">{titleName}</Badge>
           </div>
           <div className="flex items-center justify-between text-sm mt-3">
             <Link href={user.plurkInfo} target="_blank" rel="noopener noreferrer">
@@ -91,7 +94,7 @@ function CharacterCard({ user }: { user: User }) {
   );
 }
 
-function CharacterGrid({ users }: { users: User[] | undefined }) {
+function CharacterGrid({ users, titlesById }: { users: User[] | undefined, titlesById: Map<string, Title> }) {
   if (!users || users.length === 0) {
     return (
       <div className="text-center py-16 text-muted-foreground">
@@ -103,7 +106,7 @@ function CharacterGrid({ users }: { users: User[] | undefined }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
       {users.map((user) => (
-        <CharacterCard key={user.id} user={user} />
+        <CharacterCard key={user.id} user={user} titlesById={titlesById} />
       ))}
     </div>
   );
@@ -114,7 +117,16 @@ export default function RosterPage() {
   const [rosterData, setRosterData] = useState<Record<string, User[]> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+  const firestore = useFirestore();
+
+  const titlesQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'titles') : null), [firestore]);
+  const { data: allTitles, isLoading: areTitlesLoading } = useCollection<Title>(titlesQuery);
+
+  const titlesById = useMemo(() => {
+    if (!allTitles) return new Map<string, Title>();
+    return new Map(allTitles.map(title => [title.id, title]));
+  }, [allTitles]);
+
   const fetchRoster = async () => {
     setIsLoading(true);
     setError(null);
@@ -138,6 +150,8 @@ export default function RosterPage() {
     { id: 'all', name: '全體' },
     ...Object.values(FACTIONS)
   ];
+  
+  const pageIsLoading = isLoading || areTitlesLoading;
 
   return (
     <div className="w-full">
@@ -148,8 +162,8 @@ export default function RosterPage() {
             搜尋和篩選所有已批准的角色。資料每一小時更新一次。
           </CardDescription>
         </div>
-        <Button onClick={fetchRoster} variant="ghost" size="icon" disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+        <Button onClick={fetchRoster} variant="ghost" size="icon" disabled={pageIsLoading}>
+            <RefreshCw className={`h-4 w-4 ${pageIsLoading ? 'animate-spin' : ''}`} />
         </Button>
       </div>
      
@@ -171,7 +185,7 @@ export default function RosterPage() {
           ))}
         </TabsList>
 
-        {isLoading ? (
+        {pageIsLoading ? (
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {Array.from({ length: 9 }).map((_, i) => (
                 <div key={i} className="flex gap-4 p-4 border rounded-lg">
@@ -187,11 +201,11 @@ export default function RosterPage() {
         ) : (
           <>
             <TabsContent value="all" className="mt-6">
-              <CharacterGrid users={allUsers || []} />
+              <CharacterGrid users={allUsers || []} titlesById={titlesById} />
             </TabsContent>
             {Object.values(FACTIONS).map((faction) => (
               <TabsContent key={faction.id} value={faction.id} className="mt-6">
-                <CharacterGrid users={rosterData?.[faction.id]} />
+                <CharacterGrid users={rosterData?.[faction.id]} titlesById={titlesById} />
               </TabsContent>
             ))}
           </>
