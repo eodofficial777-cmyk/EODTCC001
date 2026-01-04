@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -152,7 +152,10 @@ export default function CraftingPage() {
   }, [recipes, selectedBaseId, selectedMaterialId, itemsById]);
   
   useEffect(() => {
-      form.setValue('targetItemId', targettableItems[0]?.id || '');
+    const newTargetId = targettableItems[0]?.id || '';
+    if (form.getValues('targetItemId') !== newTargetId) {
+      form.setValue('targetItemId', newTargetId, { shouldValidate: true });
+    }
   }, [targettableItems, form]);
 
 
