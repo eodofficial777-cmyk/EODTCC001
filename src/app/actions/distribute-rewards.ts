@@ -92,17 +92,6 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
     const { targetUserIds, filters, rewards } = payload;
     let finalUserIds: string[] = [];
 
-    let itemName = '';
-    if (rewards.itemId) {
-      const itemSnap = await getDoc(doc(db, 'items', rewards.itemId));
-      if (itemSnap.exists()) itemName = (itemSnap.data() as Item).name;
-    }
-    let titleName = '';
-    if (rewards.titleId) {
-        const titleSnap = await getDoc(doc(db, 'titles', rewards.titleId));
-        if (titleSnap.exists()) titleName = (titleSnap.data() as Title).name;
-    }
-
     if (targetUserIds && targetUserIds.length > 0) {
       finalUserIds = targetUserIds;
     } else if (filters) {
@@ -111,6 +100,7 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
         const userPool = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
       
         const filtered = userPool.filter(user => {
+            if(user.isAdmin) return false;
             if (filters.factionId && user.factionId !== filters.factionId) return false;
             if (filters.raceId && user.raceId !== filters.raceId) return false;
             if (filters.honorPoints_op === '>' && user.honorPoints <= (filters.honorPoints_val || 0)) return false;
@@ -133,6 +123,32 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
 
     if (finalUserIds.length === 0) {
       return { success: true, processedCount: 0, processedUsers: [] };
+    }
+    
+    const finalUsersData = await Promise.all(finalUserIds.map(id => getDoc(doc(db, 'users', id))));
+    const processedUsers = finalUsersData.filter(snap => snap.exists()).map(snap => {
+        const userData = snap.data() as User;
+        return { id: userData.id, roleName: userData.roleName };
+    });
+
+    // If this is just a preview, return the list of users without making changes.
+    if (rewards.logMessage === 'Preview') {
+      return {
+        success: true,
+        processedCount: processedUsers.length,
+        processedUsers: processedUsers,
+      };
+    }
+    
+    let itemName = '';
+    if (rewards.itemId) {
+      const itemSnap = await getDoc(doc(db, 'items', rewards.itemId));
+      if (itemSnap.exists()) itemName = (itemSnap.data() as Item).name;
+    }
+    let titleName = '';
+    if (rewards.titleId) {
+        const titleSnap = await getDoc(doc(db, 'titles', rewards.titleId));
+        if (titleSnap.exists()) titleName = (titleSnap.data() as Title).name;
     }
 
     const chunkSize = 400;
@@ -181,13 +197,6 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
         }
         processedCount += chunk.length;
     }
-
-    const finalUsersData = await Promise.all(finalUserIds.map(id => getDoc(doc(db, 'users', id))));
-    const processedUsers = finalUsersData.map(snap => {
-        if (!snap.exists()) return { id: snap.id, roleName: 'Unknown User' };
-        const userData = snap.data() as User;
-        return { id: userData.id, roleName: userData.roleName };
-    })
     
     return { success: true, processedCount, processedUsers };
   } catch (error: any) {
