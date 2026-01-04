@@ -97,6 +97,7 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
         let logMessages: string[] = [`${user.roleName} 使用了「${item.name}」。`];
         const monsters = [...battle.monsters];
         const activeBuffs = [...(participant.activeBuffs || [])];
+        let totalDamageDealtThisAction = 0;
 
         for (const effect of item.effects as TriggeredEffect[]) {
             const roll = Math.random() * 100;
@@ -121,6 +122,7 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
                     if (monsters[targetIndex].hp <= 0) throw new Error('目標已經被擊敗了。');
                     
                     const damage = effect.value;
+                    totalDamageDealtThisAction += damage;
                     monsters[targetIndex].hp = Math.max(0, monsters[targetIndex].hp - damage);
                     logMessages.push(`對 ${monsters[targetIndex].name} 造成了 ${damage} 點傷害。`);
                     break;
@@ -159,7 +161,8 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
             timestamp: serverTimestamp(),
             turn: battle.turn,
             type: 'item_used',
-            itemId, // Log which item was used
+            itemId,
+            damage: totalDamageDealtThisAction > 0 ? totalDamageDealtThisAction : undefined
         });
         
         const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
