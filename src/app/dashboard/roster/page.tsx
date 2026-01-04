@@ -37,19 +37,6 @@ function CharacterCard({ user }: { user: User }) {
   const title = user.titles?.[0] || '無';
   const faction = FACTIONS[user.factionId as keyof typeof FACTIONS];
 
-  const FactionIcon = () => {
-    switch (user.factionId) {
-      case 'yelu':
-        return <Bird className="h-4 w-4" style={{ color: faction?.color }} />;
-      case 'association':
-        return <Users className="h-4 w-4" style={{ color: faction?.color }} />;
-      case 'wanderer':
-        return <WandSparkles className="h-4 w-4" style={{ color: faction?.color }} />;
-      default:
-        return null;
-    }
-  };
-
   return (
     <Card className="overflow-hidden">
       <div className="flex">
@@ -81,14 +68,11 @@ function CharacterCard({ user }: { user: User }) {
         <CardContent className="flex flex-1 flex-col justify-center p-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold font-headline truncate">{user.roleName}</h3>
-            <div className="flex items-center gap-1 text-xs" style={{ color: faction?.color }}>
-              <FactionIcon />
-              <span>{faction?.name}</span>
-            </div>
+            {faction && <Badge style={{ backgroundColor: faction.color, color: 'white' }}>{faction.name}</Badge>}
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-2">
-            <div className="flex items-center gap-1"><UserIcon className="h-3 w-3" /><span>{race?.name || user.raceId}</span></div>
-            <div className="flex items-center gap-1"><Crown className="h-3 w-3" /><span>{title}</span></div>
+            <div className="flex items-center gap-1"><span>{race?.name || user.raceId}</span></div>
+            <Badge variant="outline">{title}</Badge>
           </div>
           <div className="flex items-center justify-between text-sm mt-3">
             <Link href={user.plurkInfo} target="_blank" rel="noopener noreferrer">
