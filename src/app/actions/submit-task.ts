@@ -137,7 +137,7 @@ export async function submitTask(payload: SubmitTaskPayload) {
         }
         if (factionToContributeTo === 'yelu' || factionToContributeTo === 'association') {
             const seasonUpdate: { [key: string]: FieldValue } = { [`${factionToContributeTo}.rawScore`]: increment(honorToAward) };
-            if (userFactionId !== 'wanderer') {
+            if (userFactionId !== 'wanderer' && userId) {
                  seasonUpdate[`${factionToContributeTo}.activePlayers`] = arrayUnion(userId);
             }
             transaction.update(seasonRef, seasonUpdate);

@@ -100,7 +100,7 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
         if (factionToContributeTo === 'yelu' || factionToContributeTo === 'association') {
             const seasonRef = doc(db, 'war-seasons', 'current');
             const seasonUpdate: { [key: string]: FieldValue } = { [`${factionToContributeTo}.rawScore`]: increment(task.honorPointsAwarded) };
-            if (task.userFactionId !== 'wanderer') {
+            if (task.userFactionId !== 'wanderer' && task.userId) {
                  seasonUpdate[`${factionToContributeTo}.activePlayers`] = arrayUnion(task.userId);
             }
             transaction.update(seasonRef, seasonUpdate);
