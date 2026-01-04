@@ -31,13 +31,12 @@ export async function getRosterData(): Promise<{
     const usersQuery = query(
       collection(db, 'users'),
       where('approved', '==', true),
-      where('isAdmin', '!=', true),
       orderBy('honorPoints', 'desc')
     );
 
     const usersSnapshot = await getDocs(usersQuery);
 
-    const allUsers = usersSnapshot.docs.map((doc) => {
+    const approvedUsers = usersSnapshot.docs.map((doc) => {
       const data = doc.data();
       return {
         ...data,
@@ -47,6 +46,9 @@ export async function getRosterData(): Promise<{
           new Date().toISOString(),
       } as User;
     });
+
+    // Filter out admins in the code instead of in the query
+    const allUsers = approvedUsers.filter(user => user.isAdmin !== true);
 
     const rosterByFaction: Record<string, User[]> = {};
     for (const factionId in FACTIONS) {
