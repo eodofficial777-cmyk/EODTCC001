@@ -7,6 +7,7 @@
 
 
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -66,10 +67,12 @@ export type AttributeEffect = {
   value: number | string;
 };
 
+export type TriggeredEffectType = 'hp_recovery' | 'damage_enemy' | 'atk_buff' | 'def_buff' | 'hp_cost';
+
 export type TriggeredEffect = {
   trigger: 'on_use';
   probability: number; // 0-100
-  effectType: 'hp_recovery' | 'damage_enemy' | 'atk_buff' | 'def_buff' | 'hp_cost';
+  effectType: TriggeredEffectType;
   value: number;
   duration?: number; // in turns
 };
@@ -155,7 +158,7 @@ export interface Monster {
     atk: string; // e.g. "20+1D10"
 }
 
-export interface ActiveBuff extends SkillEffect {
+export interface ActiveBuff extends SkillEffect, TriggeredEffect {
     turnsLeft: number;
 }
 

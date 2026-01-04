@@ -24,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { performAttack } from '@/app/actions/perform-attack';
 import { useSkill } from '@/app/actions/use-skill';
+import { useBattleItem } from '@/app/actions/use-battle-item';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogClose } from '@/components/ui/dialog';
@@ -38,7 +39,7 @@ function formatEffect(effect: AttributeEffect | TriggeredEffect | ActiveBuff | S
     // TriggeredEffect / ActiveBuff / SkillEffect
     const effectType = 'effectType' in effect ? effect.effectType : 'unknown';
     let desc = '';
-    if ('probability' in effect && effect.probability) {
+    if ('probability' in effect && effect.probability && effect.probability < 100) {
       desc = `${effect.probability}%機率`;
     }
 
@@ -65,8 +66,8 @@ function formatEffect(effect: AttributeEffect | TriggeredEffect | ActiveBuff | S
     if (effect.duration) {
         desc += `，持續 ${effect.duration} 回合`;
     }
-     if ('turnsLeft' in effect) {
-        desc += ` (剩餘 ${effect.turnsLeft} 回合)`;
+     if ('turnsLeft' in effect && (effect as ActiveBuff).turnsLeft > 0) {
+        desc += ` (剩餘 ${(effect as ActiveBuff).turnsLeft} 回合)`;
     }
     return desc;
 }
@@ -186,8 +187,8 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, activeBuffs, allItems
         });
         
         (activeBuffs || []).forEach(buff => {
-            if (buff.effectType === 'atk_buff') atkMultiplier *= Number(buff.value);
-            if (buff.effectType === 'def_buff') defMultiplier *= Number(buff.value);
+            if (buff.effectType === 'atk_buff' && 'value' in buff) atkMultiplier *= Number(buff.value);
+            if (buff.effectType === 'def_buff' && 'value' in buff) defMultiplier *= Number(buff.value);
         });
 
         const totalAtk = (baseAtk + equipAtk) * atkMultiplier;
@@ -256,7 +257,7 @@ const PlayerStatus = ({ userData, battleHP, equippedItems, activeBuffs, allItems
 const MonsterCard = ({ monster, isAttackable, onSelect, actionContext }: { monster: Monster; isAttackable: boolean; onSelect: (monsterId: string) => void; actionContext: {type: string} | null }) => {
   const isDefeated = monster.hp <= 0;
   const maxHp = monster.originalHp ?? monster.hp;
-  const isTargeting = actionContext && (actionContext.type === 'direct_damage' || actionContext.type === 'probabilistic_damage' || actionContext.type === 'attack' || actionContext.type === 'skill_target');
+  const isTargeting = actionContext && (actionContext.type === 'direct_damage' || actionContext.type === 'probabilistic_damage' || actionContext.type === 'damage_enemy' || actionContext.type === 'attack' || actionContext.type === 'skill_target' || actionContext.type === 'item_target');
   
   return (
     <Card 
@@ -376,7 +377,7 @@ export default function BattlegroundPage() {
   }, [firestore, userData]);
   const { data: availableSkills } = useCollection<Skill>(skillsQuery);
 
-  const [actionContext, setActionContext] = useState<{type: string, skillId?: string} | null>(null);
+  const [actionContext, setActionContext] = useState<{type: string, skillId?: string, itemId?: string} | null>(null);
   const [actionCooldown, setActionCooldown] = useState<number>(0);
   const [isProcessingAction, setIsProcessingAction] = useState(false);
   
@@ -476,6 +477,38 @@ export default function BattlegroundPage() {
     }
   };
 
+  const handleUseBattleItem = async (item: Item, targetMonsterId?: string) => {
+    if (!user || !currentBattle || isProcessingAction || isOnCooldown || hasFallen || isBattleTimeOver) return;
+
+    setIsProcessingAction(true);
+    try {
+      const result = await useBattleItem({
+        userId: user.uid,
+        battleId: currentBattle.id,
+        itemId: item.id,
+        targetMonsterId,
+      });
+      if (result.error) throw new Error(result.error);
+      toast({ title: '道具已使用', description: result.logMessage });
+      setActionCooldown(Date.now());
+      mutateUser(); // Re-fetch user data to update inventory
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: '道具使用失敗', description: error.message });
+    } finally {
+      setIsProcessingAction(false);
+      setActionContext(null);
+    }
+  }
+  
+  const handleItemClick = (item: Item) => {
+    const requiresTarget = item.effects.some(e => (e as TriggeredEffect).effectType === 'damage_enemy');
+    if (requiresTarget) {
+      setActionContext({ type: 'item_target', itemId: item.id });
+    } else {
+      handleUseBattleItem(item);
+    }
+  };
+
 
   const handleToggleEquip = async (itemId: string) => {
     if (!user || !currentBattle || !firestore) return;
@@ -560,6 +593,9 @@ export default function BattlegroundPage() {
                                 else if (actionContext?.type === 'skill_target' && actionContext.skillId) {
                                   const skill = availableSkills?.find(s => s.id === actionContext.skillId);
                                   if (skill) handleUseSkill(skill, monsterId);
+                                } else if (actionContext?.type === 'item_target' && actionContext.itemId) {
+                                    const item = allItems?.find(i => i.id === actionContext.itemId);
+                                    if (item) handleUseBattleItem(item, monsterId);
                                 }
                               }}
                               actionContext={actionContext}
@@ -579,6 +615,9 @@ export default function BattlegroundPage() {
                                 else if (actionContext?.type === 'skill_target' && actionContext.skillId) {
                                   const skill = availableSkills?.find(s => s.id === actionContext.skillId);
                                   if (skill) handleUseSkill(skill, monsterId);
+                                } else if (actionContext?.type === 'item_target' && actionContext.itemId) {
+                                    const item = allItems?.find(i => i.id === actionContext.itemId);
+                                    if (item) handleUseBattleItem(item, monsterId);
                                 }
                               }}
                               actionContext={actionContext}
@@ -651,7 +690,42 @@ export default function BattlegroundPage() {
                                 </div>
                             </DialogContent>
                         </Dialog>
-                        <Button size="lg" variant="outline" disabled>道具</Button>
+                         <Dialog>
+                            <DialogTrigger asChild>
+                                <Button size="lg" variant="outline" disabled={combatStatus !== 'active' || hasFallen || isOnCooldown || isProcessingAction || isBattleTimeOver}>道具</Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>選擇戰鬥道具</DialogTitle>
+                                </DialogHeader>
+                                <div className="grid grid-cols-1 gap-2 py-4">
+                                {[...inventoryConsumables.values()].length > 0 ? [...inventoryConsumables.values()].map(({ item, count }) => (
+                                    <TooltipProvider key={item.id}><Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button 
+                                                variant="outline" 
+                                                className="w-full justify-between"
+                                                onClick={() => handleItemClick(item)}
+                                                disabled={hasFallen || isOnCooldown || isProcessingAction || combatStatus !== 'active' || isBattleTimeOver}
+                                            >
+                                                <span>{item.name}</span>
+                                                <span className="text-xs text-muted-foreground font-mono">x{count}</span>
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="right" className="max-w-xs">
+                                            <p className="font-bold">{item.name}</p>
+                                            <p className="text-xs text-muted-foreground mb-2">{item.description}</p>
+                                            <div className="border-t pt-2 mt-2">
+                                                {item.effects.map((effect, i) => (
+                                                    <p key={i} className="text-xs">{formatEffect(effect)}</p>
+                                                ))}
+                                            </div>
+                                        </TooltipContent>
+                                    </Tooltip></TooltipProvider>
+                                )) : <p className="text-muted-foreground text-sm text-center py-4">沒有可用的戰鬥道具。</p>}
+                                </div>
+                            </DialogContent>
+                        </Dialog>
                         <ActionCooldown cooldown={actionCooldown} onCooldownEnd={() => setActionCooldown(0)} />
 
                         {/* This Dialog handles the monster targeting */}
@@ -673,6 +747,10 @@ export default function BattlegroundPage() {
                                         if (actionContext?.type === 'skill_target' && actionContext.skillId) {
                                             const skill = availableSkills?.find(s => s.id === actionContext.skillId);
                                             if (skill) handleUseSkill(skill, monster.monsterId);
+                                        }
+                                        if (actionContext?.type === 'item_target' && actionContext.itemId) {
+                                            const item = allItems?.find(i => i.id === actionContext.itemId);
+                                            if (item) handleUseBattleItem(item, monster.monsterId);
                                         }
                                     }}
                                     >
