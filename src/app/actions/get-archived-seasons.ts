@@ -10,6 +10,7 @@ import { firebaseConfig } from '@/firebase/config';
 export interface ArchivedSeason {
     id: string;
     archivedAt: string;
+    startDate: string;
     yelu: {
         rawScore: number;
         activePlayers: string[];
@@ -62,6 +63,7 @@ export async function getArchivedSeasons(): Promise<{ seasons?: ArchivedSeason[]
         ...data,
         id: doc.id,
         archivedAt: (data.archivedAt as Timestamp).toDate().toISOString(),
+        startDate: data.startDate ? (data.startDate as Timestamp).toDate().toISOString() : new Date().toISOString(),
         yelu: data.yelu || { rawScore: 0, activePlayers: [] },
         association: data.association || { rawScore: 0, activePlayers: [] },
       } as ArchivedSeason;
