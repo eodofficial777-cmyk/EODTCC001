@@ -12,6 +12,7 @@ export interface User {
   raceId: string;
   honorPoints: number;
   currency: number;
+  totalCurrencyEarned?: number;
   titles: string[];
   equipment: string[];
   items: string[];

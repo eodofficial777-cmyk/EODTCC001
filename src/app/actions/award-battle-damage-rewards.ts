@@ -1,3 +1,4 @@
+
 'use server';
 
 import {
@@ -93,6 +94,7 @@ async function awardSingleUser(transaction: any, userId: string, reward: RewardP
     }
     if (reward.currency) {
         userUpdate.currency = increment(reward.currency);
+        userUpdate.totalCurrencyEarned = increment(reward.currency);
         changeLog.push(`+${reward.currency} 貨幣`);
     }
     if (reward.itemId) {
@@ -116,6 +118,14 @@ async function awardSingleUser(transaction: any, userId: string, reward: RewardP
         description: logMessage,
         change: changeLog.join(', ') || '系統紀錄'
     });
+}
+
+function parseDamageFromLog(logData: string): number {
+    const damageMatch = logData.match(/造成 (\d+) 點傷害/);
+    if (damageMatch && damageMatch[1]) {
+        return parseInt(damageMatch[1], 10);
+    }
+    return 0;
 }
 
 
@@ -146,9 +156,20 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
     const damageByUser = new Map<string, number>();
 
     for (const log of logs) {
-        if (log.userId && log.damage && log.damage > 0) {
-            const currentDamage = damageByUser.get(log.userId) || 0;
-            damageByUser.set(log.userId, currentDamage + log.damage);
+        if (log.userId) {
+            let damageDealt = 0;
+            if (log.damage && typeof log.damage === 'number' && log.damage > 0) {
+                // New method: use the 'damage' field directly
+                damageDealt = log.damage;
+            } else if (log.logData) {
+                // Fallback for old logs: parse from logData string
+                damageDealt = parseDamageFromLog(log.logData);
+            }
+
+            if (damageDealt > 0) {
+                 const currentDamage = damageByUser.get(log.userId) || 0;
+                 damageByUser.set(log.userId, currentDamage + damageDealt);
+            }
         }
     }
     

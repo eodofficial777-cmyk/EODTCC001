@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import {
@@ -1954,27 +1953,27 @@ function RewardDistribution() {
                             </Select>
                             <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">榮譽點</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, honorPoints_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, honorPoints_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
                                 <Input type="number" placeholder="數量" onChange={e => setFilters(f => ({...f, honorPoints_val: parseInt(e.target.value)}))}/>
                             </div>
                             <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">貨幣</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, currency_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, currency_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
                                 <Input type="number" placeholder="數量" onChange={e => setFilters(f => ({...f, currency_val: parseInt(e.target.value)}))}/>
                             </div>
                              <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">任務數</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, taskCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, taskCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
                                 <Input type="number" placeholder="數量" onChange={e => setFilters(f => ({...f, taskCount_val: parseInt(e.target.value)}))}/>
                             </div>
                             <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">共鬥次數</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, participatedBattleCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, participatedBattleCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
                                 <Input type="number" placeholder="次數" onChange={e => setFilters(f => ({...f, participatedBattleCount_val: parseInt(e.target.value)}))}/>
                             </div>
                             <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">倒下次數</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, hpZeroCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, hpZeroCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
                                 <Input type="number" placeholder="次數" onChange={e => setFilters(f => ({...f, hpZeroCount_val: parseInt(e.target.value)}))}/>
                             </div>
                              <div className="flex gap-2 items-center">
@@ -1985,7 +1984,7 @@ function RewardDistribution() {
                                     {allItems.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;</SelectItem><SelectItem value="<">&lt;</SelectItem></SelectContent></Select>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
                                 <Input type="number" placeholder="次數" onChange={e => setFilters(f => ({...f, itemUse_val: parseInt(e.target.value)}))}/>
                             </div>
                         </div>

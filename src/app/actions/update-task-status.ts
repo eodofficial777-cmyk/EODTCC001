@@ -88,7 +88,10 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
 
       // Prepare user data update
       const userUpdateData: { [key: string]: any } = {};
-      if(task.currencyAwarded > 0) userUpdateData.currency = increment(task.currencyAwarded);
+      if(task.currencyAwarded > 0) {
+        userUpdateData.currency = increment(task.currencyAwarded);
+        userUpdateData.totalCurrencyEarned = increment(task.currencyAwarded);
+      }
       if(task.honorPointsAwarded > 0) userUpdateData.honorPoints = increment(task.honorPointsAwarded);
       if (taskType.titleAwarded) {
         userUpdateData.titles = arrayUnion(taskType.titleAwarded);
@@ -135,5 +138,3 @@ export async function updateTaskStatus(payload: UpdateTaskStatusPayload): Promis
     return { success: false, error: error.message || '更新任務狀態失敗。' };
   }
 }
-
-    

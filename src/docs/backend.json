@@ -52,6 +52,10 @@
           "type": "number",
           "description": "The character's currency."
         },
+        "totalCurrencyEarned": {
+            "type": "number",
+            "description": "The total cumulative currency earned by the character, not affected by spending."
+        },
         "titles": {
           "type": "array",
           "description": "An array of titles the character has earned.",
