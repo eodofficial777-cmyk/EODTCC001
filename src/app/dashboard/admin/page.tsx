@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -1996,10 +1997,10 @@ function RewardDistribution() {
                             </div>
                              <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">道具使用</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_id: v as any}))} value={filters.itemUse_id || ''}>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_id: v === 'none' ? undefined : v as any}))} value={filters.itemUse_id || 'none'}>
                                   <SelectTrigger><SelectValue placeholder="選擇道具"/></SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="">無</SelectItem>
+                                    <SelectItem value="none">無</SelectItem>
                                     {allItems.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
@@ -2361,7 +2362,7 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
                                     </div>
                                     <div className="space-y-2">
                                         <Label>獎勵道具</Label>
-                                         <Select value={state.itemId} onValueChange={(v) => setter(s => ({...s, itemId: v === 'none' ? undefined : v}))}>
+                                         <Select value={state.itemId || 'none'} onValueChange={(v) => setter(s => ({...s, itemId: v === 'none' ? undefined : v}))}>
                                             <SelectTrigger><SelectValue placeholder="無"/></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="none">無</SelectItem>
@@ -2371,7 +2372,7 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
                                     </div>
                                     <div className="space-y-2">
                                         <Label>獎勵稱號</Label>
-                                         <Select value={state.titleId} onValueChange={(v) => setter(s => ({...s, titleId: v === 'none' ? undefined : v}))}>
+                                         <Select value={state.titleId || 'none'} onValueChange={(v) => setter(s => ({...s, titleId: v === 'none' ? undefined : v}))}>
                                             <SelectTrigger><SelectValue placeholder="無"/></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="none">無</SelectItem>
