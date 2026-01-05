@@ -8,6 +8,7 @@ import { firebaseConfig } from '@/firebase/config';
 import type { CombatEncounter, Monster, EndOfBattleRewards } from '@/lib/types';
 import { randomUUID } from 'crypto';
 import { distributeRewards } from './distribute-rewards';
+import { archiveAndProcessBattleLogs } from './archive-battle-logs';
 
 
 const ADMIN_EMAIL = 'admin@eodtcc.com';
@@ -110,7 +111,14 @@ export async function endBattle(battleId: string): Promise<{ success: boolean; e
 
     await updateDoc(battleRef, { status: 'ended', endTime: serverTimestamp() });
 
-    // Update participant stats (participatedBattleIds, hpZeroCount)
+    // --- Archive Logs and Process Stats ---
+    const archiveResult = await archiveAndProcessBattleLogs(battleId);
+    if (!archiveResult.success) {
+        console.warn(`Warning: Battle ${battleId} was ended, but log archival failed: ${archiveResult.error}`);
+        // Decide if this should be a hard failure or just a warning
+    }
+
+    // --- Update participant stats (participatedBattleIds, hpZeroCount) ---
     const participants = Object.keys(battleData.participants || {});
     if (participants.length > 0) {
         const batch = writeBatch(db);
@@ -130,6 +138,7 @@ export async function endBattle(battleId: string): Promise<{ success: boolean; e
 
 
     const rewards = battleData.endOfBattleRewards;
+    let mainRewardMessage = '戰場已結束，沒有設定獎勵或無人參與。';
 
     if (rewards && participants.length > 0) {
       const distributionResult = await distributeRewards({
@@ -143,12 +152,14 @@ export async function endBattle(battleId: string): Promise<{ success: boolean; e
         },
       });
       if (distributionResult.error) {
-        throw new Error(`戰場已結束，但獎勵發放失敗：${distributionResult.error}`);
+        throw new Error(`戰場已結束，但主要獎勵發放失敗：${distributionResult.error}`);
       }
-      return { success: true, message: `戰場已結束，並已向 ${distributionResult.processedCount} 位玩家發放獎勵。` };
+      mainRewardMessage = `戰場已結束，並已向 ${distributionResult.processedCount} 位玩家發放主要獎勵。`;
     }
 
-    return { success: true, message: '戰場已結束，沒有設定獎勵或無人參與。' };
+    const finalMessage = [mainRewardMessage, archiveResult.message].filter(Boolean).join('\n');
+    return { success: true, message: finalMessage };
+
   } catch (error: any) {
     console.error('Failed to end battle:', error);
     return { success: false, error: error.message || '結束戰場失敗。' };
@@ -179,7 +190,3 @@ export async function addMonsterToBattle(battleId: string, monsterData: Omit<Mon
         return { success: false, error: error.message || '增加災獸失敗。' };
     }
 }
-
-    
-
-    

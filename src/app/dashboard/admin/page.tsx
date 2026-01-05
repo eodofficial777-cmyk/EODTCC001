@@ -38,7 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History, Award, KeyRound, BarChart } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History, Award, KeyRound, BarChart, Archive } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -89,6 +89,7 @@ import { awardBattleDamageRewards } from '@/app/actions/award-battle-damage-rewa
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { resetUserPassword } from '@/app/actions/reset-user-password';
+import { archiveAndProcessBattleLogs } from '@/app/actions/archive-battle-logs';
 
 
 function PasswordResetDialog({ user, isOpen, onOpenChange }: { user: User, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
@@ -1282,13 +1283,13 @@ function CraftingManagement() {
   )
 }
 
-const skillEffectTypes: { value: SkillEffectType; label: string }[] = [
-    { value: 'hp_recovery', label: '恢復HP' },
-    { value: 'direct_damage', label: '造成直接傷害' },
-    { value: 'atk_buff', label: '增加攻擊倍率(%)' },
-    { value: 'def_buff', label: '增加防禦倍率(%)' },
-    { value: 'hp_cost', label: '扣除HP' },
-    { value: 'probabilistic_damage', label: '機率傷害' },
+const skillEffectTypes: { value: SkillEffectType; label: string; requiresItem: boolean }[] = [
+    { value: 'hp_recovery', label: '恢復HP', requiresItem: false },
+    { value: 'direct_damage', label: '造成直接傷害', requiresItem: false },
+    { value: 'atk_buff', label: '增加攻擊倍率(%)', requiresItem: false },
+    { value: 'def_buff', label: '增加防禦倍率(%)', requiresItem: false },
+    { value: 'hp_cost', label: '扣除HP', requiresItem: false },
+    { value: 'probabilistic_damage', label: '機率傷害', requiresItem: false },
 ];
 
 function formatSkillEffects(effects: SkillEffect[]): string {
@@ -2292,6 +2293,7 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
     
     const [newMonster, setNewMonster] = useState<Partial<Omit<Monster, 'monsterId' | 'originalHp'>>>({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: '' });
     const [isAddingMonster, setIsAddingMonster] = useState(false);
+    const [isArchiving, setIsArchiving] = useState(false);
     
     const currentBattle = useMemo(() => allCombatEncounters?.[0] && allCombatEncounters[0].status !== 'closed' ? allCombatEncounters[0] : null, [allCombatEncounters]);
 
@@ -2364,7 +2366,7 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
         try {
             const result = await endBattle(currentBattle.id);
             if (result.error) throw new Error(result.error);
-            toast({ title: '操作成功', description: result.message });
+            toast({ title: '操作成功', description: result.message, duration: 8000 });
             onRefresh();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '操作失敗', description: error.message });
@@ -2383,12 +2385,25 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
             const result = await addMonsterToBattle(currentBattle.id, newMonster as Omit<Monster, 'monsterId' | 'originalHp'>);
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: `已將「${newMonster.name}」增援至戰場！` });
-            setNewMonster({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: 'https://images.plurk.com/' });
+            setNewMonster({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: '' });
             onRefresh();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '增援失敗', description: error.message });
         } finally {
             setIsAddingMonster(false);
+        }
+    };
+
+    const handleManualArchive = async (battleId: string) => {
+        setIsArchiving(true);
+        try {
+            const result = await archiveAndProcessBattleLogs(battleId);
+            if (result.error) throw new Error(result.error);
+            toast({ title: '操作成功', description: result.message || `戰役 ${battleId} 的日誌已成功封存與結算。`, duration: 8000 });
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: '手動封存失敗', description: error.message });
+        } finally {
+            setIsArchiving(false);
         }
     };
 
@@ -2499,7 +2514,7 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
                             <AlertDialogContent>
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>確認結束戰場？</AlertDialogTitle>
-                                <AlertDialogDescription>此操作將會結束當前戰場，並根據設定發放獎勵給所有參與者。此動作無法復原。</AlertDialogDescription>
+                                <AlertDialogDescription>此操作將會結束當前戰場，封存日誌並發放獎勵。此動作無法復原。</AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                 <AlertDialogCancel>取消</AlertDialogCancel>
@@ -2590,6 +2605,10 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
                                          {b.status === 'ended' && (
                                             <DamageRewardDialog battleId={b.id} battleName={b.name} allItems={allItems} allTitles={allTitles} onAwarded={onRefresh} />
                                         )}
+                                        <Button variant="outline" size="sm" onClick={() => handleManualArchive(b.id)} disabled={isArchiving}>
+                                          <Archive className="h-4 w-4 mr-2" />
+                                          {isArchiving ? '處理中' : '手動封存/結算'}
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             )) : <TableRow><TableCell colSpan={5} className="h-24 text-center">沒有任何歷史戰場紀錄</TableCell></TableRow>}
@@ -2714,4 +2733,5 @@ export default function AdminPage() {
     </div>
   );
 }
+
 
