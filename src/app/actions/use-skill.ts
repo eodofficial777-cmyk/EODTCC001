@@ -1,3 +1,4 @@
+
 'use server';
 
 import {
@@ -5,8 +6,8 @@ import {
   doc,
   runTransaction,
   serverTimestamp,
-  collection,
 } from 'firebase/firestore';
+import { getDatabase, ref, push } from 'firebase/database';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import type { User, CombatEncounter, Skill, ActiveBuff, CombatLog, Monster } from '@/lib/types';
@@ -18,7 +19,7 @@ if (!getApps().length) {
   app = getApps()[0];
 }
 const db = getFirestore(app);
-
+const rtdb = getDatabase(app);
 
 // Helper function to roll dice, needed for probabilistic damage
 function rollDice(diceNotation: string): number {
@@ -61,7 +62,7 @@ export async function useSkill(payload: UseSkillPayload): Promise<UseSkillResult
   const skillRef = doc(db, 'skills', skillId);
 
   try {
-    const { logMessage } = await runTransaction(db, async (transaction) => {
+    const { logMessage, logEntry } = await runTransaction(db, async (transaction) => {
       const userDoc = await transaction.get(userRef);
       const battleDoc = await transaction.get(battleRef);
       const skillDoc = await transaction.get(skillRef);
@@ -168,12 +169,11 @@ export async function useSkill(payload: UseSkillPayload): Promise<UseSkillResult
 
       // Log the action
       const finalLogMessage = logMessages.join(' ');
-      const battleLogRef = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
       
-      const logData: any = {
-        id: battleLogRef.id,
+      const logEntry: any = {
         encounterId: battleId,
         userId: userId,
+        userFaction: user.factionId,
         logData: finalLogMessage,
         timestamp: serverTimestamp(),
         turn: battle.turn,
@@ -181,13 +181,18 @@ export async function useSkill(payload: UseSkillPayload): Promise<UseSkillResult
       };
 
       if (totalDamageDealtThisAction > 0) {
-          logData.damage = totalDamageDealtThisAction;
+          logEntry.damage = totalDamageDealtThisAction;
       }
       
-      transaction.set(battleLogRef, logData);
-      
-      return { logMessage: finalLogMessage };
+      return { logMessage: finalLogMessage, logEntry };
     });
+
+    // --- Write to Realtime Database (outside transaction) ---
+    if (logEntry) {
+        const battleLogRtdbRef = ref(rtdb, `battle_buffer/${battleId}`);
+        const rtdbLogEntry = { ...logEntry, timestamp: new Date().toISOString() };
+        await push(battleLogRtdbRef, rtdbLogEntry);
+    }
 
     return { success: true, logMessage };
   } catch (error: any) {

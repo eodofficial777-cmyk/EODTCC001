@@ -6,8 +6,8 @@ import {
   doc,
   runTransaction,
   serverTimestamp,
-  collection,
 } from 'firebase/firestore';
+import { getDatabase, ref, push } from 'firebase/database';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import type { User, Item, CombatEncounter, Monster, AttributeEffect, ActiveBuff, Participant } from '@/lib/types';
@@ -19,6 +19,7 @@ if (!getApps().length) {
   app = getApps()[0];
 }
 const db = getFirestore(app);
+const rtdb = getDatabase(app);
 
 interface PerformAttackPayload {
   userId: string;
@@ -76,7 +77,7 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
   const battleRef = doc(db, 'combatEncounters', battleId);
 
   try {
-    const { logMessage, playerDamage, monsterDamage } = await runTransaction(db, async (transaction) => {
+    const { logMessage, playerDamage, monsterDamage, logEntry } = await runTransaction(db, async (transaction) => {
       const userDoc = await transaction.get(userRef);
       const battleDoc = await transaction.get(battleRef);
 
@@ -206,22 +207,30 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
           participants: updatedParticipants,
       });
       
-      // --- 5. Create a single, consolidated Battle Log Entry ---
+      // --- 5. Prepare Battle Log Entry (for RTDB) ---
       const consolidatedLogMessage = `${user.roleName} 對 ${targetMonster.name} 造成 ${finalPlayerDamage} 點傷害，並受到 ${finalMonsterDamage} 點反擊傷害。`;
-      const battleLogRef = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
-      transaction.set(battleLogRef, {
-           id: battleLogRef.id,
+      
+      const logEntry = {
            encounterId: battleId,
            userId: userId,
+           userFaction: user.factionId,
            logData: consolidatedLogMessage,
            timestamp: serverTimestamp(),
            turn: battle.turn, 
            type: 'player_attack',
            damage: finalPlayerDamage,
-      });
+      };
 
-      return { logMessage: consolidatedLogMessage, playerDamage: finalMonsterDamage, monsterDamage: finalPlayerDamage };
+      return { logMessage: consolidatedLogMessage, playerDamage: finalMonsterDamage, monsterDamage: finalPlayerDamage, logEntry };
     });
+
+    // --- 6. Write to Realtime Database (outside transaction) ---
+    if (logEntry) {
+        const battleLogRtdbRef = ref(rtdb, `battle_buffer/${battleId}`);
+        // Replace Firestore serverTimestamp with a client-side timestamp for RTDB
+        const rtdbLogEntry = { ...logEntry, timestamp: new Date().toISOString() };
+        await push(battleLogRtdbRef, rtdbLogEntry);
+    }
 
     return { success: true, logMessage, playerDamage: playerDamage, monsterDamage: monsterDamage };
   } catch (error: any) {

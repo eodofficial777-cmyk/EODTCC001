@@ -6,9 +6,9 @@ import {
   doc,
   runTransaction,
   serverTimestamp,
-  collection,
   increment,
 } from 'firebase/firestore';
+import { getDatabase, ref, push } from 'firebase/database';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import type { User, Item, CombatEncounter, Participant, ActiveBuff, Monster, TriggeredEffect } from '@/lib/types';
@@ -21,6 +21,7 @@ if (!getApps().length) {
   app = getApps()[0];
 }
 const db = getFirestore(app);
+const rtdb = getDatabase(app);
 
 interface UseItemPayload {
   userId: string;
@@ -46,7 +47,7 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
   const battleRef = doc(db, 'combatEncounters', battleId);
 
   try {
-    const { logMessage } = await runTransaction(db, async (transaction) => {
+    const { logMessage, logEntry } = await runTransaction(db, async (transaction) => {
         const userDoc = await transaction.get(userRef);
         const itemDoc = await transaction.get(itemRef);
         const battleDoc = await transaction.get(battleRef);
@@ -133,12 +134,11 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
         });
         
         const finalLogMessage = logMessages.join(' ');
-        const battleLogRef = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
         
         const logData: any = {
-            id: battleLogRef.id,
             encounterId: battleId,
             userId: userId,
+            userFaction: user.factionId,
             logData: finalLogMessage,
             timestamp: serverTimestamp(),
             turn: battle.turn,
@@ -150,9 +150,7 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
             logData.damage = totalDamageDealtThisAction;
         }
 
-        transaction.set(battleLogRef, logData);
-        
-        const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
+        const activityLogRef = doc(db, `users/${userId}/activityLogs`);
         transaction.set(activityLogRef, {
             id: activityLogRef.id,
             userId,
@@ -161,9 +159,16 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
             change: `消耗 1 個 ${item.name}`,
         });
         
-        return { logMessage: finalLogMessage };
+        return { logMessage: finalLogMessage, logEntry: logData };
     });
     
+    // --- Write to Realtime Database (outside transaction) ---
+    if (logEntry) {
+        const battleLogRtdbRef = ref(rtdb, `battle_buffer/${battleId}`);
+        const rtdbLogEntry = { ...logEntry, timestamp: new Date().toISOString() };
+        await push(battleLogRtdbRef, rtdbLogEntry);
+    }
+
     return { success: true, logMessage };
 
   } catch (error: any) {
@@ -171,7 +176,3 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
     return { success: false, error: error.message || '使用道具失敗，請稍後再試。' };
   }
 }
-
-    
-
-    

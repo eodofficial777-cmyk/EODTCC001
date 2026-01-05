@@ -1,3 +1,4 @@
+
 'use client';
 
 import Image from 'next/image';
@@ -14,7 +15,7 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Heart, Shield, Sword, Timer, CheckCircle2, Package, WandSparkles, Bird, Users, EyeOff, Sparkles, AlertCircle } from 'lucide-react';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection, useDatabase } from '@/firebase';
 import { doc, collection, query, orderBy, limit, where, updateDoc } from 'firebase/firestore';
 import { ref, onValue, off } from 'firebase/database';
@@ -365,6 +366,7 @@ export default function BattlegroundPage() {
   const isBattleActiveForState = currentBattle && ['preparing', 'active'].includes(currentBattle.status);
 
   const [battleLogs, setBattleLogs] = useState<CombatLog[]>([]);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
       if (!database || !currentBattle) {
@@ -385,6 +387,16 @@ export default function BattlegroundPage() {
 
       return () => off(logsRef, 'value', listener);
   }, [database, currentBattle]);
+
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+        const scrollContainer = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
+        if (scrollContainer) {
+            scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        }
+    }
+  }, [battleLogs]);
+
 
   const allItemsQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'items') : null), [firestore]);
   const { data: allItems, isLoading: areItemsLoading } = useCollection<Item>(allItemsQuery);
@@ -791,7 +803,7 @@ export default function BattlegroundPage() {
               <Card>
                   <CardHeader><CardTitle>共鬥紀錄</CardTitle></CardHeader>
                   <CardContent>
-                      <ScrollArea className="h-64">
+                      <ScrollArea className="h-64" ref={scrollAreaRef}>
                           <div className="space-y-3 text-sm font-mono pr-4">
                               {battleLogs && battleLogs.length > 0 ? battleLogs.map(log => (
                                   <p key={log.id}>
