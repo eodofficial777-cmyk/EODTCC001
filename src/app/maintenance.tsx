@@ -1,12 +1,14 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Wrench } from "lucide-react";
 import React from "react";
 import { useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MaintenanceStatus, User } from "@/lib/types";
+import Link from "next/link";
 
 function MaintenanceScreen() {
     return (
@@ -26,6 +28,11 @@ function MaintenanceScreen() {
                         感謝您的耐心等候！
                     </p>
                 </CardContent>
+                <CardFooter>
+                    <Button asChild variant="outline" className="w-full">
+                        <Link href="/">返回登入頁面</Link>
+                    </Button>
+                </CardFooter>
             </Card>
         </div>
     );
@@ -42,7 +49,18 @@ export default function MaintenanceWrapper({ children }: { children: React.React
     const userDocRef = useMemoFirebase(() => (user ? doc(firestore, `users/${user.uid}`) : null), [user, firestore]);
     const { data: userData, isLoading: isUserDataLoading } = useDoc<User>(userDocRef);
 
-    const isLoading = isUserLoading || isMaintenanceLoading || isUserDataLoading;
+    // If the user is not logged in, we are not in maintenance mode for them.
+    // They should see the login page. The check happens after login.
+    if (isUserLoading) {
+        return (
+             <div className="flex min-h-screen items-center justify-center bg-background p-4">
+                 <Skeleton className="w-full max-w-md h-72" />
+             </div>
+        )
+    }
+
+    // After login, we might still be loading user or maintenance data.
+    const isLoading = isMaintenanceLoading || isUserDataLoading;
     
     if(isLoading) {
         return (
@@ -53,6 +71,7 @@ export default function MaintenanceWrapper({ children }: { children: React.React
     }
 
     const isMaintenanceMode = maintenanceStatus?.isMaintenance || false;
+    // We can only know if they are admin if they are logged in and we have their data.
     const isAdmin = userData?.isAdmin || false;
 
     if (isMaintenanceMode && !isAdmin) {

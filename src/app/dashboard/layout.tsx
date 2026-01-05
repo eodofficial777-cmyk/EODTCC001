@@ -29,11 +29,9 @@ import {
 } from '@/components/ui/sidebar';
 import Logo from '@/components/logo';
 import { UserNav } from './user-nav';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { useDoc } from '@/firebase';
-import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
+import { useDoc, useUser, useFirestore, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
+import MaintenanceWrapper from '../maintenance';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: '角色資訊' },
@@ -47,11 +45,7 @@ const navItems = [
   { href: '/dashboard/admin', icon: ShieldCheck, label: '管理後台', admin: true },
 ];
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function DashboardContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user } = useUser();
   const firestore = useFirestore();
@@ -68,7 +62,7 @@ export default function DashboardLayout({
     if (currentItem) return currentItem.label;
     if (pathname.startsWith('/dashboard/roster/')) return '角色檔案';
     return '儀表板';
-  }
+  };
 
   return (
     <SidebarProvider>
@@ -115,5 +109,17 @@ export default function DashboardLayout({
         </SidebarInset>
       </div>
     </SidebarProvider>
+  );
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <MaintenanceWrapper>
+      <DashboardContent>{children}</DashboardContent>
+    </MaintenanceWrapper>
   );
 }
