@@ -76,9 +76,11 @@ export async function archiveAndProcessBattleLogs(battleId: string): Promise<Arc
       });
       archivedCount++;
       
-      // Calculate damage for stats
+      // Calculate damage for stats from the data just read from RTDB
       if (log.userId && log.damage && log.damage > 0) {
         if (!damageByUser[log.userId]) {
+            // This is the first time we see this user, we might not know their roleName yet.
+            // We'll fill it later if possible, or just use ID.
             damageByUser[log.userId] = { damage: 0, faction: log.userFaction, roleName: 'Unknown' };
         }
         damageByUser[log.userId].damage += log.damage;
@@ -108,4 +110,3 @@ export async function archiveAndProcessBattleLogs(battleId: string): Promise<Arc
     return { success: false, error: error.message || '封存戰鬥日誌時發生未知錯誤。' };
   }
 }
-
