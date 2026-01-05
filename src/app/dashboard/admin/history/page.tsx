@@ -172,31 +172,38 @@ export default function HistoryPage() {
   
   const yeluMVP = useMemo(() => {
     if (!selectedSeason || !mvpDetails) return "N/A";
-    const mvpId = selectedSeason.yelu.activePlayers[0];
-    return mvpDetails[mvpId] || mvpId || "N/A";
+    const mvpId = selectedSeason.yelu.mvp;
+    return mvpId ? (mvpDetails[mvpId] || mvpId) : "N/A";
   }, [selectedSeason, mvpDetails]);
 
   const associationMVP = useMemo(() => {
     if (!selectedSeason || !mvpDetails) return "N/A";
-    const mvpId = selectedSeason.association.activePlayers[0];
-    return mvpDetails[mvpId] || mvpId || "N/A";
+    const mvpId = selectedSeason.association.mvp;
+    return mvpId ? (mvpDetails[mvpId] || mvpId) : "N/A";
   }, [selectedSeason, mvpDetails]);
 
   const fetchMvpData = useCallback(async (season: ArchivedSeason | null) => {
     if (!season) return;
-    setIsMvpLoading(true);
-    const playerIds = [...season.yelu.activePlayers, ...season.association.activePlayers];
-    const uniquePlayerIds = Array.from(new Set(playerIds));
     
-    if(uniquePlayerIds.length > 0) {
-      const { players, error } = await getSeasonMvpDetails(uniquePlayerIds);
+    const playerIds = [season.yelu.mvp, season.association.mvp].filter((id): id is string => !!id);
+    if (playerIds.length === 0) {
+      setMvpDetails({});
+      return;
+    }
+
+    setIsMvpLoading(true);
+    try {
+      const { players, error } = await getSeasonMvpDetails(playerIds);
       if (error) {
         toast({ variant: 'destructive', title: '獲取 MVP 資料失敗', description: error });
       } else {
         setMvpDetails(players);
       }
+    } catch(e: any) {
+        toast({ variant: 'destructive', title: '獲取 MVP 資料失敗', description: e.message });
+    } finally {
+        setIsMvpLoading(false);
     }
-    setIsMvpLoading(false);
   }, [toast]);
   
   const handleMvpModalOpen = (season: ArchivedSeason) => {
@@ -261,8 +268,8 @@ export default function HistoryPage() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>紀錄結束日期</TableHead>
-                                <TableHead>夜鷺分數</TableHead>
-                                <TableHead>協會分數</TableHead>
+                                <TableHead>夜鷺分數 (加權)</TableHead>
+                                <TableHead>協會分數 (加權)</TableHead>
                                 <TableHead className="text-center">當期贏家</TableHead>
                                 <TableHead className="text-right">操作</TableHead>
                               </TableRow>
@@ -283,7 +290,7 @@ export default function HistoryPage() {
                                             <AlertDialogHeader>
                                                 <AlertDialogTitle>當期貢獻 MVP</AlertDialogTitle>
                                                 <AlertDialogDescription>
-                                                    此處顯示在 {selectedSeason && new Date(selectedSeason.archivedAt).toLocaleDateString()} 結算的賽季中，各陣營貢獻最高的玩家。此功能目前僅供查詢。
+                                                    此處顯示在 {selectedSeason && new Date(selectedSeason.archivedAt).toLocaleDateString()} 結算的賽季中，各陣營貢獻最高的玩家。
                                                 </AlertDialogDescription>
                                             </AlertDialogHeader>
                                             {isMvpLoading ? <Skeleton className="h-24 w-full"/> : selectedSeason && (
@@ -326,4 +333,3 @@ export default function HistoryPage() {
     </div>
   );
 }
-

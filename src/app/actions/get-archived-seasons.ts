@@ -5,7 +5,7 @@ import { getFirestore, collection, getDocs, orderBy, query, Timestamp, where, do
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
-import type { User } from '@/lib/types';
+import type { User, Task } from '@/lib/types';
 
 
 // Define the shape of the archived season data
@@ -17,11 +17,13 @@ export interface ArchivedSeason {
         rawScore: number;
         weightedScore?: number;
         activePlayers: string[];
+        mvp?: string; // Add MVP field
     };
     association: {
         rawScore: number;
         weightedScore?: number;
         activePlayers: string[];
+        mvp?: string; // Add MVP field
     };
 }
 
@@ -61,17 +63,56 @@ export async function getArchivedSeasons(): Promise<{ seasons?: ArchivedSeason[]
       return { seasons: [] };
     }
 
-    const seasons = snapshot.docs.map(doc => {
+    const seasons = await Promise.all(snapshot.docs.map(async (doc) => {
       const data = doc.data();
+      const seasonStartDate = data.startDate ? (data.startDate as Timestamp).toDate() : new Date(0);
+      const seasonEndDate = (data.archivedAt as Timestamp).toDate();
+
+      // Get all tasks within the season's timeframe
+      const tasksQuery = query(
+        collection(db, 'tasks'),
+        where('submissionDate', '>=', seasonStartDate),
+        where('submissionDate', '<=', seasonEndDate),
+        where('status', '==', 'approved')
+      );
+      const tasksSnapshot = await getDocs(tasksQuery);
+      const seasonTasks = tasksSnapshot.docs.map(d => d.data() as Task);
+
+      // Calculate contribution per user
+      const contributions: { [userId: string]: { honor: number, factionId: string } } = {};
+      for (const task of seasonTasks) {
+          if (!contributions[task.userId]) {
+              contributions[task.userId] = { honor: 0, factionId: task.userFactionId };
+          }
+          contributions[task.userId].honor += task.honorPointsAwarded;
+      }
+      
+      // Find MVP for each faction
+      let yeluMvp: { id: string, honor: number } | null = null;
+      let associationMvp: { id: string, honor: number } | null = null;
+
+      for (const userId in contributions) {
+          const { honor, factionId } = contributions[userId];
+          if (factionId === 'yelu') {
+              if (!yeluMvp || honor > yeluMvp.honor) {
+                  yeluMvp = { id: userId, honor };
+              }
+          } else if (factionId === 'association') {
+              if (!associationMvp || honor > associationMvp.honor) {
+                  associationMvp = { id: userId, honor };
+              }
+          }
+      }
+
       return {
         ...data,
         id: doc.id,
-        archivedAt: (data.archivedAt as Timestamp).toDate().toISOString(),
-        startDate: data.startDate ? (data.startDate as Timestamp).toDate().toISOString() : new Date().toISOString(),
-        yelu: data.yelu || { rawScore: 0, activePlayers: [] },
-        association: data.association || { rawScore: 0, activePlayers: [] },
+        archivedAt: seasonEndDate.toISOString(),
+        startDate: seasonStartDate.toISOString(),
+        yelu: { ...data.yelu, mvp: yeluMvp?.id },
+        association: { ...data.association, mvp: associationMvp?.id },
       } as ArchivedSeason;
-    });
+    }));
     
     return { seasons };
 
@@ -104,4 +145,3 @@ export async function getSeasonMvpDetails(playerIds: string[]): Promise<{ player
         return { players: {}, error: error.message || '無法獲取 MVP 玩家資料。' };
     }
 }
-
