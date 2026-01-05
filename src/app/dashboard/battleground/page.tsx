@@ -378,10 +378,9 @@ export default function BattlegroundPage() {
     const listener = onValue(logsRef, (snapshot) => {
         const data = snapshot.val();
         if (data) {
-            // Convert the object of logs into an array, assigning the key as the ID
             const logsArray: CombatLog[] = Object.entries(data).map(([key, value]) => ({
                 id: key,
-                ...(value as Omit<CombatLog, 'id'>)
+                ...((value as any) as Omit<CombatLog, 'id'>)
             }));
             logsArray.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
             setBattleLogs(logsArray);
@@ -390,9 +389,8 @@ export default function BattlegroundPage() {
         }
     });
 
-    // Cleanup listener on component unmount or when dependencies change
     return () => off(logsRef, 'value', listener);
-}, [database, currentBattle?.id]);
+  }, [database, currentBattle?.id]);
 
 
   useEffect(() => {
@@ -812,13 +810,13 @@ export default function BattlegroundPage() {
                   <CardContent>
                       <ScrollArea className="h-64" ref={scrollAreaRef}>
                           <div className="space-y-3 text-sm font-mono pr-4">
-                              {battleLogs && battleLogs.length > 0 ? battleLogs.map(log => (
+                              {battleLogs && battleLogs.length > 0 ? [...battleLogs].reverse().map(log => (
                                   <p key={log.id}>
-                                      <span className="text-muted-foreground mr-2">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                                      {log.logData}
+                                      <span className="text-muted-foreground/80 mr-2">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                                      <span>{log.logData}</span>
                                   </p>
                               )) : <p className="text-muted-foreground text-center">戰鬥尚未開始...</p>}
-                              {hasFallen && <p className="text-red-500">[{new Date().toLocaleTimeString()}] 您的HP已歸零，無法繼續行動。</p>}
+                              {hasFallen && <p className="text-red-500 font-bold">[{new Date().toLocaleTimeString()}] 您的HP已歸零，無法繼續行動。</p>}
                           </div>
                       </ScrollArea>
                   </CardContent>
@@ -941,5 +939,3 @@ export default function BattlegroundPage() {
     </div>
   );
 }
-
-    
