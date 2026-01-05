@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getFirestore, collection, getDocs, orderBy, query, Timestamp } from 'firebase/firestore';
@@ -61,6 +62,8 @@ export async function getArchivedSeasons(): Promise<{ seasons?: ArchivedSeason[]
         ...data,
         id: doc.id,
         archivedAt: (data.archivedAt as Timestamp).toDate().toISOString(),
+        yelu: data.yelu || { rawScore: 0, activePlayers: [] },
+        association: data.association || { rawScore: 0, activePlayers: [] },
       } as ArchivedSeason;
     });
     

@@ -80,61 +80,64 @@ export interface DistributionPayload {
     battleData?: CombatEncounter;
 }
 
-// This function now correctly filters users.
-// It returns `true` if a user should be included.
 function applyFilters(user: User, filters: FilterCriteria): boolean {
-    if (!filters) return true; // If no filters, everyone is included.
-    if (user.isAdmin) return false; // Always exclude admins.
+    if (!filters) return true;
+    if (user.isAdmin) return false;
 
     // Faction filter
     if (filters.factionId && user.factionId !== filters.factionId) return false;
 
     // Race filter
     if (filters.raceId && user.raceId !== filters.raceId) return false;
-    
+
     // Honor Points filter
-    if (filters.honorPoints_op && filters.honorPoints_val !== undefined) {
-        if (filters.honorPoints_op === '>=' && user.honorPoints < filters.honorPoints_val) return false;
-        if (filters.honorPoints_op === '<=' && user.honorPoints > filters.honorPoints_val) return false;
+    if (filters.honorPoints_op && typeof filters.honorPoints_val === 'number') {
+        const value = filters.honorPoints_val;
+        if (filters.honorPoints_op === '>=' && user.honorPoints < value) return false;
+        if (filters.honorPoints_op === '<=' && user.honorPoints > value) return false;
     }
-    
-    // Currency filter (using totalCurrencyEarned)
-    if (filters.currency_op && filters.currency_val !== undefined) {
+
+    // Total Currency Earned filter
+    if (filters.currency_op && typeof filters.currency_val === 'number') {
         const totalCurrency = user.totalCurrencyEarned || 0;
-        if (filters.currency_op === '>=' && totalCurrency < filters.currency_val) return false;
-        if (filters.currency_op === '<=' && totalCurrency > filters.currency_val) return false;
+        const value = filters.currency_val;
+        if (filters.currency_op === '>=' && totalCurrency < value) return false;
+        if (filters.currency_op === '<=' && totalCurrency > value) return false;
     }
-    
+
     // Task Count filter
-    if (filters.taskCount_op && filters.taskCount_val !== undefined) {
+    if (filters.taskCount_op && typeof filters.taskCount_val === 'number') {
         const taskCount = (user.tasks || []).length;
-        if (filters.taskCount_op === '>=' && taskCount < filters.taskCount_val) return false;
-        if (filters.taskCount_op === '<=' && taskCount > filters.taskCount_val) return false;
+        const value = filters.taskCount_val;
+        if (filters.taskCount_op === '>=' && taskCount < value) return false;
+        if (filters.taskCount_op === '<=' && taskCount > value) return false;
     }
 
     // Battle Participation filter
-    if (filters.participatedBattleCount_op && filters.participatedBattleCount_val !== undefined) {
+    if (filters.participatedBattleCount_op && typeof filters.participatedBattleCount_val === 'number') {
         const battleCount = (user.participatedBattleIds || []).length;
-        if (filters.participatedBattleCount_op === '>=' && battleCount < filters.participatedBattleCount_val) return false;
-        if (filters.participatedBattleCount_op === '<=' && battleCount > filters.participatedBattleCount_val) return false;
+        const value = filters.participatedBattleCount_val;
+        if (filters.participatedBattleCount_op === '>=' && battleCount < value) return false;
+        if (filters.participatedBattleCount_op === '<=' && battleCount > value) return false;
     }
     
     // HP Zero Count filter
-    if (filters.hpZeroCount_op && filters.hpZeroCount_val !== undefined) {
+    if (filters.hpZeroCount_op && typeof filters.hpZeroCount_val === 'number') {
         const hpZeroCount = user.hpZeroCount || 0;
-        if (filters.hpZeroCount_op === '>=' && hpZeroCount < filters.hpZeroCount_val) return false;
-        if (filters.hpZeroCount_op === '<=' && hpZeroCount > filters.hpZeroCount_val) return false;
+        const value = filters.hpZeroCount_val;
+        if (filters.hpZeroCount_op === '>=' && hpZeroCount < value) return false;
+        if (filters.hpZeroCount_op === '<=' && hpZeroCount > value) return false;
     }
 
     // Item Use filter
-    if (filters.itemUse_id && filters.itemUse_op && filters.itemUse_val !== undefined) {
+    if (filters.itemUse_id && filters.itemUse_op && typeof filters.itemUse_val === 'number') {
         const userItemUseCount = user.itemUseCount?.[filters.itemUse_id] || 0;
-        if (filters.itemUse_op === '>=' && userItemUseCount < filters.itemUse_val) return false;
-        if (filters.itemUse_op === '<=' && userItemUseCount > filters.itemUse_val) return false;
+        const value = filters.itemUse_val;
+        if (filters.itemUse_op === '>=' && userItemUseCount < value) return false;
+        if (filters.itemUse_op === '<=' && userItemUseCount > value) return false;
     }
 
-    // If none of the above conditions returned false, the user passes the filters.
-    return true;
+    return true; // User passes all filters
 }
 
 
@@ -262,5 +265,3 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
     return { success: false, error: error.message || '發放獎勵時發生未知錯誤。' };
   }
 }
-
-    

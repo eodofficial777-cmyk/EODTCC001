@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import {
@@ -1054,59 +1053,6 @@ function StoreManagement() {
     );
 }
 
-function ConflictManagement() {
-  const { toast } = useToast();
-  const [isResetting, setIsResetting] = useState(false);
-
-  const handleResetSeason = async () => {
-    setIsResetting(true);
-    try {
-      const result = await resetSeason();
-      if (result.error) throw new Error(result.error);
-      toast({
-        title: '成功',
-        description: '賽季已成功重置，並已封存舊賽季資料。',
-      });
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: '重置失敗',
-        description: error.message,
-      });
-    } finally {
-      setIsResetting(false);
-    }
-  };
-
-  return (
-     <div>
-        <h3 className="text-lg font-semibold">陣營對抗管理</h3>
-        <p className="text-muted-foreground mt-2">
-            重置陣營積分以開啟新賽季，並存檔當前賽季的結果。
-        </p>
-         <AlertDialog>
-            <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="mt-4" disabled={isResetting}>
-                  {isResetting ? '重置中...' : '重置賽季積分'}
-                </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>您確定嗎？</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        此操作將會封存當前賽季的所有積分與活躍玩家資料，並開啟一個全新的賽季。此操作無法復原。
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>取消</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleResetSeason}>確定重置</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-    </div>
-  )
-}
-
 function RecipeEditor({
   recipe,
   items,
@@ -2108,66 +2054,6 @@ function RewardDistribution() {
     );
 }
 
-function DatabaseManagement() {
-    const { toast } = useToast();
-    const firestore = useFirestore();
-    const maintenanceDocRef = useMemoFirebase(() => doc(firestore, 'globals', 'maintenance'), [firestore]);
-    const { data: maintenanceStatus, isLoading } = useDoc<MaintenanceStatus>(maintenanceDocRef);
-    const [isSaving, setIsSaving] = useState(false);
-
-    const handleMaintenanceToggle = async (enabled: boolean) => {
-        setIsSaving(true);
-        try {
-            const result = await updateMaintenanceStatus(enabled);
-            if (result.error) throw new Error(result.error);
-            toast({
-                title: '成功',
-                description: `維護模式已${enabled ? '開啟' : '關閉'}。`,
-            });
-        } catch (error: any) {
-            toast({
-                variant: 'destructive',
-                title: '操作失敗',
-                description: error.message,
-            });
-        } finally {
-            setIsSaving(false);
-        }
-    };
-    
-    return (
-         <div>
-             <h3 className="text-lg font-semibold">資料庫管理</h3>
-            <p className="text-muted-foreground mt-2">
-              執行資料庫維護操作。請謹慎使用。
-            </p>
-            <Card className="mt-4">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5" /> 伺服器維修模式</CardTitle>
-                    <CardDescription>開啟後，所有非管理員玩家將看到維修頁面，無法存取遊戲內容。</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {isLoading ? (
-                        <Skeleton className="h-10 w-48" />
-                    ) : (
-                        <div className="flex items-center space-x-2">
-                            <Switch
-                                id="maintenance-mode"
-                                checked={maintenanceStatus?.isMaintenance || false}
-                                onCheckedChange={handleMaintenanceToggle}
-                                disabled={isSaving}
-                            />
-                            <Label htmlFor="maintenance-mode" className={maintenanceStatus?.isMaintenance ? 'text-destructive' : 'text-green-500'}>
-                                {isSaving ? '更新中...' : maintenanceStatus?.isMaintenance ? '維修模式已開啟' : '維修模式已關閉'}
-                            </Label>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-        </div>
-    );
-}
-
 function BattleLogViewer({ battleId, battleName }: { battleId: string, battleName: string }) {
     const [logs, setLogs] = useState<CombatLog[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -2758,6 +2644,18 @@ export default function AdminPage() {
     );
   }
 
+  const tabs = [
+    { value: 'accounts', label: '帳號審核' },
+    { value: 'tasks', label: '任務中心' },
+    { value: 'store', label: '商店道具' },
+    { value: 'crafting', label: '裝備合成' },
+    { value: 'battle', label: '共鬥管理' },
+    { value: 'skills', label: '技能管理' },
+    { value: 'titles', label: '稱號管理' },
+    { value: 'rewards', label: '獎勵發放' },
+    { value: 'history', label: '歷史紀錄' },
+  ];
+
   return (
     <div className="w-full">
       <Card>
@@ -2769,17 +2667,10 @@ export default function AdminPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="accounts" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 md:grid-cols-5 lg:grid-cols-10">
-              <TabsTrigger value="accounts">帳號審核</TabsTrigger>
-              <TabsTrigger value="tasks">任務中心</TabsTrigger>
-              <TabsTrigger value="store">商店道具</TabsTrigger>
-              <TabsTrigger value="crafting">裝備合成</TabsTrigger>
-              <TabsTrigger value="battle">共鬥管理</TabsTrigger>
-              <TabsTrigger value="conflict">陣營對抗</TabsTrigger>
-              <TabsTrigger value="skills">技能管理</TabsTrigger>
-              <TabsTrigger value="titles">稱號管理</TabsTrigger>
-              <TabsTrigger value="rewards">獎勵發放</TabsTrigger>
-              <TabsTrigger value="database">資料庫</TabsTrigger>
+            <TabsList className="flex flex-wrap h-auto sm:grid sm:h-auto sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9">
+              {tabs.map(tab => (
+                <TabsTrigger key={tab.value} value={tab.value}>{tab.label}</TabsTrigger>
+              ))}
             </TabsList>
 
             <div className="mt-4 p-4 border rounded-md min-h-[400px]">
@@ -2803,8 +2694,8 @@ export default function AdminPage() {
                     onRefresh={fetchAllData}
                  />
               </TabsContent>
-              <TabsContent value="conflict">
-                <ConflictManagement />
+              <TabsContent value="history">
+                <Link href="/dashboard/admin/history">前往歷史賽季與資料庫管理</Link>
               </TabsContent>
                <TabsContent value="skills">
                  <SkillManagement />
@@ -2815,9 +2706,6 @@ export default function AdminPage() {
                <TabsContent value="rewards">
                   <RewardDistribution />
               </TabsContent>
-              <TabsContent value="database">
-                <DatabaseManagement />
-              </TabsContent>
             </div>
           </Tabs>
         </CardContent>
@@ -2825,5 +2713,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
-    
