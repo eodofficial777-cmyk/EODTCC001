@@ -7,6 +7,7 @@ import {
   runTransaction,
   serverTimestamp,
   increment,
+  collection,
 } from 'firebase/firestore';
 import { getDatabase, ref, push } from 'firebase/database';
 import { initializeApp, getApps, App } from 'firebase/app';
@@ -150,7 +151,7 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
             logData.damage = totalDamageDealtThisAction;
         }
 
-        const activityLogRef = doc(db, `users/${userId}/activityLogs`);
+        const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
         transaction.set(activityLogRef, {
             id: activityLogRef.id,
             userId,
