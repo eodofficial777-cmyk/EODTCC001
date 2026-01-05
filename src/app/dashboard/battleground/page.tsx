@@ -15,8 +15,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Heart, Shield, Sword, Timer, CheckCircle2, Package, WandSparkles, Bird, Users, EyeOff, Sparkles, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
+import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection, useDatabase } from '@/firebase';
 import { doc, collection, query, orderBy, limit, where, updateDoc } from 'firebase/firestore';
+import { ref, onValue, off } from 'firebase/database';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import type { CombatEncounter, User, Item, Skill, Monster, CombatLog, AttributeEffect, TriggeredEffect, ActiveBuff, SkillEffect } from '@/lib/types';
@@ -349,6 +350,7 @@ const ActionCooldown = ({ cooldown, onCooldownEnd }: { cooldown: number, onCoold
 export default function BattlegroundPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const database = useDatabase();
   const { toast } = useToast();
   
   const userDocRef = useMemoFirebase(() => (user ? doc(firestore, `users/${user.uid}`) : null), [user, firestore]);
@@ -362,11 +364,27 @@ export default function BattlegroundPage() {
   const currentBattle = battleData?.[0];
   const isBattleActiveForState = currentBattle && ['preparing', 'active'].includes(currentBattle.status);
 
-  const battleLogsQuery = useMemoFirebase(
-    () => (currentBattle ? query(collection(firestore, `combatEncounters/${currentBattle.id}/combatLogs`), orderBy('timestamp', 'desc')) : null),
-    [firestore, currentBattle]
-  );
-  const { data: battleLogs } = useCollection<CombatLog>(battleLogsQuery);
+  const [battleLogs, setBattleLogs] = useState<CombatLog[]>([]);
+
+  useEffect(() => {
+      if (!database || !currentBattle) {
+          setBattleLogs([]);
+          return;
+      }
+      const logsRef = ref(database, `battle_buffer/${currentBattle.id}`);
+      const listener = onValue(logsRef, (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+              const logsArray = Object.values(data) as CombatLog[];
+              logsArray.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+              setBattleLogs(logsArray);
+          } else {
+              setBattleLogs([]);
+          }
+      });
+
+      return () => off(logsRef, 'value', listener);
+  }, [database, currentBattle]);
 
   const allItemsQuery = useMemoFirebase(() => (firestore ? collection(firestore, 'items') : null), [firestore]);
   const { data: allItems, isLoading: areItemsLoading } = useCollection<Item>(allItemsQuery);
@@ -777,7 +795,7 @@ export default function BattlegroundPage() {
                           <div className="space-y-3 text-sm font-mono pr-4">
                               {battleLogs && battleLogs.length > 0 ? battleLogs.map(log => (
                                   <p key={log.id}>
-                                      <span className="text-muted-foreground mr-2">[{new Date(log.timestamp?.toDate()).toLocaleTimeString()}]</span>
+                                      <span className="text-muted-foreground mr-2">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
                                       {log.logData}
                                   </p>
                               )) : <p className="text-muted-foreground text-center">戰鬥尚未開始...</p>}
