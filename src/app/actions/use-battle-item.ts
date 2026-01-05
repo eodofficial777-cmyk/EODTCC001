@@ -136,6 +136,7 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
         const logData: any = {
             id: battleLogRef.id,
             encounterId: battleId,
+            userId: userId,
             logData: finalLogMessage,
             timestamp: serverTimestamp(),
             turn: battle.turn,

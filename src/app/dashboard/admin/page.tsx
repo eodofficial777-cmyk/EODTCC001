@@ -1,5 +1,6 @@
 
 
+
 'use client';
 
 import {
@@ -38,7 +39,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History, Award, KeyRound } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History, Award, KeyRound, BarChart } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -2192,10 +2193,28 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [damageStats, setDamageStats] = useState<any[] | null>(null);
 
     const [thresholdReward, setThresholdReward] = useState({ enabled: true, damageThreshold: 1000, titleId: ''});
     const [topYeluPlayerReward, setTopYeluPlayerReward] = useState({ enabled: false, titleId: '', itemId: '', honorPoints: 0, currency: 0 });
     const [topAssociationPlayerReward, setTopAssociationPlayerReward] = useState({ enabled: false, titleId: '', itemId: '', honorPoints: 0, currency: 0 });
+
+    const handlePreviewDamage = async () => {
+        setIsProcessing(true);
+        setDamageStats(null);
+        try {
+            const result = await awardBattleDamageRewards({ battleId, isPreview: true, thresholdReward: { enabled: false, damageThreshold: 0, titleId: '' }, topYeluPlayerReward: { enabled: false }, topAssociationPlayerReward: { enabled: false } });
+            if (result.error) throw new Error(result.error);
+            setDamageStats(result.damageStats || []);
+            if (!result.damageStats || result.damageStats.length === 0) {
+                 toast({ variant: 'default', title: '無傷害紀錄', description: '此戰場沒有玩家造成傷害的紀錄。' });
+            }
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: '預覽失敗', description: error.message });
+        } finally {
+            setIsProcessing(false);
+        }
+    }
 
     const handleAward = async () => {
         setIsProcessing(true);
@@ -2222,12 +2241,46 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
             <DialogTrigger asChild>
                 <Button variant="outline" size="sm"><Award className="h-4 w-4 mr-2"/>結算傷害獎勵</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-xl">
+            <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>結算戰役傷害獎勵: {battleName}</DialogTitle>
                     <DialogDescription>為在此戰役中表現出色的玩家授予獎勵。</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto pr-4">
+                <div className="space-y-6 py-4 max-h-[70vh] overflow-y-auto pr-4">
+                    {/* Damage Stats Preview */}
+                    <div className="space-y-2">
+                        <Button variant="secondary" onClick={handlePreviewDamage} disabled={isProcessing} className="w-full">
+                           <BarChart className="h-4 w-4 mr-2"/> {isProcessing && damageStats === null ? '讀取中...' : '預覽傷害統計'}
+                        </Button>
+                        {damageStats && (
+                            <div className="border rounded-md max-h-48 overflow-y-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>玩家</TableHead>
+                                            <TableHead>陣營</TableHead>
+                                            <TableHead className="text-right">總傷害</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {damageStats.map(stat => (
+                                            <TableRow key={stat.userId}>
+                                                <TableCell>{stat.roleName}</TableCell>
+                                                <TableCell>
+                                                    <Badge style={{ backgroundColor: FACTIONS[stat.factionId as keyof typeof FACTIONS]?.color, color: 'white' }}>
+                                                        {FACTIONS[stat.factionId as keyof typeof FACTIONS]?.name || stat.factionId}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono">{stat.totalDamage}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </div>
+                    <Separator/>
+
                     {/* Threshold Reward */}
                     <div className="p-4 border rounded-lg space-y-4">
                         <div className="flex items-center justify-between">
@@ -2303,7 +2356,7 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">取消</Button></DialogClose>
-                    <Button onClick={handleAward} disabled={isProcessing}>{isProcessing ? '結算中...' : '確認發放'}</Button>
+                    <Button onClick={handleAward} disabled={isProcessing}>{isProcessing && damageStats !== null ? '結算中...' : '確認發放'}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

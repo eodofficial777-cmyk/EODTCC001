@@ -51,6 +51,7 @@ interface RewardPayload {
 
 interface AwardPayload {
   battleId: string;
+  isPreview?: boolean; // Flag for previewing damage stats
   thresholdReward: {
     enabled: boolean;
     damageThreshold: number;
@@ -70,13 +71,13 @@ async function awardSingleUser(transaction: any, userId: string, reward: RewardP
     
     let itemName = '';
     if (reward.itemId) {
-        const itemSnap = await getDoc(doc(db, 'items', reward.itemId));
+        const itemSnap = await transaction.get(doc(db, 'items', reward.itemId));
         if (itemSnap.exists()) itemName = (itemSnap.data() as Item).name;
     }
     
     let titleName = '';
     if (reward.titleId) {
-        const titleSnap = await getDoc(doc(db, 'titles', reward.titleId));
+        const titleSnap = await transaction.get(doc(db, 'titles', reward.titleId));
         if (titleSnap.exists()) titleName = (titleSnap.data() as Title).name;
     }
 
@@ -115,10 +116,10 @@ async function awardSingleUser(transaction: any, userId: string, reward: RewardP
 }
 
 
-export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{ success: boolean; error?: string; message?: string }> {
+export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{ success: boolean; error?: string; message?: string, damageStats?: any[] }> {
   try {
     await ensureAdminAuth();
-    const { battleId, thresholdReward, topYeluPlayerReward, topAssociationPlayerReward } = payload;
+    const { battleId, isPreview, thresholdReward, topYeluPlayerReward, topAssociationPlayerReward } = payload;
 
     if (!battleId) throw new Error('缺少戰場 ID。');
 
@@ -128,10 +129,13 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
     const battleData = battleDoc.data();
     const participants = battleData.participants || {};
     
-    // Create a mapping from roleName to userId and factionId
-    const roleNameToUserInfo: { [key: string]: { userId: string, factionId: string } } = {};
+    // Create a mapping from userId to factionId and roleName
+    const userIdToUserInfo: { [key: string]: { factionId: string, roleName: string } } = {};
     for (const userId in participants) {
-        roleNameToUserInfo[participants[userId].roleName] = { userId, factionId: participants[userId].factionId };
+        userIdToUserInfo[userId] = { 
+            factionId: participants[userId].factionId, 
+            roleName: participants[userId].roleName 
+        };
     }
 
     // 2. Fetch all logs for the battle to aggregate damage
@@ -139,24 +143,26 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
     const logsSnapshot = await getDocs(logsQuery);
     const logs = logsSnapshot.docs.map(d => d.data() as CombatLog);
     
-    const damageByUser = new Map<string, { totalDamage: number, factionId: string }>();
+    const damageByUser = new Map<string, number>();
 
     for (const log of logs) {
-        let userInfo: { userId: string, factionId: string } | null = null;
-        for (const roleName in roleNameToUserInfo) {
-            if (log.logData.startsWith(roleName)) {
-                userInfo = roleNameToUserInfo[roleName];
-                break;
-            }
+        // Use the userId from the log directly for accurate attribution
+        if (log.userId && log.damage && log.damage > 0) {
+            const currentDamage = damageByUser.get(log.userId) || 0;
+            damageByUser.set(log.userId, currentDamage + log.damage);
         }
-        
-        if (userInfo && log.damage && log.damage > 0) {
-            const currentData = damageByUser.get(userInfo.userId) || { totalDamage: 0, factionId: userInfo.factionId };
-            damageByUser.set(userInfo.userId, { 
-                totalDamage: currentData.totalDamage + log.damage,
-                factionId: currentData.factionId
-            });
-        }
+    }
+    
+    // Prepare damage stats for preview
+    const damageStats = Array.from(damageByUser.entries()).map(([userId, totalDamage]) => ({
+        userId,
+        roleName: userIdToUserInfo[userId]?.roleName || '未知玩家',
+        factionId: userIdToUserInfo[userId]?.factionId || '未知',
+        totalDamage,
+    })).sort((a,b) => b.totalDamage - a.totalDamage);
+
+    if (isPreview) {
+        return { success: true, damageStats };
     }
 
     let messages: string[] = [];
@@ -168,11 +174,11 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
                 throw new Error('傷害閾值獎勵設定不完整。');
             }
             const userIdsToAward = Array.from(damageByUser.entries())
-                .filter(([_, data]) => data.totalDamage >= thresholdReward.damageThreshold)
+                .filter(([_, totalDamage]) => totalDamage >= thresholdReward.damageThreshold)
                 .map(([userId, _]) => userId);
 
             if (userIdsToAward.length > 0) {
-                 const titleSnap = await getDoc(doc(db, 'titles', thresholdReward.titleId));
+                 const titleSnap = await transaction.get(doc(db, 'titles', thresholdReward.titleId));
                  if (!titleSnap.exists()) throw new Error(`找不到傷害閾值獎勵的稱號 ID: ${thresholdReward.titleId}`);
                  const titleName = (titleSnap.data() as Title).name;
                 
@@ -196,31 +202,31 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
         }
 
         // --- 3b. Process Top Player Rewards ---
-        const yeluPlayers = Array.from(damageByUser.entries()).filter(([_, data]) => data.factionId === 'yelu');
-        const associationPlayers = Array.from(damageByUser.entries()).filter(([_, data]) => data.factionId === 'association');
+        const yeluPlayers = Array.from(damageByUser.entries()).filter(([userId, _]) => userIdToUserInfo[userId]?.factionId === 'yelu');
+        const associationPlayers = Array.from(damageByUser.entries()).filter(([userId, _]) => userIdToUserInfo[userId]?.factionId === 'association');
         
-        let topYeluPlayer: [string, { totalDamage: number; factionId: string; }] | undefined;
+        let topYeluPlayer: [string, number] | undefined;
         if (yeluPlayers.length > 0) {
-            topYeluPlayer = yeluPlayers.reduce((max, player) => player[1].totalDamage > max[1].totalDamage ? player : max);
+            topYeluPlayer = yeluPlayers.reduce((max, player) => player[1] > max[1] ? player : max);
         }
         
-        let topAssociationPlayer: [string, { totalDamage: number; factionId: string; }] | undefined;
+        let topAssociationPlayer: [string, number] | undefined;
         if (associationPlayers.length > 0) {
-            topAssociationPlayer = associationPlayers.reduce((max, player) => player[1].totalDamage > max[1].totalDamage ? player : max);
+            topAssociationPlayer = associationPlayers.reduce((max, player) => player[1] > max[1] ? player : max);
         }
 
         if (topYeluPlayerReward.enabled && topYeluPlayer) {
-            const [userId, userData] = topYeluPlayer;
+            const [userId, totalDamage] = topYeluPlayer;
             await awardSingleUser(transaction, userId, topYeluPlayerReward, `作為夜鷺陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`);
-            const user = (await getDoc(doc(db, 'users', userId))).data() as User;
-            messages.push(`已為夜鷺陣營傷害冠軍 ${user.roleName} (傷害: ${userData.totalDamage}) 發放獎勵。`);
+            const user = userIdToUserInfo[userId];
+            messages.push(`已為夜鷺陣營傷害冠軍 ${user.roleName} (傷害: ${totalDamage}) 發放獎勵。`);
         }
         
         if (topAssociationPlayerReward.enabled && topAssociationPlayer) {
-            const [userId, userData] = topAssociationPlayer;
+            const [userId, totalDamage] = topAssociationPlayer;
             await awardSingleUser(transaction, userId, topAssociationPlayerReward, `作為協會陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`);
-            const user = (await getDoc(doc(db, 'users', userId))).data() as User;
-            messages.push(`已為協會陣營傷害冠軍 ${user.roleName} (傷害: ${userData.totalDamage}) 發放獎勵。`);
+             const user = userIdToUserInfo[userId];
+            messages.push(`已為協會陣營傷害冠軍 ${user.roleName} (傷害: ${totalDamage}) 發放獎勵。`);
         }
     });
 

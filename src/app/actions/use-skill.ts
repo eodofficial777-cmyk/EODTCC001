@@ -97,6 +97,7 @@ export async function useSkill(payload: UseSkillPayload): Promise<UseSkillResult
       const skillCooldowns = participantData.skillCooldowns || {};
       const monsters = [...battle.monsters];
       let logMessages: string[] = [];
+      let totalDamageDealtThisAction = 0;
 
       // Apply skill effects
       for (const effect of skill.effects) {
@@ -140,6 +141,7 @@ export async function useSkill(payload: UseSkillPayload): Promise<UseSkillResult
               }
 
               if (damageDealt > 0) {
+                 totalDamageDealtThisAction += damageDealt;
                  targetMonster.hp = Math.max(0, targetMonster.hp - damageDealt);
                  monsters[targetIndex] = targetMonster;
                  logMessages.push(`${user.roleName} 使用「${skill.name}」對 ${targetMonster.name} 造成了 ${damageDealt} 點直接傷害。`);
@@ -167,14 +169,22 @@ export async function useSkill(payload: UseSkillPayload): Promise<UseSkillResult
       // Log the action
       const finalLogMessage = logMessages.join(' ');
       const battleLogRef = doc(collection(db, `combatEncounters/${battleId}/combatLogs`));
-      transaction.set(battleLogRef, {
+      
+      const logData: any = {
         id: battleLogRef.id,
         encounterId: battleId,
+        userId: userId,
         logData: finalLogMessage,
         timestamp: serverTimestamp(),
         turn: battle.turn,
         type: 'skill_used',
-      });
+      };
+
+      if (totalDamageDealtThisAction > 0) {
+          logData.damage = totalDamageDealtThisAction;
+      }
+      
+      transaction.set(battleLogRef, logData);
       
       return { logMessage: finalLogMessage };
     });

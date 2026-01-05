@@ -1,4 +1,5 @@
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -192,6 +193,7 @@ export interface CombatEncounter {
 export interface CombatLog {
   id: string;
   encounterId: string;
+  userId: string; // The user who performed the action
   logData: string;
   timestamp: any;
   turn: number;

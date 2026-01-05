@@ -212,10 +212,12 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
       transaction.set(battleLogRef, {
            id: battleLogRef.id,
            encounterId: battleId,
+           userId: userId,
            logData: consolidatedLogMessage,
            timestamp: serverTimestamp(),
            turn: battle.turn, 
-           type: 'player_attack'
+           type: 'player_attack',
+           damage: finalPlayerDamage,
       });
 
       return { logMessage: consolidatedLogMessage, playerDamage: finalMonsterDamage, monsterDamage: finalPlayerDamage };
