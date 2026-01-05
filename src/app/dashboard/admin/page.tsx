@@ -1850,7 +1850,7 @@ function RewardDistribution() {
         async function fetchData() {
             setIsLoading(true);
             const data = await getAdminData();
-            if (data.users) setAllUsers(data.users);
+            if (data.users) setAllUsers(data.users.filter(u => !u.isAdmin)); // Exclude admins from list
             if (data.items) setAllItems(data.items);
             if (data.titles) setAllTitles(data.titles);
             setIsLoading(false);
@@ -1863,16 +1863,23 @@ function RewardDistribution() {
         setPreview(null);
         try {
             const payload = {
-                targetUserIds: mode === 'single' ? (selectedUser ? [selectedUser] : undefined) : undefined,
+                targetUserIds: mode === 'single' ? (selectedUser ? [selectedUser] : []) : undefined,
                 filters: mode === 'filter' ? filters : undefined,
                 rewards: { logMessage: "Preview" },
             };
+            
+            // Do not distribute to an empty list
+            if (mode === 'single' && !selectedUser) {
+                toast({ variant: 'destructive', title: '錯誤', description: '請選擇一位玩家。'});
+                setIsProcessing(false);
+                return;
+            }
             
             const result = await distributeRewards(payload);
             if (result.error) throw new Error(result.error);
             
             if (!result.processedUsers || result.processedUsers.length === 0) {
-                 toast({ variant: 'destructive', title: '預覽結果', description: '沒有任何玩家符合條件。'});
+                 toast({ variant: 'default', title: '預覽結果', description: '沒有任何玩家符合條件。'});
                  setPreview({ count: 0, users: [] });
             } else {
                 setPreview({
@@ -1893,11 +1900,19 @@ function RewardDistribution() {
             return;
         }
 
+        const userIdsToDistribute = mode === 'single' 
+            ? (selectedUser ? [selectedUser] : []) 
+            : (preview?.users.map(u => u.id) || []);
+
+        if (userIdsToDistribute.length === 0) {
+            toast({ variant: 'destructive', title: '錯誤', description: '沒有指定任何發放對象。' });
+            return;
+        }
+
         setIsProcessing(true);
         try {
             const result = await distributeRewards({
-                targetUserIds: mode === 'single' ? (selectedUser ? [selectedUser] : []) : preview?.users.map(u => u.id),
-                filters: mode === 'single' ? undefined : filters,
+                targetUserIds: userIdsToDistribute,
                 rewards: {
                     honorPoints: rewards.honorPoints || undefined,
                     currency: rewards.currency || undefined,
@@ -1909,6 +1924,8 @@ function RewardDistribution() {
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: `已向 ${result.processedCount} 位玩家發放獎勵。` });
             setPreview(null);
+            setFilters({});
+            setSelectedUser('');
         } catch (e: any) {
             toast({ variant: 'destructive', title: '發放失敗', description: e.message });
         } finally {
@@ -1930,21 +1947,22 @@ function RewardDistribution() {
                     <CardTitle>1. 選擇目標</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <RadioGroup value={mode} onValueChange={(v) => { setMode(v as any); setFilters({}); setPreview(null); }} className="mb-4">
+                    <RadioGroup value={mode} onValueChange={(v) => { setMode(v as any); setFilters({}); setPreview(null); setSelectedUser('') }} className="mb-4">
                         <div className="flex items-center space-x-2"><RadioGroupItem value="filter" id="filter" /><Label htmlFor="filter">複合篩選</Label></div>
                         <div className="flex items-center space-x-2"><RadioGroupItem value="single" id="single" /><Label htmlFor="single">指定單一玩家</Label></div>
                     </RadioGroup>
                     
                     {mode === 'filter' && (
                         <div className="p-4 border rounded-md bg-muted/30 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Select onValueChange={v => setFilters(f => ({ ...f, factionId: v === 'all' ? undefined : v }))}>
+                           {/* Filters */}
+                            <Select onValueChange={v => setFilters(f => ({ ...f, factionId: v === 'all' ? undefined : v }))} value={filters.factionId || 'all'}>
                                 <SelectTrigger><SelectValue placeholder="所有陣營" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">所有陣營</SelectItem>
                                     {Object.values(FACTIONS).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
-                             <Select onValueChange={v => setFilters(f => ({ ...f, raceId: v === 'all' ? undefined : v }))}>
+                             <Select onValueChange={v => setFilters(f => ({ ...f, raceId: v === 'all' ? undefined : v }))} value={filters.raceId || 'all'}>
                                 <SelectTrigger><SelectValue placeholder="所有種族" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">所有種族</SelectItem>
@@ -1953,44 +1971,45 @@ function RewardDistribution() {
                             </Select>
                             <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">榮譽點</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, honorPoints_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
-                                <Input type="number" placeholder="數量" onChange={e => setFilters(f => ({...f, honorPoints_val: parseInt(e.target.value)}))}/>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, honorPoints_op: v as any}))} value={filters.honorPoints_op || '>='}><SelectTrigger className="w-24"><SelectValue/></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="數量" value={filters.honorPoints_val ?? ''} onChange={e => setFilters(f => ({...f, honorPoints_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
-                            <div className="flex gap-2 items-center">
-                                <Label className="shrink-0">貨幣</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, currency_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
-                                <Input type="number" placeholder="數量" onChange={e => setFilters(f => ({...f, currency_val: parseInt(e.target.value)}))}/>
+                             <div className="flex gap-2 items-center">
+                                <Label className="shrink-0">累計貨幣</Label>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, currency_op: v as any}))} value={filters.currency_op || '>='}><SelectTrigger className="w-24"><SelectValue/></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="數量" value={filters.currency_val ?? ''} onChange={e => setFilters(f => ({...f, currency_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
                              <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">任務數</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, taskCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
-                                <Input type="number" placeholder="數量" onChange={e => setFilters(f => ({...f, taskCount_val: parseInt(e.target.value)}))}/>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, taskCount_op: v as any}))} value={filters.taskCount_op || '>='}><SelectTrigger className="w-24"><SelectValue/></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="數量" value={filters.taskCount_val ?? ''} onChange={e => setFilters(f => ({...f, taskCount_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
                             <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">共鬥次數</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, participatedBattleCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
-                                <Input type="number" placeholder="次數" onChange={e => setFilters(f => ({...f, participatedBattleCount_val: parseInt(e.target.value)}))}/>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, participatedBattleCount_op: v as any}))} value={filters.participatedBattleCount_op || '>='}><SelectTrigger className="w-24"><SelectValue/></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="次數" value={filters.participatedBattleCount_val ?? ''} onChange={e => setFilters(f => ({...f, participatedBattleCount_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
                             <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">倒下次數</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, hpZeroCount_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
-                                <Input type="number" placeholder="次數" onChange={e => setFilters(f => ({...f, hpZeroCount_val: parseInt(e.target.value)}))}/>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, hpZeroCount_op: v as any}))} value={filters.hpZeroCount_op || '>='}><SelectTrigger className="w-24"><SelectValue/></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="次數" value={filters.hpZeroCount_val ?? ''} onChange={e => setFilters(f => ({...f, hpZeroCount_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
                              <div className="flex gap-2 items-center">
                                 <Label className="shrink-0">道具使用</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_id: v as any}))}>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_id: v as any}))} value={filters.itemUse_id || ''}>
                                   <SelectTrigger><SelectValue placeholder="選擇道具"/></SelectTrigger>
                                   <SelectContent>
+                                    <SelectItem value="">無</SelectItem>
                                     {allItems.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_op: v as any}))}><SelectTrigger className="w-24"><SelectValue placeholder=">"/></SelectTrigger><SelectContent><SelectItem value=">">&gt;=</SelectItem><SelectItem value="<">&lt;=</SelectItem></SelectContent></Select>
-                                <Input type="number" placeholder="次數" onChange={e => setFilters(f => ({...f, itemUse_val: parseInt(e.target.value)}))}/>
+                                <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_op: v as any}))} value={filters.itemUse_op || '>='}><SelectTrigger className="w-24"><SelectValue placeholder=">=" /></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Input type="number" placeholder="次數" value={filters.itemUse_val ?? ''} onChange={e => setFilters(f => ({...f, itemUse_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
                         </div>
                     )}
                     {mode === 'single' && (
-                        <Select onValueChange={setSelectedUser}>
+                        <Select onValueChange={setSelectedUser} value={selectedUser}>
                             <SelectTrigger><SelectValue placeholder="選擇一個玩家..." /></SelectTrigger>
                             <SelectContent>
                                 {allUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.roleName}</SelectItem>)}
@@ -2020,7 +2039,7 @@ function RewardDistribution() {
                         </div>
                          <div className="space-y-2">
                             <Label>道具</Label>
-                            <Select onValueChange={v => setRewards(r => ({ ...r, itemId: v === 'none' ? '' : v}))}>
+                            <Select onValueChange={v => setRewards(r => ({ ...r, itemId: v === 'none' ? '' : v}))} value={rewards.itemId || 'none'}>
                                 <SelectTrigger><SelectValue placeholder="選擇道具"/></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">無</SelectItem>
@@ -2030,7 +2049,7 @@ function RewardDistribution() {
                          </div>
                          <div className="space-y-2">
                             <Label>稱號</Label>
-                            <Select onValueChange={v => setRewards(r => ({ ...r, titleId: v === 'none' ? '' : v}))}>
+                            <Select onValueChange={v => setRewards(r => ({ ...r, titleId: v === 'none' ? '' : v}))} value={rewards.titleId || 'none'}>
                                 <SelectTrigger><SelectValue placeholder="選擇稱號"/></SelectTrigger>
                                 <SelectContent>
                                      <SelectItem value="none">無</SelectItem>
@@ -2044,21 +2063,22 @@ function RewardDistribution() {
 
              <Card className="mt-4">
                 <CardHeader>
-                    <CardTitle>3. 預覽与發放</CardTitle>
+                    <CardTitle>3. 預覽與發放</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <Button onClick={handlePreview} disabled={isProcessing} className="w-full">
-                        {isProcessing ? '預覽中...' : '預覽發放對象'}
+                        {isProcessing && !preview ? '預覽中...' : '預覽發放對象'}
                     </Button>
                     {preview && (
                         <div className="mt-4 p-4 border rounded-md">
                             <h4 className="font-semibold">預覽結果：共 {preview.count} 位玩家</h4>
-                            <ScrollArea className="h-40 mt-2">
-                               <ul className="text-sm text-muted-foreground list-disc pl-5">
-                                 {preview.users.map(u => <li key={u.id}>{u.roleName}</li>)}
-                               </ul>
-                            </ScrollArea>
-                            {preview.count > 0 && (
+                            {preview.count > 0 ? (
+                                <>
+                                <ScrollArea className="h-40 mt-2">
+                                    <ul className="text-sm text-muted-foreground list-disc pl-5">
+                                        {preview.users.map(u => <li key={u.id}>{u.roleName}</li>)}
+                                    </ul>
+                                </ScrollArea>
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                         <Button variant="destructive" className="w-full mt-4" disabled={isProcessing}>確認發放</Button>
@@ -2076,7 +2096,8 @@ function RewardDistribution() {
                                         </AlertDialogFooter>
                                     </AlertDialogContent>
                                 </AlertDialog>
-                            )}
+                                </>
+                            ) : <p className="text-muted-foreground text-center py-4">沒有符合條件的玩家。</p>}
                         </div>
                     )}
                 </CardContent>
@@ -2747,7 +2768,7 @@ export default function AdminPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="accounts" className="w-full">
-            <TabsList className="flex h-auto flex-wrap justify-start sm:h-10 sm:grid sm:w-full sm:grid-cols-5 md:grid-cols-5 lg:w-max lg:grid-flow-col">
+            <TabsList className="flex h-auto flex-wrap justify-start sm:grid sm:w-full sm:grid-cols-5 md:grid-cols-5 lg:w-max lg:grid-flow-col">
               <TabsTrigger value="accounts">帳號審核</TabsTrigger>
               <TabsTrigger value="tasks">任務中心</TabsTrigger>
               <TabsTrigger value="store">商店道具</TabsTrigger>

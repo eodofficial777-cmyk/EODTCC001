@@ -57,18 +57,18 @@ export interface RewardPayload {
 export interface FilterCriteria {
   factionId?: string;
   raceId?: string;
-  honorPoints_op?: '>' | '<';
+  honorPoints_op?: '>=' | '<=';
   honorPoints_val?: number;
-  currency_op?: '>' | '<';
+  currency_op?: '>=' | '<=';
   currency_val?: number;
-  taskCount_op?: '>' | '<';
+  taskCount_op?: '>=' | '<=';
   taskCount_val?: number;
-  participatedBattleCount_op?: '>' | '<';
+  participatedBattleCount_op?: '>=' | '<=';
   participatedBattleCount_val?: number;
-  hpZeroCount_op?: '>' | '<';
+  hpZeroCount_op?: '>=' | '<=';
   hpZeroCount_val?: number;
   itemUse_id?: string;
-  itemUse_op?: '>' | '<';
+  itemUse_op?: '>=' | '<=';
   itemUse_val?: number;
 }
 
@@ -80,35 +80,60 @@ export interface DistributionPayload {
     battleData?: CombatEncounter;
 }
 
+// This function now correctly filters users.
+// It returns `false` if a user should be excluded.
 function applyFilters(user: User, filters: FilterCriteria): boolean {
-    if (!filters) return true;
-    if (user.isAdmin) return false;
+    if (!filters) return true; // If no filters, everyone is included.
+    if (user.isAdmin) return false; // Always exclude admins.
 
+    // Faction filter
     if (filters.factionId && user.factionId !== filters.factionId) return false;
+
+    // Race filter
     if (filters.raceId && user.raceId !== filters.raceId) return false;
     
-    if (filters.honorPoints_op === '>' && user.honorPoints < (filters.honorPoints_val || 0)) return false;
-    if (filters.honorPoints_op === '<' && user.honorPoints > (filters.honorPoints_val || 0)) return false;
+    // Honor Points filter
+    if (filters.honorPoints_op && filters.honorPoints_val !== undefined) {
+        if (filters.honorPoints_op === '>=' && user.honorPoints < filters.honorPoints_val) return false;
+        if (filters.honorPoints_op === '<=' && user.honorPoints > filters.honorPoints_val) return false;
+    }
     
-    if (filters.currency_op === '>' && user.currency < (filters.currency_val || 0)) return false;
-    if (filters.currency_op === '<' && user.currency > (filters.currency_val || 0)) return false;
+    // Currency filter (using totalCurrencyEarned)
+    if (filters.currency_op && filters.currency_val !== undefined) {
+        const totalCurrency = user.totalCurrencyEarned || 0;
+        if (filters.currency_op === '>=' && totalCurrency < filters.currency_val) return false;
+        if (filters.currency_op === '<=' && totalCurrency > filters.currency_val) return false;
+    }
     
-    if (filters.taskCount_op === '>' && (user.tasks || []).length < (filters.taskCount_val || 0)) return false;
-    if (filters.taskCount_op === '<' && (user.tasks || []).length > (filters.taskCount_val || 0)) return false;
-
-    if (filters.participatedBattleCount_op === '>' && (user.participatedBattleIds || []).length < (filters.participatedBattleCount_val || 0)) return false;
-    if (filters.participatedBattleCount_op === '<' && (user.participatedBattleIds || []).length > (filters.participatedBattleCount_val || 0)) return false;
-    
-    if (filters.hpZeroCount_op === '>' && (user.hpZeroCount || 0) < (filters.hpZeroCount_val || 0)) return false;
-    if (filters.hpZeroCount_op === '<' && (user.hpZeroCount || 0) > (filters.hpZeroCount_val || 0)) return false;
-
-    if (filters.itemUse_id) {
-        const itemUseVal = filters.itemUse_val || 0;
-        const userItemUseCount = user.itemUseCount?.[filters.itemUse_id] || 0;
-        if (filters.itemUse_op === '>' && userItemUseCount < itemUseVal) return false;
-        if (filters.itemUse_op === '<' && userItemUseCount > itemUseVal) return false;
+    // Task Count filter
+    if (filters.taskCount_op && filters.taskCount_val !== undefined) {
+        const taskCount = (user.tasks || []).length;
+        if (filters.taskCount_op === '>=' && taskCount < filters.taskCount_val) return false;
+        if (filters.taskCount_op === '<=' && taskCount > filters.taskCount_val) return false;
     }
 
+    // Battle Participation filter
+    if (filters.participatedBattleCount_op && filters.participatedBattleCount_val !== undefined) {
+        const battleCount = (user.participatedBattleIds || []).length;
+        if (filters.participatedBattleCount_op === '>=' && battleCount < filters.participatedBattleCount_val) return false;
+        if (filters.participatedBattleCount_op === '<=' && battleCount > filters.participatedBattleCount_val) return false;
+    }
+    
+    // HP Zero Count filter
+    if (filters.hpZeroCount_op && filters.hpZeroCount_val !== undefined) {
+        const hpZeroCount = user.hpZeroCount || 0;
+        if (filters.hpZeroCount_op === '>=' && hpZeroCount < filters.hpZeroCount_val) return false;
+        if (filters.hpZeroCount_op === '<=' && hpZeroCount > filters.hpZeroCount_val) return false;
+    }
+
+    // Item Use filter
+    if (filters.itemUse_id && filters.itemUse_op && filters.itemUse_val !== undefined) {
+        const userItemUseCount = user.itemUseCount?.[filters.itemUse_id] || 0;
+        if (filters.itemUse_op === '>=' && userItemUseCount < filters.itemUse_val) return false;
+        if (filters.itemUse_op === '<=' && userItemUseCount > filters.itemUse_val) return false;
+    }
+
+    // If none of the above conditions returned false, the user passes the filters.
     return true;
 }
 
@@ -124,31 +149,48 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
     const { targetUserIds, filters, rewards } = payload;
     let finalUsersDataForPreview: { id: string; roleName: string }[] = [];
 
-    if (targetUserIds && targetUserIds.length > 0) {
-        const userDocs = await Promise.all(targetUserIds.map(id => getDoc(doc(db, 'users', id))));
-        finalUsersDataForPreview = userDocs
-            .filter(snap => snap.exists() && !snap.data().isAdmin)
-            .map(snap => ({ id: snap.id, roleName: (snap.data() as User).roleName }));
-    } else if (filters) {
-         const usersQuery = query(collection(db, 'users'), where('approved', '==', true));
-         const usersSnapshot = await getDocs(usersQuery);
-         const userPool = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
-         
-         finalUsersDataForPreview = userPool
-            .filter(user => applyFilters(user, filters))
-            .map(user => ({ id: user.id, roleName: user.roleName }));
-    }
-       
+    // --- Preview Logic ---
     if (rewards.logMessage === 'Preview') {
+        let userPool: User[] = [];
+
+        if (targetUserIds && targetUserIds.length > 0) {
+            const userDocs = await Promise.all(targetUserIds.map(id => getDoc(doc(db, 'users', id))));
+            userPool = userDocs
+                .filter(snap => snap.exists())
+                .map(snap => ({ ...snap.data(), id: snap.id } as User));
+        } else if (filters) {
+            const usersQuery = query(collection(db, 'users'), where('approved', '==', true));
+            const usersSnapshot = await getDocs(usersQuery);
+            userPool = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+        }
+        
+        finalUsersDataForPreview = userPool
+            .filter(user => applyFilters(user, filters || {}))
+            .map(user => ({ id: user.id, roleName: user.roleName }));
+
         return {
             success: true,
             processedCount: finalUsersDataForPreview.length,
             processedUsers: finalUsersDataForPreview,
-       };
+        };
     }
     
-    const finalUserIds = finalUsersDataForPreview.map(u => u.id);
+    // --- Actual Distribution Logic ---
+    let finalUserIds: string[] = [];
 
+    if (targetUserIds && targetUserIds.length > 0) {
+        // If specific users are targeted, we use them directly
+        finalUserIds = targetUserIds;
+    } else if (filters) {
+        // If filters are provided, we must fetch and filter
+        const usersQuery = query(collection(db, 'users'), where('approved', '==', true));
+        const usersSnapshot = await getDocs(usersQuery);
+        finalUserIds = usersSnapshot.docs
+            .map(doc => ({ ...doc.data(), id: doc.id } as User))
+            .filter(user => applyFilters(user, filters))
+            .map(user => user.id);
+    }
+       
     if (finalUserIds.length === 0) {
       return { success: true, processedCount: 0, processedUsers: [] };
     }
@@ -197,7 +239,9 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                     changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
                 }
 
-                transaction.update(userRef, userUpdate);
+                if (Object.keys(userUpdate).length > 0) {
+                    transaction.update(userRef, userUpdate);
+                }
 
                 const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
                 transaction.set(activityLogRef, {
