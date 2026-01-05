@@ -257,3 +257,5 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
     return { success: false, error: error.message || '發放戰役傷害獎勵時發生未知錯誤。' };
   }
 }
+
+    

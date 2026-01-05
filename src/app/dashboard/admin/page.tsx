@@ -554,7 +554,7 @@ function TaskManagement() {
         setEditingTask(null);
         fetchAdminData(); // Refresh list
     } catch (error: any) {
-        toast({ variant: 'destructive', title: '儲存失敗', description: error.message });
+        toast({ variant: 'destructive', title: '儲存失败', description: error.message });
     } finally {
         setIsSaving(false);
     }
@@ -1475,7 +1475,7 @@ function SkillManagement() {
             setEditingSkill(null);
             fetchAdminData();
         } catch (e: any) {
-            toast({ variant: 'destructive', title: '儲存失敗', description: e.message });
+            toast({ variant: 'destructive', title: '儲存失败', description: e.message });
         } finally {
             setIsSaving(false);
         }
@@ -2734,5 +2734,4 @@ export default function AdminPage() {
   );
 }
 
-
-
+    
