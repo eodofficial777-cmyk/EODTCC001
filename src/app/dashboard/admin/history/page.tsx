@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -18,7 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RefreshCw, Trophy, Database, Wrench } from 'lucide-react';
-import { getArchivedSeasons, ArchivedSeason } from '@/app/actions/get-archived-seasons';
+import { getArchivedSeasons, getSeasonMvpDetails, ArchivedSeason } from '@/app/actions/get-archived-seasons';
 import { FACTIONS } from '@/lib/game-data';
 import {
   Table,
@@ -49,7 +49,7 @@ import type { MaintenanceStatus } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
-function ConflictManagement() {
+function ConflictManagement({ onActionComplete }: { onActionComplete: () => void }) {
   const { toast } = useToast();
   const [isResetting, setIsResetting] = useState(false);
 
@@ -62,7 +62,7 @@ function ConflictManagement() {
         title: '成功',
         description: '賽季已成功重置，並已封存舊賽季資料。',
       });
-      // Consider adding a refresh function passed as a prop if immediate update is needed
+      onActionComplete();
     } catch (error: any) {
       toast({
         variant: 'destructive',
@@ -79,7 +79,7 @@ function ConflictManagement() {
         <CardHeader>
             <CardTitle>陣營對抗管理</CardTitle>
             <CardDescription>
-                重置陣營積分以開啟新賽季，並存檔當前賽季的結果。
+                重置陣營積分以開啟新賽季，並存檔當前賽季的結果。此動作會將目前的原始分數與玩家列表封存，並計算加權分數後一併儲存。
             </CardDescription>
         </CardHeader>
         <CardContent>
@@ -162,24 +162,49 @@ function DatabaseManagement() {
 }
 
 export default function HistoryPage() {
+  const { toast } = useToast();
   const [archivedSeasons, setArchivedSeasons] = useState<ArchivedSeason[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<ArchivedSeason | null>(null);
+  const [mvpDetails, setMvpDetails] = useState<Record<string, string>>({});
+  const [isMvpLoading, setIsMvpLoading] = useState(false);
   
   const yeluMVP = useMemo(() => {
-    if (!selectedSeason) return null;
-    // This is a placeholder, real implementation would need to fetch task logs for the period
-    return selectedSeason.yelu.activePlayers[0] || "N/A";
-  }, [selectedSeason]);
+    if (!selectedSeason || !mvpDetails) return "N/A";
+    const mvpId = selectedSeason.yelu.activePlayers[0];
+    return mvpDetails[mvpId] || mvpId || "N/A";
+  }, [selectedSeason, mvpDetails]);
 
   const associationMVP = useMemo(() => {
-    if (!selectedSeason) return null;
-    // Placeholder
-    return selectedSeason.association.activePlayers[0] || "N/A";
-  }, [selectedSeason]);
+    if (!selectedSeason || !mvpDetails) return "N/A";
+    const mvpId = selectedSeason.association.activePlayers[0];
+    return mvpDetails[mvpId] || mvpId || "N/A";
+  }, [selectedSeason, mvpDetails]);
 
-  const fetchData = async () => {
+  const fetchMvpData = useCallback(async (season: ArchivedSeason | null) => {
+    if (!season) return;
+    setIsMvpLoading(true);
+    const playerIds = [...season.yelu.activePlayers, ...season.association.activePlayers];
+    const uniquePlayerIds = Array.from(new Set(playerIds));
+    
+    if(uniquePlayerIds.length > 0) {
+      const { players, error } = await getSeasonMvpDetails(uniquePlayerIds);
+      if (error) {
+        toast({ variant: 'destructive', title: '獲取 MVP 資料失敗', description: error });
+      } else {
+        setMvpDetails(players);
+      }
+    }
+    setIsMvpLoading(false);
+  }, [toast]);
+  
+  const handleMvpModalOpen = (season: ArchivedSeason) => {
+    setSelectedSeason(season);
+    fetchMvpData(season);
+  };
+
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -191,15 +216,16 @@ export default function HistoryPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const getWinnerBadge = (season: ArchivedSeason) => {
-    const yeluScore = season.yelu?.rawScore ?? 0;
-    const associationScore = season.association?.rawScore ?? 0;
+    const yeluScore = season.yelu?.weightedScore ?? season.yelu?.rawScore ?? 0;
+    const associationScore = season.association?.weightedScore ?? season.association?.rawScore ?? 0;
+
     if (yeluScore > associationScore) {
       return <Badge style={{ backgroundColor: FACTIONS.yelu.color, color: 'white' }}>夜鷺</Badge>;
     }
@@ -225,7 +251,7 @@ export default function HistoryPage() {
                             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                         </Button>
                       </div>
-                      <CardDescription>查看過往賽季的戰績與貢獻 MVP。</CardDescription>
+                      <CardDescription>查看過往賽季的戰績與貢獻 MVP。分數已根據人數進行加權。</CardDescription>
                     </CardHeader>
                     <CardContent>
                        <div className="border rounded-md">
@@ -245,13 +271,13 @@ export default function HistoryPage() {
                               {archivedSeasons.map(season => (
                                 <TableRow key={season.id}>
                                   <TableCell>{new Date(season.archivedAt).toLocaleDateString()}</TableCell>
-                                  <TableCell>{season.yelu?.rawScore.toLocaleString() ?? 0}</TableCell>
-                                  <TableCell>{season.association?.rawScore.toLocaleString() ?? 0}</TableCell>
+                                  <TableCell>{(season.yelu?.weightedScore ?? season.yelu?.rawScore ?? 0).toLocaleString()}</TableCell>
+                                  <TableCell>{(season.association?.weightedScore ?? season.association?.rawScore ?? 0).toLocaleString()}</TableCell>
                                   <TableCell className="text-center">{getWinnerBadge(season)}</TableCell>
                                   <TableCell className="text-right">
                                     <AlertDialog>
                                         <AlertDialogTrigger asChild>
-                                            <Button variant="outline" size="sm" onClick={() => setSelectedSeason(season)}>查詢貢獻 MVP</Button>
+                                            <Button variant="outline" size="sm" onClick={() => handleMvpModalOpen(season)}>查詢貢獻 MVP</Button>
                                         </AlertDialogTrigger>
                                         <AlertDialogContent>
                                             <AlertDialogHeader>
@@ -260,7 +286,7 @@ export default function HistoryPage() {
                                                     此處顯示在 {selectedSeason && new Date(selectedSeason.archivedAt).toLocaleDateString()} 結算的賽季中，各陣營貢獻最高的玩家。此功能目前僅供查詢。
                                                 </AlertDialogDescription>
                                             </AlertDialogHeader>
-                                            {selectedSeason && (
+                                            {isMvpLoading ? <Skeleton className="h-24 w-full"/> : selectedSeason && (
                                                 <div className="grid grid-cols-2 gap-4 py-4">
                                                     <div className="flex flex-col items-center gap-2 p-4 rounded-md border">
                                                         <h4 className="font-semibold" style={{color: FACTIONS.yelu.color}}>夜鷺 MVP</h4>
@@ -293,10 +319,11 @@ export default function HistoryPage() {
                 </Card>
             </TabsContent>
             <TabsContent value="database" className="mt-4 space-y-6">
-                <ConflictManagement />
+                <ConflictManagement onActionComplete={fetchData} />
                 <DatabaseManagement />
             </TabsContent>
         </Tabs>
     </div>
   );
 }
+

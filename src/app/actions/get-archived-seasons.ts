@@ -1,10 +1,12 @@
 
 'use server';
 
-import { getFirestore, collection, getDocs, orderBy, query, Timestamp } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, orderBy, query, Timestamp, where, doc, getDoc } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
+import type { User } from '@/lib/types';
+
 
 // Define the shape of the archived season data
 export interface ArchivedSeason {
@@ -13,10 +15,12 @@ export interface ArchivedSeason {
     startDate: string;
     yelu: {
         rawScore: number;
+        weightedScore?: number;
         activePlayers: string[];
     };
     association: {
         rawScore: number;
+        weightedScore?: number;
         activePlayers: string[];
     };
 }
@@ -76,3 +80,28 @@ export async function getArchivedSeasons(): Promise<{ seasons?: ArchivedSeason[]
     return { error: error.message || '無法獲取過往月度紀錄。' };
   }
 }
+
+export async function getSeasonMvpDetails(playerIds: string[]): Promise<{ players: Record<string, string>; error?: string }> {
+    if (!playerIds || playerIds.length === 0) {
+        return { players: {} };
+    }
+    
+    try {
+        await ensureAdminAuth();
+        const playerDocs = await Promise.all(playerIds.map(id => getDoc(doc(db, 'users', id))));
+        
+        const players: Record<string, string> = {};
+        playerDocs.forEach(docSnap => {
+            if (docSnap.exists()) {
+                const user = docSnap.data() as User;
+                players[docSnap.id] = user.roleName;
+            }
+        });
+        
+        return { players };
+    } catch (error: any) {
+        console.error('Error fetching MVP details:', error);
+        return { players: {}, error: error.message || '無法獲取 MVP 玩家資料。' };
+    }
+}
+

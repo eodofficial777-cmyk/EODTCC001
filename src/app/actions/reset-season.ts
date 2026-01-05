@@ -1,6 +1,7 @@
+
 'use server';
 
-import { getFirestore, doc, runTransaction, collection, Timestamp } from 'firebase/firestore';
+import { getFirestore, doc, runTransaction, collection, Timestamp, getDocs, query, where } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseConfig } from '@/firebase/config';
@@ -43,19 +44,42 @@ export async function resetSeason(): Promise<{ success: boolean; error?: string 
       }
       const currentSeasonData = currentSeasonSnap.data();
 
-      // 2. Create an archive document
+      // 2. Calculate weighted scores before archiving
+      const yeluPlayerCount = currentSeasonData.yelu.activePlayers.length;
+      const associationPlayerCount = currentSeasonData.association.activePlayers.length;
+      const totalActivePlayers = yeluPlayerCount + associationPlayerCount;
+
+      const yeluRawScore = currentSeasonData.yelu.rawScore || 0;
+      const associationRawScore = currentSeasonData.association.rawScore || 0;
+
+      const yeluWeight = totalActivePlayers > 0 && yeluPlayerCount > 0 ? totalActivePlayers / yeluPlayerCount : 1;
+      const associationWeight = totalActivePlayers > 0 && associationPlayerCount > 0 ? totalActivePlayers / associationPlayerCount : 1;
+      
+      const yeluWeightedScore = Math.round(yeluRawScore * yeluWeight);
+      const associationWeightedScore = Math.round(associationRawScore * associationWeight);
+
+
+      // 3. Create an archive document
       const archiveId = `season-end-${new Date().toISOString()}`;
       const archiveRef = doc(db, 'war-seasons-archive', archiveId);
       
       const archiveData = {
         ...currentSeasonData,
+        yelu: {
+            ...currentSeasonData.yelu,
+            weightedScore: yeluWeightedScore
+        },
+        association: {
+            ...currentSeasonData.association,
+            weightedScore: associationWeightedScore
+        },
         archivedAt: Timestamp.now(),
         seasonId: 'current', // To know which season this was
       };
       
       transaction.set(archiveRef, archiveData);
 
-      // 3. Reset the current season document
+      // 4. Reset the current season document
       const newSeasonData = {
         id: 'current',
         startDate: Timestamp.now(),
@@ -77,3 +101,4 @@ export async function resetSeason(): Promise<{ success: boolean; error?: string 
     return { success: false, error: error.message || '重置賽季失敗。' };
   }
 }
+
