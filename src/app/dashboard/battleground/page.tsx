@@ -369,24 +369,31 @@ export default function BattlegroundPage() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-      if (!database || !currentBattle) {
-          setBattleLogs([]);
-          return;
-      }
-      const logsRef = ref(database, `battle_buffer/${currentBattle.id}`);
-      const listener = onValue(logsRef, (snapshot) => {
-          const data = snapshot.val();
-          if (data) {
-              const logsArray = Object.values(data) as CombatLog[];
-              logsArray.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-              setBattleLogs(logsArray);
-          } else {
-              setBattleLogs([]);
-          }
-      });
+    if (!database || !currentBattle?.id) {
+        setBattleLogs([]);
+        return;
+    }
+    const logsRef = ref(database, `battle_buffer/${currentBattle.id}`);
 
-      return () => off(logsRef, 'value', listener);
-  }, [database, currentBattle]);
+    const listener = onValue(logsRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            // Convert the object of logs into an array, assigning the key as the ID
+            const logsArray: CombatLog[] = Object.entries(data).map(([key, value]) => ({
+                id: key,
+                ...(value as Omit<CombatLog, 'id'>)
+            }));
+            logsArray.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+            setBattleLogs(logsArray);
+        } else {
+            setBattleLogs([]);
+        }
+    });
+
+    // Cleanup listener on component unmount or when dependencies change
+    return () => off(logsRef, 'value', listener);
+}, [database, currentBattle?.id]);
+
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -934,3 +941,5 @@ export default function BattlegroundPage() {
     </div>
   );
 }
+
+    
