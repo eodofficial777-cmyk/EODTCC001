@@ -51,7 +51,7 @@ interface RewardPayload {
 
 interface AwardPayload {
   battleId: string;
-  isPreview?: boolean; // Flag for previewing damage stats
+  isPreview?: boolean; 
   thresholdReward: {
     enabled: boolean;
     damageThreshold: number;
@@ -61,6 +61,9 @@ interface AwardPayload {
     enabled: boolean;
   } & RewardPayload;
   topAssociationPlayerReward: {
+    enabled: boolean;
+  } & RewardPayload;
+   topWandererPlayerReward: {
     enabled: boolean;
   } & RewardPayload;
 }
@@ -119,17 +122,15 @@ async function awardSingleUser(transaction: any, userId: string, reward: RewardP
 export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{ success: boolean; error?: string; message?: string, damageStats?: any[] }> {
   try {
     await ensureAdminAuth();
-    const { battleId, isPreview, thresholdReward, topYeluPlayerReward, topAssociationPlayerReward } = payload;
+    const { battleId, isPreview, thresholdReward, topYeluPlayerReward, topAssociationPlayerReward, topWandererPlayerReward } = payload;
 
     if (!battleId) throw new Error('缺少戰場 ID。');
 
-    // 1. Fetch battle data to get participants' factions
     const battleDoc = await getDoc(doc(db, 'combatEncounters', battleId));
     if (!battleDoc.exists()) throw new Error('找不到指定的戰場資料。');
     const battleData = battleDoc.data();
     const participants = battleData.participants || {};
     
-    // Create a mapping from userId to factionId and roleName
     const userIdToUserInfo: { [key: string]: { factionId: string, roleName: string } } = {};
     for (const userId in participants) {
         userIdToUserInfo[userId] = { 
@@ -138,7 +139,6 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
         };
     }
 
-    // 2. Fetch all logs for the battle to aggregate damage
     const logsQuery = query(collection(db, `combatEncounters/${battleId}/combatLogs`));
     const logsSnapshot = await getDocs(logsQuery);
     const logs = logsSnapshot.docs.map(d => d.data() as CombatLog);
@@ -146,14 +146,12 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
     const damageByUser = new Map<string, number>();
 
     for (const log of logs) {
-        // Use the userId from the log directly for accurate attribution
         if (log.userId && log.damage && log.damage > 0) {
             const currentDamage = damageByUser.get(log.userId) || 0;
             damageByUser.set(log.userId, currentDamage + log.damage);
         }
     }
     
-    // Prepare damage stats for preview
     const damageStats = Array.from(damageByUser.entries()).map(([userId, totalDamage]) => ({
         userId,
         roleName: userIdToUserInfo[userId]?.roleName || '未知玩家',
@@ -184,16 +182,19 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
                 
                 for (const userId of userIdsToAward) {
                     const userRef = doc(db, 'users', userId);
-                    transaction.update(userRef, { titles: arrayUnion(thresholdReward.titleId) });
+                    const userSnap = await transaction.get(userRef);
+                    if (userSnap.exists()) {
+                         transaction.update(userRef, { titles: arrayUnion(thresholdReward.titleId) });
 
-                    const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
-                    transaction.set(activityLogRef, {
-                        id: activityLogRef.id,
-                        userId: userId,
-                        timestamp: serverTimestamp(),
-                        description: `在戰役「${battleData.name}」中造成大量傷害，獲得了特殊成就。`,
-                        change: `獲得稱號「${titleName}」`
-                    });
+                        const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
+                        transaction.set(activityLogRef, {
+                            id: activityLogRef.id,
+                            userId: userId,
+                            timestamp: serverTimestamp(),
+                            description: `在戰役「${battleData.name}」中造成大量傷害，獲得了特殊成就。`,
+                            change: `獲得稱號「${titleName}」`
+                        });
+                    }
                 }
                 messages.push(`已為 ${userIdsToAward.length} 位傷害超過 ${thresholdReward.damageThreshold} 的玩家授予「${titleName}」稱號。`);
             } else {
@@ -202,32 +203,30 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
         }
 
         // --- 3b. Process Top Player Rewards ---
-        const yeluPlayers = Array.from(damageByUser.entries()).filter(([userId, _]) => userIdToUserInfo[userId]?.factionId === 'yelu');
-        const associationPlayers = Array.from(damageByUser.entries()).filter(([userId, _]) => userIdToUserInfo[userId]?.factionId === 'association');
-        
-        let topYeluPlayer: [string, number] | undefined;
-        if (yeluPlayers.length > 0) {
-            topYeluPlayer = yeluPlayers.reduce((max, player) => player[1] > max[1] ? player : max);
-        }
-        
-        let topAssociationPlayer: [string, number] | undefined;
-        if (associationPlayers.length > 0) {
-            topAssociationPlayer = associationPlayers.reduce((max, player) => player[1] > max[1] ? player : max);
-        }
+        const yeluPlayers = damageStats.filter(p => p.factionId === 'yelu');
+        const associationPlayers = damageStats.filter(p => p.factionId === 'association');
+        const wandererPlayers = damageStats.filter(p => p.factionId !== 'yelu' && p.factionId !== 'association');
+
+        const topYeluPlayer = yeluPlayers.length > 0 ? yeluPlayers[0] : undefined;
+        const topAssociationPlayer = associationPlayers.length > 0 ? associationPlayers[0] : undefined;
+        const topWandererPlayer = wandererPlayers.length > 0 ? wandererPlayers[0] : undefined;
+
 
         if (topYeluPlayerReward.enabled && topYeluPlayer) {
-            const [userId, totalDamage] = topYeluPlayer;
-            await awardSingleUser(transaction, userId, topYeluPlayerReward, `作為夜鷺陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`);
-            const user = userIdToUserInfo[userId];
-            messages.push(`已為夜鷺陣營傷害冠軍 ${user.roleName} (傷害: ${totalDamage}) 發放獎勵。`);
+            await awardSingleUser(transaction, topYeluPlayer.userId, topYeluPlayerReward, `作為夜鷺陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`);
+            messages.push(`已為夜鷺陣營傷害冠軍 ${topYeluPlayer.roleName} (傷害: ${topYeluPlayer.totalDamage}) 發放獎勵。`);
         }
         
         if (topAssociationPlayerReward.enabled && topAssociationPlayer) {
-            const [userId, totalDamage] = topAssociationPlayer;
-            await awardSingleUser(transaction, userId, topAssociationPlayerReward, `作為協會陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`);
-             const user = userIdToUserInfo[userId];
-            messages.push(`已為協會陣營傷害冠軍 ${user.roleName} (傷害: ${totalDamage}) 發放獎勵。`);
+            await awardSingleUser(transaction, topAssociationPlayer.userId, topAssociationPlayerReward, `作為協會陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`);
+            messages.push(`已為協會陣營傷害冠軍 ${topAssociationPlayer.roleName} (傷害: ${topAssociationPlayer.totalDamage}) 發放獎勵。`);
         }
+        
+        if (topWandererPlayerReward.enabled && topWandererPlayer) {
+            await awardSingleUser(transaction, topWandererPlayer.userId, topWandererPlayerReward, `作為流浪者/其他陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`);
+            messages.push(`已為流浪者/其他陣營傷害冠軍 ${topWandererPlayer.roleName} (傷害: ${topWandererPlayer.totalDamage}) 發放獎勵。`);
+        }
+
     });
 
     return { success: true, message: messages.join('\n') || '沒有設定任何獎勵，或無人符合條件。' };

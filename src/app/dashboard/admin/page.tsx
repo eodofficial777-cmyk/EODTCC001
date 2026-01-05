@@ -1,6 +1,5 @@
 
 
-
 'use client';
 
 import {
@@ -2198,12 +2197,21 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
     const [thresholdReward, setThresholdReward] = useState({ enabled: true, damageThreshold: 1000, titleId: ''});
     const [topYeluPlayerReward, setTopYeluPlayerReward] = useState({ enabled: false, titleId: '', itemId: '', honorPoints: 0, currency: 0 });
     const [topAssociationPlayerReward, setTopAssociationPlayerReward] = useState({ enabled: false, titleId: '', itemId: '', honorPoints: 0, currency: 0 });
+    const [topWandererPlayerReward, setTopWandererPlayerReward] = useState({ enabled: false, titleId: '', itemId: '', honorPoints: 0, currency: 0 });
+
 
     const handlePreviewDamage = async () => {
         setIsProcessing(true);
         setDamageStats(null);
         try {
-            const result = await awardBattleDamageRewards({ battleId, isPreview: true, thresholdReward: { enabled: false, damageThreshold: 0, titleId: '' }, topYeluPlayerReward: { enabled: false }, topAssociationPlayerReward: { enabled: false } });
+            const result = await awardBattleDamageRewards({ 
+                battleId, 
+                isPreview: true, 
+                thresholdReward: { enabled: false, damageThreshold: 0, titleId: '' }, 
+                topYeluPlayerReward: { enabled: false }, 
+                topAssociationPlayerReward: { enabled: false },
+                topWandererPlayerReward: { enabled: false },
+            });
             if (result.error) throw new Error(result.error);
             setDamageStats(result.damageStats || []);
             if (!result.damageStats || result.damageStats.length === 0) {
@@ -2223,7 +2231,8 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
                 battleId,
                 thresholdReward,
                 topYeluPlayerReward,
-                topAssociationPlayerReward
+                topAssociationPlayerReward,
+                topWandererPlayerReward
             });
             if (result.error) throw new Error(result.error);
             toast({ title: '操作成功', description: result.message, duration: 8000 });
@@ -2241,7 +2250,7 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
             <DialogTrigger asChild>
                 <Button variant="outline" size="sm"><Award className="h-4 w-4 mr-2"/>結算傷害獎勵</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-3xl">
                 <DialogHeader>
                     <DialogTitle>結算戰役傷害獎勵: {battleName}</DialogTitle>
                     <DialogDescription>為在此戰役中表現出色的玩家授予獎勵。</DialogDescription>
@@ -2308,17 +2317,18 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
                      <Separator />
                     {/* Top Player Rewards */}
                     {[
-                        { faction: 'yelu', state: topYeluPlayerReward, setter: setTopYeluPlayerReward },
-                        { faction: 'association', state: topAssociationPlayerReward, setter: setTopAssociationPlayerReward }
-                    ].map(({ faction, state, setter }) => {
-                        const factionInfo = FACTIONS[faction as keyof typeof FACTIONS];
+                        { id: 'yelu', label: '夜鷺', state: topYeluPlayerReward, setter: setTopYeluPlayerReward },
+                        { id: 'association', label: '協會', state: topAssociationPlayerReward, setter: setTopAssociationPlayerReward },
+                        { id: 'wanderer', label: '流浪者/其他', state: topWandererPlayerReward, setter: setTopWandererPlayerReward },
+                    ].map(({ id, label, state, setter }) => {
+                        const factionInfo = FACTIONS[id as keyof typeof FACTIONS];
                         return (
-                            <div key={faction} className="p-4 border rounded-lg space-y-4">
+                            <div key={id} className="p-4 border rounded-lg space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <Label htmlFor={`${faction}-mvp-enabled`} className="text-base font-semibold flex items-center gap-2" style={{color: factionInfo.color}}>
-                                        <Award className="h-5 w-5"/> {factionInfo.name} 傷害冠軍獎 (MVP)
+                                    <Label htmlFor={`${id}-mvp-enabled`} className="text-base font-semibold flex items-center gap-2" style={{color: factionInfo?.color}}>
+                                        <Award className="h-5 w-5"/> {label} 傷害冠軍獎 (MVP)
                                     </Label>
-                                    <Switch id={`${faction}-mvp-enabled`} checked={state.enabled} onCheckedChange={(c) => setter(s => ({...s, enabled: c}))} />
+                                    <Switch id={`${id}-mvp-enabled`} checked={state.enabled} onCheckedChange={(c) => setter(s => ({...s, enabled: c}))} />
                                 </div>
                                 <div className={cn("grid grid-cols-2 gap-4", !state.enabled && "opacity-50 pointer-events-none")}>
                                      <div className="space-y-2">
@@ -2738,7 +2748,7 @@ export default function AdminPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="accounts" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 md:grid-cols-5 lg:w-max lg:grid-flow-col">
+            <TabsList className="flex h-auto flex-wrap justify-start sm:h-10 sm:grid sm:w-full sm:grid-cols-5 md:grid-cols-5 lg:w-max lg:grid-flow-col">
               <TabsTrigger value="accounts">帳號審核</TabsTrigger>
               <TabsTrigger value="tasks">任務中心</TabsTrigger>
               <TabsTrigger value="store">商店道具</TabsTrigger>
