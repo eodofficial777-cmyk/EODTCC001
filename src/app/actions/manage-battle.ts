@@ -104,7 +104,7 @@ export async function endBattle(battleId: string): Promise<{ success: boolean; e
     
     const battleData = battleSnap.data() as CombatEncounter;
     
-    if (battleData.status === 'ended') {
+    if (battleData.status === 'ended' || battleData.status === 'closed') {
       return { success: false, error: '戰場已經結束。' };
     }
 

@@ -81,7 +81,7 @@ export interface DistributionPayload {
 }
 
 // This function now correctly filters users.
-// It returns `false` if a user should be excluded.
+// It returns `true` if a user should be included.
 function applyFilters(user: User, filters: FilterCriteria): boolean {
     if (!filters) return true; // If no filters, everyone is included.
     if (user.isAdmin) return false; // Always exclude admins.

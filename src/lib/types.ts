@@ -16,7 +16,7 @@ export interface User {
   titles: string[];
   equipment: string[];
   items: string[];
-  tasks: string[];
+  tasks: { taskId: string, taskTypeId: string }[];
   submittedMainQuest: boolean;
   attributes: {
     hp: number;

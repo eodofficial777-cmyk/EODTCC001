@@ -78,6 +78,8 @@ export async function useBattleItem(payload: UseItemPayload): Promise<UseItemRes
         let totalDamageDealtThisAction = 0;
 
         for (const effect of item.effects as TriggeredEffect[]) {
+            if (effect.trigger !== 'on_use') continue;
+            
             const roll = Math.random() * 100;
             if (roll > effect.probability) {
                 logMessages.push(`但什麼也沒發生...`);
