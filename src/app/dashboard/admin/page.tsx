@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -2289,13 +2290,13 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
     const [rewards, setRewards] = useState<EndOfBattleRewards>({ honorPoints: 0, currency: 0, logMessage: '' });
     const [isLoading, setIsLoading] = useState(false);
     
-    const [newMonster, setNewMonster] = useState<Partial<Omit<Monster, 'monsterId' | 'originalHp'>>>({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: 'https://images.plurk.com/' });
+    const [newMonster, setNewMonster] = useState<Partial<Omit<Monster, 'monsterId' | 'originalHp'>>>({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: '' });
     const [isAddingMonster, setIsAddingMonster] = useState(false);
     
     const currentBattle = useMemo(() => allCombatEncounters?.[0] && allCombatEncounters[0].status !== 'closed' ? allCombatEncounters[0] : null, [allCombatEncounters]);
 
     const addMonster = (faction: 'yelu' | 'association' | 'common') => {
-        const newMonster: Partial<Monster> = { name: '', imageUrl: 'https://images.plurk.com/', hp: 1000, atk: '10+1D6', factionId: faction };
+        const newMonster: Partial<Monster> = { name: '', imageUrl: '', hp: 1000, atk: '10+1D6', factionId: faction };
         if (faction === 'yelu') setYeluMonsters([...yeluMonsters, newMonster]);
         else if (faction === 'association') setAssociationMonsters([...associationMonsters, newMonster]);
         else setCommonMonsters([...commonMonsters, newMonster]);
@@ -2713,3 +2714,4 @@ export default function AdminPage() {
     </div>
   );
 }
+
