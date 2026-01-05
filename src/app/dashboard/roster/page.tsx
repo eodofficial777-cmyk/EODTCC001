@@ -177,9 +177,9 @@ export default function RosterPage() {
 
       {!error && (
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+        <TabsList className="flex flex-wrap h-auto sm:grid sm:h-10 sm:w-full sm:grid-cols-4">
           {factionTabs.map((faction) => (
-            <TabsTrigger key={faction.id} value={faction.id}>
+            <TabsTrigger key={faction.id} value={faction.id} className="flex-grow">
               {faction.name}
             </TabsTrigger>
           ))}
