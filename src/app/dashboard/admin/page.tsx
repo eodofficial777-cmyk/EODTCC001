@@ -2769,7 +2769,7 @@ export default function AdminPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="accounts" className="w-full">
-            <TabsList className="flex h-auto flex-wrap justify-start sm:grid sm:w-full sm:grid-cols-5 md:grid-cols-5 lg:w-max lg:grid-flow-col">
+            <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 md:grid-cols-5 lg:grid-cols-10">
               <TabsTrigger value="accounts">帳號審核</TabsTrigger>
               <TabsTrigger value="tasks">任務中心</TabsTrigger>
               <TabsTrigger value="store">商店道具</TabsTrigger>
@@ -2825,3 +2825,5 @@ export default function AdminPage() {
     </div>
   );
 }
+
+    
