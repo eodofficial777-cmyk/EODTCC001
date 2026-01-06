@@ -191,7 +191,6 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                 let changeLog = [];
 
                 // --- MANUALLY CALCULATE AND UPDATE ---
-                // Handle numeric values
                 if (rewards.honorPoints) {
                     updates.honorPoints = (user.honorPoints || 0) + rewards.honorPoints;
                     changeLog.push(`+${rewards.honorPoints} 榮譽點`);
@@ -202,22 +201,23 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                     changeLog.push(`+${rewards.currency} 貨幣`);
                 }
 
-                // Handle item array (stacking)
                 if (rewards.itemId) {
-                    updates.items = [...(user.items || []), rewards.itemId];
+                    const newItems = [...(user.items || [])];
+                    newItems.push(rewards.itemId);
+                    updates.items = newItems; // *** THIS WAS THE MISSING LINE ***
                     changeLog.push(`獲得道具「${itemName || rewards.itemId}」`);
                 }
 
-                // Handle title array (unique)
                 if (rewards.titleId) {
                     const newTitles = [...(user.titles || [])];
                     if (!newTitles.includes(rewards.titleId)) {
                         newTitles.push(rewards.titleId);
-                        updates.titles = newTitles;
                     }
+                    updates.titles = newTitles; // *** THIS WAS THE MISSING LINE ***
                     changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
                 }
                 
+                // Perform a single update operation with all calculated changes.
                 if (Object.keys(updates).length > 0) {
                     transaction.update(userRef, updates);
                 }
