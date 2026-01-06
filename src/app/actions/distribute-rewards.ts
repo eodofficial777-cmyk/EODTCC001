@@ -57,18 +57,12 @@ export interface RewardPayload {
 export interface FilterCriteria {
   factionId?: string;
   raceId?: string;
-  honorPoints_op?: '>=' | '<=';
   honorPoints_val?: number;
-  currency_op?: '>=' | '<=';
   currency_val?: number;
-  taskCount_op?: '>=' | '<=';
   taskCount_val?: number;
-  participatedBattleCount_op?: '>=' | '<=';
   participatedBattleCount_val?: number;
-  hpZeroCount_op?: '>=' | '<=';
   hpZeroCount_val?: number;
   itemUse_id?: string;
-  itemUse_op?: '>=' | '<=';
   itemUse_val?: number;
 }
 
@@ -91,50 +85,24 @@ function applyFilters(user: User, filters: FilterCriteria): boolean {
     if (filters.raceId && user.raceId !== filters.raceId) return false;
 
     // Honor Points filter
-    if (filters.honorPoints_op && typeof filters.honorPoints_val === 'number') {
-        const value = filters.honorPoints_val;
-        if (filters.honorPoints_op === '>=' && user.honorPoints < value) return false;
-        if (filters.honorPoints_op === '<=' && user.honorPoints > value) return false;
-    }
+    if (typeof filters.honorPoints_val === 'number' && user.honorPoints < filters.honorPoints_val) return false;
 
     // Total Currency Earned filter
-    if (filters.currency_op && typeof filters.currency_val === 'number') {
-        const totalCurrency = user.totalCurrencyEarned || 0;
-        const value = filters.currency_val;
-        if (filters.currency_op === '>=' && totalCurrency < value) return false;
-        if (filters.currency_op === '<=' && totalCurrency > value) return false;
-    }
-
+    if (typeof filters.currency_val === 'number' && (user.totalCurrencyEarned || 0) < filters.currency_val) return false;
+    
     // Task Count filter
-    if (filters.taskCount_op && typeof filters.taskCount_val === 'number') {
-        const taskCount = (user.tasks || []).length;
-        const value = filters.taskCount_val;
-        if (filters.taskCount_op === '>=' && taskCount < value) return false;
-        if (filters.taskCount_op === '<=' && taskCount > value) return false;
-    }
+    if (typeof filters.taskCount_val === 'number' && (user.tasks || []).length < filters.taskCount_val) return false;
 
     // Battle Participation filter
-    if (filters.participatedBattleCount_op && typeof filters.participatedBattleCount_val === 'number') {
-        const battleCount = (user.participatedBattleIds || []).length;
-        const value = filters.participatedBattleCount_val;
-        if (filters.participatedBattleCount_op === '>=' && battleCount < value) return false;
-        if (filters.participatedBattleCount_op === '<=' && battleCount > value) return false;
-    }
-    
+    if (typeof filters.participatedBattleCount_val === 'number' && (user.participatedBattleIds || []).length < filters.participatedBattleCount_val) return false;
+
     // HP Zero Count filter
-    if (filters.hpZeroCount_op && typeof filters.hpZeroCount_val === 'number') {
-        const hpZeroCount = user.hpZeroCount || 0;
-        const value = filters.hpZeroCount_val;
-        if (filters.hpZeroCount_op === '>=' && hpZeroCount < value) return false;
-        if (filters.hpZeroCount_op === '<=' && hpZeroCount > value) return false;
-    }
+    if (typeof filters.hpZeroCount_val === 'number' && (user.hpZeroCount || 0) < filters.hpZeroCount_val) return false;
 
     // Item Use filter
-    if (filters.itemUse_id && filters.itemUse_op && typeof filters.itemUse_val === 'number') {
+    if (filters.itemUse_id && typeof filters.itemUse_val === 'number') {
         const userItemUseCount = user.itemUseCount?.[filters.itemUse_id] || 0;
-        const value = filters.itemUse_val;
-        if (filters.itemUse_op === '>=' && userItemUseCount < value) return false;
-        if (filters.itemUse_op === '<=' && userItemUseCount > value) return false;
+        if (userItemUseCount < filters.itemUse_val) return false;
     }
 
     return true; // User passes all filters

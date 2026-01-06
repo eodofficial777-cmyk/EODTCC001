@@ -1971,32 +1971,27 @@ function RewardDistribution() {
                                 </SelectContent>
                             </Select>
                             <div className="flex gap-2 items-center">
-                                <Label className="shrink-0">榮譽點</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, honorPoints_op: v as any}))} value={filters.honorPoints_op || '>='}><SelectTrigger className="w-24"><SelectValue/></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Label className="shrink-0 whitespace-nowrap">榮譽點 &gt;=</Label>
                                 <Input type="number" placeholder="數量" value={filters.honorPoints_val ?? ''} onChange={e => setFilters(f => ({...f, honorPoints_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
                              <div className="flex gap-2 items-center">
-                                <Label className="shrink-0">累計貨幣</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, currency_op: v as any}))} value={filters.currency_op || '>='}><SelectTrigger className="w-24"><SelectValue/></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Label className="shrink-0 whitespace-nowrap">累計貨幣 &gt;=</Label>
                                 <Input type="number" placeholder="數量" value={filters.currency_val ?? ''} onChange={e => setFilters(f => ({...f, currency_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
                              <div className="flex gap-2 items-center">
-                                <Label className="shrink-0">任務數</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, taskCount_op: v as any}))} value={filters.taskCount_op || '>='}><SelectTrigger className="w-24"><SelectValue/></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Label className="shrink-0 whitespace-nowrap">任務數 &gt;=</Label>
                                 <Input type="number" placeholder="數量" value={filters.taskCount_val ?? ''} onChange={e => setFilters(f => ({...f, taskCount_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
                             <div className="flex gap-2 items-center">
-                                <Label className="shrink-0">共鬥次數</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, participatedBattleCount_op: v as any}))} value={filters.participatedBattleCount_op || '>='}><SelectTrigger className="w-24"><SelectValue/></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Label className="shrink-0 whitespace-nowrap">共鬥次數 &gt;=</Label>
                                 <Input type="number" placeholder="次數" value={filters.participatedBattleCount_val ?? ''} onChange={e => setFilters(f => ({...f, participatedBattleCount_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
                             <div className="flex gap-2 items-center">
-                                <Label className="shrink-0">倒下次數</Label>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, hpZeroCount_op: v as any}))} value={filters.hpZeroCount_op || '>='}><SelectTrigger className="w-24"><SelectValue/></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Label className="shrink-0 whitespace-nowrap">倒下次數 &gt;=</Label>
                                 <Input type="number" placeholder="次數" value={filters.hpZeroCount_val ?? ''} onChange={e => setFilters(f => ({...f, hpZeroCount_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
                              <div className="flex gap-2 items-center">
-                                <Label className="shrink-0">道具使用</Label>
+                                <Label className="shrink-0 whitespace-nowrap">使用道具</Label>
                                 <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_id: v === 'none' ? undefined : v as any}))} value={filters.itemUse_id || 'none'}>
                                   <SelectTrigger><SelectValue placeholder="選擇道具"/></SelectTrigger>
                                   <SelectContent>
@@ -2004,7 +1999,7 @@ function RewardDistribution() {
                                     {allItems.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
-                                <Select onValueChange={v => setFilters(f => ({ ...f, itemUse_op: v as any}))} value={filters.itemUse_op || '>='}><SelectTrigger className="w-24"><SelectValue placeholder=">=" /></SelectTrigger><SelectContent><SelectItem value=">=">&gt;=</SelectItem><SelectItem value="<=">&lt;=</SelectItem></SelectContent></Select>
+                                <Label className="shrink-0 whitespace-nowrap">&gt;=</Label>
                                 <Input type="number" placeholder="次數" value={filters.itemUse_val ?? ''} onChange={e => setFilters(f => ({...f, itemUse_val: e.target.value === '' ? undefined : parseInt(e.target.value)}))}/>
                             </div>
                         </div>
@@ -2786,3 +2781,4 @@ export default function AdminPage() {
     </div>
   );
 }
+
