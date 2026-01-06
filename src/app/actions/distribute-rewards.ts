@@ -192,42 +192,45 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                 const user = userSnap.data() as User;
                 let changeLog = [];
 
-                // --- Step 1: Handle numeric increments ---
-                const numericUpdates: { [key: string]: any } = {};
+                const updates: { [key: string]: any } = {};
+
+                // --- Handle ALL updates manually ---
+
+                // Handle numeric values
                 if (rewards.honorPoints) {
-                    numericUpdates.honorPoints = increment(rewards.honorPoints);
+                    updates.honorPoints = (user.honorPoints || 0) + rewards.honorPoints;
                     changeLog.push(`+${rewards.honorPoints} 榮譽點`);
                 }
                 if (rewards.currency) {
-                    numericUpdates.currency = increment(rewards.currency);
-                    numericUpdates.totalCurrencyEarned = increment(rewards.currency);
+                    updates.currency = (user.currency || 0) + rewards.currency;
+                    updates.totalCurrencyEarned = (user.totalCurrencyEarned || 0) + rewards.currency;
                     changeLog.push(`+${rewards.currency} 貨幣`);
                 }
-                if (Object.keys(numericUpdates).length > 0) {
-                    transaction.update(userRef, numericUpdates);
-                }
 
-                // --- Step 2: Handle array appends ---
-                const arrayUpdates: { [key: string]: any } = {};
-                let userItems = user.items || [];
-                let userTitles = user.titles || [];
-
+                // Handle item array (stacking)
                 if (rewards.itemId) {
-                    userItems.push(rewards.itemId);
-                    arrayUpdates.items = userItems;
+                    const newItems = [...(user.items || [])];
+                    newItems.push(rewards.itemId);
+                    updates.items = newItems;
                     changeLog.push(`獲得道具「${itemName || rewards.itemId}」`);
                 }
-                if (rewards.titleId && !userTitles.includes(rewards.titleId)) {
-                    userTitles.push(rewards.titleId);
-                    arrayUpdates.titles = userTitles;
-                    changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
-                }
 
-                if (Object.keys(arrayUpdates).length > 0) {
-                    transaction.update(userRef, arrayUpdates);
+                // Handle title array (unique)
+                if (rewards.titleId) {
+                    const newTitles = [...(user.titles || [])];
+                    if (!newTitles.includes(rewards.titleId)) {
+                        newTitles.push(rewards.titleId);
+                        updates.titles = newTitles;
+                        changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
+                    }
                 }
                 
-                // --- Step 3: Create Activity Log ---
+                // --- Perform a SINGLE update operation ---
+                if (Object.keys(updates).length > 0) {
+                    transaction.update(userRef, updates);
+                }
+                
+                // --- Create Activity Log ---
                 const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
                 transaction.set(activityLogRef, {
                     id: activityLogRef.id,
