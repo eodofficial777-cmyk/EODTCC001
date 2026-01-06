@@ -190,12 +190,12 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                 if (!userSnap.exists()) return;
 
                 const user = userSnap.data() as User;
+                const updates: { [key: string]: any } = {};
                 let changeLog = [];
 
-                const updates: { [key: string]: any } = {};
-
-                // --- Handle ALL updates manually ---
-
+                // --- MANUALLY CALCULATE AND UPDATE ---
+                // This approach avoids mixing increment() with array updates in the same transaction.
+                
                 // Handle numeric values
                 if (rewards.honorPoints) {
                     updates.honorPoints = (user.honorPoints || 0) + rewards.honorPoints;
