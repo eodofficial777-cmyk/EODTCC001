@@ -16,7 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollText } from 'lucide-react';
 import type { ActivityLog } from '@/lib/types';
@@ -26,7 +26,7 @@ export default function ActivityLogPage() {
   const firestore = useFirestore();
 
   const activityLogQuery = useMemoFirebase(
-    () => (user ? query(collection(firestore, `users/${user.uid}/activityLogs`), orderBy('timestamp', 'desc')) : null),
+    () => (user ? query(collection(firestore, `users/${user.uid}/activityLogs`), orderBy('timestamp', 'desc'), limit(20)) : null),
     [user, firestore]
   );
   
@@ -39,7 +39,7 @@ export default function ActivityLogPage() {
       <Card>
         <CardHeader>
           <CardTitle className="font-headline">活動紀錄</CardTitle>
-          <CardDescription>您所有的遊戲歷程、任務提交、物品獲取與獎勵紀錄。</CardDescription>
+          <CardDescription>您最近的 20 筆遊戲歷程、任務提交、物品獲取與獎勵紀錄。</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="border rounded-md">
