@@ -177,13 +177,10 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
         if (titleSnap.exists()) titleName = (titleSnap.data() as Title).name;
     }
 
-    const chunkSize = 400;
     let processedCount = 0;
     
-    for (let i = 0; i < finalUserIds.length; i += chunkSize) {
-        const chunk = finalUserIds.slice(i, i + chunkSize);
-        
-        for (const userId of chunk) {
+    for (const userId of finalUserIds) {
+        try {
             await runTransaction(db, async (transaction) => {
                 const userRef = doc(db, 'users', userId);
                 const userSnap = await transaction.get(userRef);
@@ -194,8 +191,6 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                 let changeLog = [];
 
                 // --- MANUALLY CALCULATE AND UPDATE ---
-                // This approach avoids mixing increment() with array updates in the same transaction.
-                
                 // Handle numeric values
                 if (rewards.honorPoints) {
                     updates.honorPoints = (user.honorPoints || 0) + rewards.honorPoints;
@@ -209,9 +204,7 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
 
                 // Handle item array (stacking)
                 if (rewards.itemId) {
-                    const newItems = [...(user.items || [])];
-                    newItems.push(rewards.itemId);
-                    updates.items = newItems;
+                    updates.items = [...(user.items || []), rewards.itemId];
                     changeLog.push(`獲得道具「${itemName || rewards.itemId}」`);
                 }
 
@@ -221,16 +214,14 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                     if (!newTitles.includes(rewards.titleId)) {
                         newTitles.push(rewards.titleId);
                         updates.titles = newTitles;
-                        changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
                     }
+                    changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
                 }
                 
-                // --- Perform a SINGLE update operation ---
                 if (Object.keys(updates).length > 0) {
                     transaction.update(userRef, updates);
                 }
                 
-                // --- Create Activity Log ---
                 const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
                 transaction.set(activityLogRef, {
                     id: activityLogRef.id,
@@ -240,8 +231,11 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                     change: changeLog.join(', ') || '系統發放'
                 });
             });
+            processedCount++;
+        } catch (e) {
+            console.error(`Failed to process reward for user ${userId}:`, e);
+            // Decide if you want to stop the whole process or just log and continue
         }
-        processedCount += chunk.length;
     }
     
     return { success: true, processedCount };
