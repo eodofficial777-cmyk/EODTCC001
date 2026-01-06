@@ -1960,7 +1960,7 @@ function RewardDistribution() {
                                 <SelectTrigger><SelectValue placeholder="所有陣營" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">所有陣營</SelectItem>
-                                    {Object.values(FACTIONS).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                    {Object.values(FACTIONS).filter(f => f.id !== 'common').map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                              <Select onValueChange={v => setFilters(f => ({ ...f, raceId: v === 'all' ? undefined : v }))} value={filters.raceId || 'all'}>

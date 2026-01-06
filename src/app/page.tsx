@@ -358,7 +358,7 @@ export default function AuthPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {Object.values(FACTIONS).map((faction) => (
+                              {Object.values(FACTIONS).filter(f => f.id !== 'common').map((faction) => (
                                 <SelectItem key={faction.id} value={faction.id}>{faction.name}</SelectItem>
                               ))}
                             </SelectContent>
