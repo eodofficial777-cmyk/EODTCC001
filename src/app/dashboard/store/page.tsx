@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import Image from 'next/image';
@@ -141,44 +139,31 @@ export default function StorePage() {
   const userFactionId = userData?.factionId;
 
   const factionItemsQuery = useMemoFirebase(() => {
-    if (!firestore || !userFactionId) {
-      return null;
-    }
+    if (!firestore || !userFactionId) return null;
     return query(
-        collection(firestore, 'items'),
-        where('isPublished', '==', true),
-        where('factionId', '==', userFactionId)
+      collection(firestore, 'items'),
+      where('isPublished', '==', true),
+      where('factionId', '==', userFactionId)
     );
   }, [firestore, userFactionId]);
 
   const commonItemsQuery = useMemoFirebase(() => {
-    if (!firestore) {
-      return null;
-    }
+    if (!firestore) return null;
     return query(
-        collection(firestore, 'items'),
-        where('isPublished', '==', true),
-        where('factionId', '==', 'common')
+      collection(firestore, 'items'),
+      where('isPublished', '==', true),
+      where('factionId', '==', 'common')
     );
   }, [firestore]);
 
   const { data: factionItems, isLoading: areFactionItemsLoading } = useCollection<Item>(factionItemsQuery);
   const { data: commonItems, isLoading: areCommonItemsLoading } = useCollection<Item>(commonItemsQuery);
 
-  const [items, setItems] = useState<Item[]>([]);
-
-  useEffect(() => {
-      const combinedItems = new Map<string, Item>();
-      
-      if (factionItems) {
-          factionItems.forEach(item => combinedItems.set(item.id, item));
-      }
-
-      if (commonItems) {
-          commonItems.forEach(item => combinedItems.set(item.id, item));
-      }
-      
-      setItems(Array.from(combinedItems.values()));
+  const items = useMemo(() => {
+    const combined = new Map<string, Item>();
+    if (factionItems) factionItems.forEach(item => combined.set(item.id, item));
+    if (commonItems) commonItems.forEach(item => combined.set(item.id, item));
+    return Array.from(combined.values());
   }, [factionItems, commonItems]);
 
 
