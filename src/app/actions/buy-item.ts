@@ -1,3 +1,4 @@
+
 'use server';
 
 import {
@@ -60,8 +61,8 @@ export async function buyItem(payload: BuyItemPayload): Promise<{ success: boole
         throw new Error('您的種族不符合購買此道具的條件。');
       }
       
-      // 3. Check faction requirement
-      if (item.factionId !== 'common' && user.factionId !== item.factionId) {
+      // 3. Check faction requirement - allow buying 'common' and own faction's items
+      if (item.factionId !== 'common' && item.factionId !== 'wanderer' && user.factionId !== item.factionId) {
          throw new Error('您的陣營無法購買此道具。');
       }
 
@@ -72,25 +73,13 @@ export async function buyItem(payload: BuyItemPayload): Promise<{ success: boole
 
       // All checks passed, perform the updates
       const newCurrency = user.currency - item.price;
-      
-      let updatedItems;
       const userItems = user.items || [];
-
-      if (item.itemTypeId === 'equipment') {
-        // For unique items like equipment, we can still use arrayUnion
-        updatedItems = arrayUnion(itemId);
-         transaction.update(userRef, {
-            currency: newCurrency,
-            items: updatedItems
-         });
-      } else {
-        // For stackable items, append to the array
-        updatedItems = [...userItems, itemId];
-         transaction.update(userRef, {
-            currency: newCurrency,
-            items: updatedItems
-         });
-      }
+      const updatedItems = [...userItems, itemId];
+      
+      transaction.update(userRef, {
+        currency: newCurrency,
+        items: updatedItems,
+      });
       
       // Create an activity log entry
        const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));

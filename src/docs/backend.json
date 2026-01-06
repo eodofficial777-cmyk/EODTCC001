@@ -72,7 +72,7 @@
         },
         "items": {
           "type": "array",
-          "description": "An array of item IDs the character possesses.",
+          "description": "An array containing all item IDs the character possesses. This array allows for duplicate entries to represent stackable items.",
           "items": {
             "type": "string"
           }

@@ -189,6 +189,7 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                 const userSnap = await transaction.get(userRef);
                 if (!userSnap.exists()) return;
 
+                const user = userSnap.data() as User;
                 const userUpdate: { [key: string]: any } = {};
                 let changeLog = [];
 
@@ -202,7 +203,8 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                     changeLog.push(`+${rewards.currency} 貨幣`);
                 }
                 if (rewards.itemId) {
-                    userUpdate.items = arrayUnion(rewards.itemId);
+                    const currentItems = user.items || [];
+                    userUpdate.items = [...currentItems, rewards.itemId];
                     changeLog.push(`獲得道具「${itemName || rewards.itemId}」`);
                 }
                 if (rewards.titleId) {
@@ -233,5 +235,3 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
     return { success: false, error: error.message || '發放獎勵時發生未知錯誤。' };
   }
 }
-
-    
