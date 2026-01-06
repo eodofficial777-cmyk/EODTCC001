@@ -892,9 +892,14 @@ export default function BattlegroundPage() {
                                          <span className="text-sm text-muted-foreground font-mono">x{count}</span>
                                     </div>
                                 </TooltipTrigger>
-                                <TooltipContent side="left">
+                                <TooltipContent side="left" className="max-w-xs">
                                      <p className="font-bold">{item.name}</p>
-                                     <p className="text-xs text-muted-foreground">{item.description}</p>
+                                     <p className="text-xs text-muted-foreground mb-2">{item.description}</p>
+                                     <div className="border-t pt-2 mt-2">
+                                        {item.effects.map((effect, i) => (
+                                            <p key={i} className="text-xs">{formatEffect(effect)}</p>
+                                        ))}
+                                    </div>
                                 </TooltipContent>
                             </Tooltip></TooltipProvider>
                         )) : <p className="text-muted-foreground text-sm text-center py-4">沒有可用的戰鬥道具。</p>}
