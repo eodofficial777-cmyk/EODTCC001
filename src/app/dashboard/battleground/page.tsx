@@ -49,7 +49,10 @@ function formatEffect(effect: AttributeEffect | TriggeredEffect | ActiveBuff | S
         case 'hp_recovery':
             desc += `恢復 ${effect.value} HP`;
             break;
-        case 'direct_damage':
+        case 'damage_enemy': // This case was missing for items
+            desc += `造成 ${effect.value} 點傷害`;
+            break;
+        case 'direct_damage': // This is for skills
             desc += `造成 ${effect.value} 點直接傷害`;
             break;
         case 'probabilistic_damage':

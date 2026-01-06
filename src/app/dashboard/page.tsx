@@ -319,7 +319,7 @@ function EditProfileDialog({ user, userData, onProfileChanged }: { user: any, us
                           name="characterSheetFile"
                           render={({ field: { onChange, value, ...rest } }) => (
                             <FormItem>
-                              <FormControl><Input type="file" accept="image/*" onChange={e => onChange(e.target.files?.[0])} {...rest} /></FormControl>
+                              <FormControl><Input type="file" accept="image/*" onChange={(e) => onChange(e.target.files?.[0])} {...rest} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
