@@ -38,7 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History, Award, KeyRound, BarChart, Archive } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History, Award, KeyRound, BarChart, Archive, RotateCcw } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -158,9 +158,9 @@ function AccountApproval() {
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState<Record<string, boolean>>({});
   const [resettingUser, setResettingUser] = useState<User | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -175,11 +175,16 @@ function AccountApproval() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
+
+  const filteredUsers = useMemo(() => {
+    if (!searchTerm) return users;
+    return users.filter(user => user.roleName.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [users, searchTerm]);
 
   const handleFieldChange = (userId: string, field: keyof User, value: any) => {
     setUsers((prevUsers) =>
@@ -215,7 +220,6 @@ function AccountApproval() {
         title: '更新失敗',
         description: error.message,
       });
-      // Optional: Revert state on failure by re-fetching
       fetchUsers();
     } finally {
       setIsUpdating((prev) => ({ ...prev, [userId]: false }));
@@ -249,6 +253,14 @@ function AccountApproval() {
         </Button>
       </div>
 
+      <div className="mb-4">
+        <Input 
+            placeholder="搜尋角色名稱..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
       <div className="border rounded-md overflow-x-auto">
         <Table>
           <TableHeader>
@@ -273,12 +285,12 @@ function AccountApproval() {
                   </TableCell>
                 </TableRow>
               ))
-            ) : users.length === 0 ? (
+            ) : filteredUsers.length === 0 ? (
                 <TableRow>
-                    <TableCell colSpan={9} className="text-center h-24">沒有待審核或已註冊的使用者</TableCell>
+                    <TableCell colSpan={9} className="text-center h-24">找不到符合條件的使用者</TableCell>
                 </TableRow>
             ) : (
-              users.map((user) => (
+              filteredUsers.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
                     {user.avatarUrl && (
@@ -506,7 +518,7 @@ function TaskManagement() {
   const [isProcessing, setIsProcessing] = useState<Record<string, boolean>>({});
   const [editingTask, setEditingTask] = useState<Partial<TaskType> | null>(null);
 
-  const fetchAdminData = async () => {
+  const fetchAdminData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -525,11 +537,11 @@ function TaskManagement() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchAdminData();
-  }, []);
+  }, [fetchAdminData]);
 
   const handleUpdateStatus = async (task: Task, status: 'approved' | 'rejected') => {
     setIsProcessing(prev => ({...prev, [task.id]: true}));
@@ -926,7 +938,7 @@ function StoreManagement() {
     const [isSaving, setIsSaving] = useState(false);
     const [editingItem, setEditingItem] = useState<Partial<Item> | null>(null);
 
-    const fetchAdminData = async () => {
+    const fetchAdminData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
@@ -939,11 +951,11 @@ function StoreManagement() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchAdminData();
-    }, []);
+    }, [fetchAdminData]);
 
     const handleSave = async (itemData: Partial<Item>) => {
         setIsSaving(true);
@@ -959,6 +971,48 @@ function StoreManagement() {
             setIsSaving(false);
         }
     };
+
+    const itemGroups = useMemo(() => {
+        if (isLoading) return [];
+        
+        const grouped: { typeId: string; typeName: string; factions: { factionId: string; factionName: string; items: Item[] }[] }[] = [];
+
+        for (const typeId in itemTypeTranslations) {
+            const group = {
+                typeId: typeId,
+                typeName: itemTypeTranslations[typeId as keyof typeof itemTypeTranslations],
+                factions: [] as { factionId: string; factionName: string; items: Item[] }[]
+            };
+
+            const factionsGrouped: { [factionId: string]: Item[] } = {};
+            const itemsOfType = items.filter(item => item.itemTypeId === typeId);
+
+            for (const item of itemsOfType) {
+                if (!factionsGrouped[item.factionId]) {
+                    factionsGrouped[item.factionId] = [];
+                }
+                factionsGrouped[item.factionId].push(item);
+            }
+
+            for (const factionId in factionsGrouped) {
+                const factionName = FACTIONS[factionId as keyof typeof FACTIONS]?.name || '未知陣營';
+                const displayName = factionId === 'wanderer' ? '流浪者 / 通用' : factionName;
+                group.factions.push({
+                    factionId: factionId,
+                    factionName: displayName,
+                    items: factionsGrouped[factionId]
+                });
+            }
+            
+            // Sort factions for consistent order
+            group.factions.sort((a, b) => a.factionName.localeCompare(b.factionName));
+            if (group.factions.length > 0) {
+              grouped.push(group);
+            }
+        }
+        return grouped;
+    }, [items, isLoading]);
+
 
     if (error) {
         return (
@@ -992,64 +1046,73 @@ function StoreManagement() {
                 />
             )}
 
-            <div className="border rounded-md mt-4">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>名稱</TableHead>
-                            <TableHead>類型</TableHead>
-                            <TableHead>陣營</TableHead>
-                            <TableHead>種族</TableHead>
-                            <TableHead>效果</TableHead>
-                            <TableHead>價格</TableHead>
-                            <TableHead>狀態</TableHead>
-                            <TableHead>操作</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading ? (
-                            Array.from({ length: 4 }).map((_, i) => (
-                                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
-                            ))
-                        ) : items.length === 0 ? (
-                            <TableRow><TableCell colSpan={8} className="text-center h-24">尚未建立任何道具</TableCell></TableRow>
-                        ) : (
-                            items.map(item => (
-                                <TableRow key={item.id}>
-                                    <TableCell className="font-medium">{item.name}</TableCell>
-                                    <TableCell>{itemTypeTranslations[item.itemTypeId] || '未知'}</TableCell>
-                                    <TableCell>{FACTIONS[item.factionId as keyof typeof FACTIONS]?.name || 'N/A'}</TableCell>
-                                    <TableCell>{item.raceId === 'all' ? '通用' : RACES[item.raceId as keyof typeof RACES]?.name || '未知'}</TableCell>
-                                    <TableCell className="text-xs max-w-[200px] truncate">{item.effects?.map(formatEffect).join(', ') || '無'}</TableCell>
-                                    <TableCell>{item.price}</TableCell>
-                                    <TableCell>
-                                        <span className={item.isPublished ? 'text-green-500' : 'text-red-500'}>
-                                            {item.isPublished ? '已上架' : '未上架'}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="space-x-2">
-                                        <Button variant="ghost" size="icon" onClick={() => setEditingItem(item)}><Edit className="h-4 w-4"/></Button>
-                                        <Dialog>
-                                            <DialogTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
-                                            </DialogTrigger>
-                                            <DialogContent>
-                                                <DialogHeader>
-                                                    <DialogTitle>確認刪除</DialogTitle>
-                                                    <DialogDescription>您確定要刪除「{item.name}」嗎？</DialogDescription>
-                                                </DialogHeader>
-                                                <DialogFooter>
-                                                    <DialogClose asChild><Button variant="outline">取消</Button></DialogClose>
-                                                    <Button variant="destructive" onClick={() => handleSave({...item, _delete: true})}>刪除</Button>
-                                                </DialogFooter>
-                                            </DialogContent>
-                                        </Dialog>
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
+            <div className="mt-4 space-y-6">
+                {isLoading ? (
+                    Array.from({ length: 2 }).map((_, i) => (
+                        <div key={i}>
+                            <Skeleton className="h-8 w-1/3 mb-4" />
+                            <Skeleton className="h-32 w-full" />
+                        </div>
+                    ))
+                ) : itemGroups.length === 0 ? (
+                    <div className="text-center h-24 text-muted-foreground flex items-center justify-center">尚未建立任何道具</div>
+                ) : (
+                    itemGroups.map(group => (
+                        <div key={group.typeId}>
+                            <h4 className="text-xl font-semibold font-headline mb-2">{group.typeName}</h4>
+                            {group.factions.map(factionGroup => (
+                                <div key={factionGroup.factionId} className="mb-6">
+                                     <h5 className="text-base font-semibold mb-2 text-muted-foreground" style={{color: FACTIONS[factionGroup.factionId as keyof typeof FACTIONS]?.color}}>{factionGroup.factionName}</h5>
+                                     <div className="border rounded-md">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>名稱</TableHead>
+                                                    <TableHead>效果</TableHead>
+                                                    <TableHead>價格</TableHead>
+                                                    <TableHead>狀態</TableHead>
+                                                    <TableHead>操作</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {factionGroup.items.map(item => (
+                                                     <TableRow key={item.id}>
+                                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                                        <TableCell className="text-xs max-w-[200px] truncate">{item.effects?.map(formatEffect).join(', ') || '無'}</TableCell>
+                                                        <TableCell>{item.price}</TableCell>
+                                                        <TableCell>
+                                                            <span className={item.isPublished ? 'text-green-500' : 'text-red-500'}>
+                                                                {item.isPublished ? '已上架' : '未上架'}
+                                                            </span>
+                                                        </TableCell>
+                                                        <TableCell className="space-x-2">
+                                                            <Button variant="ghost" size="icon" onClick={() => setEditingItem(item)}><Edit className="h-4 w-4"/></Button>
+                                                            <Dialog>
+                                                                <DialogTrigger asChild>
+                                                                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                                                                </DialogTrigger>
+                                                                <DialogContent>
+                                                                    <DialogHeader>
+                                                                        <DialogTitle>確認刪除</DialogTitle>
+                                                                        <DialogDescription>您確定要刪除「{item.name}」嗎？</DialogDescription>
+                                                                    </DialogHeader>
+                                                                    <DialogFooter>
+                                                                        <DialogClose asChild><Button variant="outline">取消</Button></DialogClose>
+                                                                        <Button variant="destructive" onClick={() => handleSave({...item, _delete: true})}>刪除</Button>
+                                                                    </DialogFooter>
+                                                                </DialogContent>
+                                                            </Dialog>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                     </div>
+                                </div>
+                            ))}
+                        </div>
+                    ))
+                )}
             </div>
         </div>
     );
@@ -1155,7 +1218,7 @@ function CraftingManagement() {
 
   const itemsById = useMemo(() => new Map(items.map(item => [item.id, item])), [items]);
 
-  const fetchAdminData = async () => {
+  const fetchAdminData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -1168,11 +1231,11 @@ function CraftingManagement() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchAdminData();
-  }, []);
+  }, [fetchAdminData]);
   
   const handleSave = async (recipeData: Partial<CraftRecipe>) => {
     setIsSaving(true);
@@ -1436,7 +1499,7 @@ function SkillManagement() {
     const [activeFactionTab, setActiveFactionTab] = useState<string>('yelu');
     const [activeRaceTab, setActiveRaceTab] = useState<string>('corruptor');
 
-    const fetchAdminData = async () => {
+    const fetchAdminData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
@@ -1448,16 +1511,15 @@ function SkillManagement() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
     
     useEffect(() => {
         fetchAdminData();
-    }, []);
+    }, [fetchAdminData]);
 
     const handleFactionTabChange = (value: string) => {
         setActiveFactionTab(value);
         setEditingSkill(null);
-        // Reset race tab to default when faction changes
         setActiveRaceTab(Object.keys(RACES)[0]); 
     };
     
@@ -1669,7 +1731,7 @@ function TitleManagement() {
     const [isSaving, setIsSaving] = useState(false);
     const [editingTitle, setEditingTitle] = useState<Partial<Title> | null>(null);
 
-    const fetchAdminData = async () => {
+    const fetchAdminData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
@@ -1682,11 +1744,11 @@ function TitleManagement() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchAdminData();
-    }, []);
+    }, [fetchAdminData]);
 
     const handleSave = async (titleData: Partial<Title>) => {
         setIsSaving(true);
@@ -1720,7 +1782,6 @@ function TitleManagement() {
              desc = desc.replace('A', (title.trigger.damageThreshold ?? 0).toString());
         }
 
-        // Always replace 'X' with the value
         desc = desc.replace('X', (title.trigger.value ?? 0).toString());
 
         return desc;
@@ -1795,17 +1856,26 @@ function RewardDistribution() {
     const [preview, setPreview] = useState<{ count: number; users: { id: string; roleName: string }[] } | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
 
-    useEffect(() => {
-        async function fetchData() {
-            setIsLoading(true);
-            const data = await getAdminData();
-            if (data.users) setAllUsers(data.users.filter(u => !u.isAdmin)); // Exclude admins from list
-            if (data.items) setAllItems(data.items);
-            if (data.titles) setAllTitles(data.titles);
-            setIsLoading(false);
-        }
-        fetchData();
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        const data = await getAdminData();
+        if (data.users) setAllUsers(data.users.filter(u => !u.isAdmin)); // Exclude admins from list
+        if (data.items) setAllItems(data.items);
+        if (data.titles) setAllTitles(data.titles);
+        setIsLoading(false);
     }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const handleReset = () => {
+        setFilters({});
+        setRewards({ honorPoints: 0, currency: 0, itemId: '', titleId: '', logMessage: '' });
+        setSelectedUser('');
+        setPreview(null);
+        toast({ title: '已重設', description: '所有篩選和獎勵條件都已清空。' });
+    };
 
     const handlePreview = async () => {
         setIsProcessing(true);
@@ -1817,7 +1887,6 @@ function RewardDistribution() {
                 rewards: { logMessage: "Preview" },
             };
             
-            // Do not distribute to an empty list
             if (mode === 'single' && !selectedUser) {
                 toast({ variant: 'destructive', title: '錯誤', description: '請選擇一位玩家。'});
                 setIsProcessing(false);
@@ -1872,9 +1941,7 @@ function RewardDistribution() {
             });
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: `已向 ${result.processedCount} 位玩家發放獎勵。` });
-            setPreview(null);
-            setFilters({});
-            setSelectedUser('');
+            handleReset();
         } catch (e: any) {
             toast({ variant: 'destructive', title: '發放失敗', description: e.message });
         } finally {
@@ -2011,8 +2078,9 @@ function RewardDistribution() {
             </Card>
 
              <Card className="mt-4">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>3. 預覽與發放</CardTitle>
+                    <Button variant="ghost" size="icon" onClick={handleReset}><RotateCcw className="h-4 w-4" /></Button>
                 </CardHeader>
                 <CardContent>
                     <Button onClick={handlePreview} disabled={isProcessing} className="w-full">
