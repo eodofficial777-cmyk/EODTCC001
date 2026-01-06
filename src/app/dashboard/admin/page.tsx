@@ -837,7 +837,7 @@ function ItemEditor({
             <SelectTrigger id="item-faction"><SelectValue placeholder="選擇陣營" /></SelectTrigger>
             <SelectContent>
               {Object.entries(FACTIONS).map(([id, faction]) => (
-                 <SelectItem key={id} value={id}>{id === 'wanderer' ? `${faction.name} / 通用` : faction.name}</SelectItem>
+                 <SelectItem key={id} value={id}>{faction.name}{id === 'wanderer' ? ' (通用)' : ''}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -937,6 +937,7 @@ function StoreManagement() {
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [editingItem, setEditingItem] = useState<Partial<Item> | null>(null);
+    const [activeFactionTab, setActiveFactionTab] = useState<string>('yelu');
 
     const fetchAdminData = useCallback(async () => {
         setIsLoading(true);
@@ -973,46 +974,27 @@ function StoreManagement() {
     };
 
     const itemGroups = useMemo(() => {
-        if (isLoading) return [];
+        if (!items) return [];
+
+        const filteredItems = items.filter(item => item.factionId === activeFactionTab);
         
-        const grouped: { typeId: string; typeName: string; factions: { factionId: string; factionName: string; items: Item[] }[] }[] = [];
+        const grouped: { typeId: string; typeName: string; items: Item[] }[] = [];
 
         for (const typeId in itemTypeTranslations) {
-            const group = {
-                typeId: typeId,
-                typeName: itemTypeTranslations[typeId as keyof typeof itemTypeTranslations],
-                factions: [] as { factionId: string; factionName: string; items: Item[] }[]
-            };
-
-            const factionsGrouped: { [factionId: string]: Item[] } = {};
-            const itemsOfType = items.filter(item => item.itemTypeId === typeId);
-
-            for (const item of itemsOfType) {
-                if (!factionsGrouped[item.factionId]) {
-                    factionsGrouped[item.factionId] = [];
-                }
-                factionsGrouped[item.factionId].push(item);
-            }
-
-            for (const factionId in factionsGrouped) {
-                const factionName = FACTIONS[factionId as keyof typeof FACTIONS]?.name || '未知陣營';
-                const displayName = factionId === 'wanderer' ? '流浪者 / 通用' : factionName;
-                group.factions.push({
-                    factionId: factionId,
-                    factionName: displayName,
-                    items: factionsGrouped[factionId]
-                });
-            }
+            const typeName = itemTypeTranslations[typeId as keyof typeof itemTypeTranslations];
+            const itemsOfType = filteredItems.filter(item => item.itemTypeId === typeId);
             
-            // Sort factions for consistent order
-            group.factions.sort((a, b) => a.factionName.localeCompare(b.factionName));
-            if (group.factions.length > 0) {
-              grouped.push(group);
+            if (itemsOfType.length > 0) {
+                grouped.push({
+                    typeId,
+                    typeName,
+                    items: itemsOfType
+                });
             }
         }
         return grouped;
-    }, [items, isLoading]);
 
+    }, [items, activeFactionTab]);
 
     if (error) {
         return (
@@ -1034,8 +1016,16 @@ function StoreManagement() {
                     <h3 className="text-lg font-semibold">商店道具管理</h3>
                     <p className="text-muted-foreground mt-1 text-sm">新增、編輯和上下架商店中的商品。</p>
                 </div>
-                <Button onClick={() => setEditingItem({ isPublished: true, effects: [] })} disabled={!!editingItem}>新增道具</Button>
+                <Button onClick={() => setEditingItem({ isPublished: true, effects: [], factionId: activeFactionTab })} disabled={!!editingItem}>新增道具</Button>
             </div>
+            
+            <Tabs value={activeFactionTab} onValueChange={setActiveFactionTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                    {Object.values(FACTIONS).map(f => (
+                        <TabsTrigger key={f.id} value={f.id}>{f.name}{f.id === 'wanderer' ? ' (通用)' : ''}</TabsTrigger>
+                    ))}
+                </TabsList>
+            </Tabs>
 
             {editingItem && (
                 <ItemEditor 
@@ -1055,61 +1045,56 @@ function StoreManagement() {
                         </div>
                     ))
                 ) : itemGroups.length === 0 ? (
-                    <div className="text-center h-24 text-muted-foreground flex items-center justify-center">尚未建立任何道具</div>
+                    <div className="text-center h-48 text-muted-foreground flex items-center justify-center">此陣營尚無任何道具</div>
                 ) : (
                     itemGroups.map(group => (
                         <div key={group.typeId}>
                             <h4 className="text-xl font-semibold font-headline mb-2">{group.typeName}</h4>
-                            {group.factions.map(factionGroup => (
-                                <div key={factionGroup.factionId} className="mb-6">
-                                     <h5 className="text-base font-semibold mb-2 text-muted-foreground" style={{color: FACTIONS[factionGroup.factionId as keyof typeof FACTIONS]?.color}}>{factionGroup.factionName}</h5>
-                                     <div className="border rounded-md">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>名稱</TableHead>
-                                                    <TableHead>效果</TableHead>
-                                                    <TableHead>價格</TableHead>
-                                                    <TableHead>狀態</TableHead>
-                                                    <TableHead>操作</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {factionGroup.items.map(item => (
-                                                     <TableRow key={item.id}>
-                                                        <TableCell className="font-medium">{item.name}</TableCell>
-                                                        <TableCell className="text-xs max-w-[200px] truncate">{item.effects?.map(formatEffect).join(', ') || '無'}</TableCell>
-                                                        <TableCell>{item.price}</TableCell>
-                                                        <TableCell>
-                                                            <span className={item.isPublished ? 'text-green-500' : 'text-red-500'}>
-                                                                {item.isPublished ? '已上架' : '未上架'}
-                                                            </span>
-                                                        </TableCell>
-                                                        <TableCell className="space-x-2">
-                                                            <Button variant="ghost" size="icon" onClick={() => setEditingItem(item)}><Edit className="h-4 w-4"/></Button>
-                                                            <Dialog>
-                                                                <DialogTrigger asChild>
-                                                                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
-                                                                </DialogTrigger>
-                                                                <DialogContent>
-                                                                    <DialogHeader>
-                                                                        <DialogTitle>確認刪除</DialogTitle>
-                                                                        <DialogDescription>您確定要刪除「{item.name}」嗎？</DialogDescription>
-                                                                    </DialogHeader>
-                                                                    <DialogFooter>
-                                                                        <DialogClose asChild><Button variant="outline">取消</Button></DialogClose>
-                                                                        <Button variant="destructive" onClick={() => handleSave({...item, _delete: true})}>刪除</Button>
-                                                                    </DialogFooter>
-                                                                </DialogContent>
-                                                            </Dialog>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                     </div>
-                                </div>
-                            ))}
+                             <div className="border rounded-md">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>名稱</TableHead>
+                                            <TableHead>效果</TableHead>
+                                            <TableHead>價格</TableHead>
+                                            <TableHead>狀態</TableHead>
+                                            <TableHead>操作</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {group.items.map(item => (
+                                             <TableRow key={item.id}>
+                                                <TableCell className="font-medium">{item.name}</TableCell>
+                                                <TableCell className="text-xs max-w-[200px] truncate">{item.effects?.map(formatEffect).join(', ') || '無'}</TableCell>
+                                                <TableCell>{item.price}</TableCell>
+                                                <TableCell>
+                                                    <span className={item.isPublished ? 'text-green-500' : 'text-red-500'}>
+                                                        {item.isPublished ? '已上架' : '未上架'}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell className="space-x-2">
+                                                    <Button variant="ghost" size="icon" onClick={() => setEditingItem(item)}><Edit className="h-4 w-4"/></Button>
+                                                    <Dialog>
+                                                        <DialogTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4"/></Button>
+                                                        </DialogTrigger>
+                                                        <DialogContent>
+                                                            <DialogHeader>
+                                                                <DialogTitle>確認刪除</DialogTitle>
+                                                                <DialogDescription>您確定要刪除「{item.name}」嗎？</DialogDescription>
+                                                            </DialogHeader>
+                                                            <DialogFooter>
+                                                                <DialogClose asChild><Button variant="outline">取消</Button></DialogClose>
+                                                                <Button variant="destructive" onClick={() => handleSave({...item, _delete: true})}>刪除</Button>
+                                                            </DialogFooter>
+                                                        </DialogContent>
+                                                    </Dialog>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                             </div>
                         </div>
                     ))
                 )}
@@ -2802,4 +2787,3 @@ export default function AdminPage() {
   );
 }
 
-    

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import Image from 'next/image';
@@ -14,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Gem, Users } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
-import { collection, query, where, doc } from 'firebase/firestore';
+import { collection, query, where, doc, or } from 'firebase/firestore';
 import type { Item, AttributeEffect, TriggeredEffect } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RACES } from '@/lib/game-data';
@@ -135,7 +136,7 @@ export default function StorePage() {
     () => (user ? doc(firestore, `users/${user.uid}`) : null),
     [user, firestore]
   );
-  const { data: userData, isLoading: isUserDataLoading } = useDoc(userDocRef);
+  const { data: userData, isLoading: isUserDataLoading, mutate } = useDoc(userDocRef);
   
   const userFactionId = userData?.factionId;
 
@@ -143,17 +144,29 @@ export default function StorePage() {
     if (!firestore || !userFactionId) {
       return null;
     }
-    // Wanderers can see 'wanderer' items, others see their specific faction items.
-    const factionsToShow = ['wanderer'];
-    if (userFactionId !== 'wanderer') {
-        factionsToShow.push(userFactionId);
+    
+    let q;
+    // Yelu/Association see their own items + universal (wanderer) items
+    if (userFactionId === 'yelu' || userFactionId === 'association') {
+        q = query(
+            collection(firestore, 'items'),
+            where('isPublished', '==', true),
+            or(
+              where('factionId', '==', userFactionId),
+              where('factionId', '==', 'wanderer')
+            )
+        );
+    } 
+    // Wanderers see all non-faction specific items
+    else {
+        q = query(
+            collection(firestore, 'items'),
+            where('isPublished', '==', true),
+            where('factionId', 'not-in', ['yelu', 'association'])
+        );
     }
     
-    return query(
-      collection(firestore, 'items'),
-      where('factionId', 'in', factionsToShow),
-      where('isPublished', '==', true)
-    );
+    return q;
   }, [firestore, userFactionId]);
 
 
@@ -172,6 +185,7 @@ export default function StorePage() {
         throw new Error(result.error);
       }
       toast({ title: '購買成功！', description: `「${item.name}」已加入您的背包。`});
+      mutate();
     } catch(error: any) {
       toast({ variant: 'destructive', title: '購買失敗', description: error.message });
     } finally {
