@@ -263,7 +263,7 @@ const MonsterCard = ({ monster, isAttackable, onSelect, actionContext }: { monst
   
   return (
     <Card 
-        className={cn("overflow-hidden transition-all duration-300 flex flex-col relative", 
+        className={cn("overflow-hidden transition-all duration-300 flex flex-col relative md:min-w-0 min-w-[75%] shrink-0", 
             isDefeated && "grayscale opacity-50",
             isTargeting && isAttackable && !isDefeated && "cursor-pointer ring-2 ring-primary",
             !isAttackable && "cursor-not-allowed"
@@ -617,7 +617,7 @@ export default function BattlegroundPage() {
                     <TabsTrigger value="association">協會戰場</TabsTrigger>
                 </TabsList>
                 <TabsContent value="yelu" className="mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-4 flex gap-4 overflow-x-auto pb-4">
                       {[...yeluMonsters, ...commonMonsters].map((monster) => (
                           <MonsterCard 
                               key={monster.monsterId}
@@ -639,7 +639,7 @@ export default function BattlegroundPage() {
                     </div>
                 </TabsContent>
                 <TabsContent value="association" className="mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-4 flex gap-4 overflow-x-auto pb-4">
                        {[...associationMonsters, ...commonMonsters].map((monster) => (
                           <MonsterCard 
                               key={monster.monsterId}
