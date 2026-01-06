@@ -158,7 +158,7 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
         const usersSnapshot = await getDocs(usersQuery);
         finalUserIds = usersSnapshot.docs
             .map(doc => ({ ...doc.data(), id: doc.id } as User))
-            .filter(user => applyFilters(user, filters))
+            .filter(user => applyFilters(user, filters || {}))
             .map(user => user.id);
     }
        
@@ -202,13 +202,20 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                     userUpdate.totalCurrencyEarned = increment(rewards.currency); // Also increment total
                     changeLog.push(`+${rewards.currency} 貨幣`);
                 }
+
+                // Handle item stacking correctly
                 if (rewards.itemId) {
                     const currentItems = user.items || [];
-                    userUpdate.items = [...currentItems, rewards.itemId];
+                    userUpdate.items = [...currentItems, rewards.itemId]; // Append, don't use arrayUnion
                     changeLog.push(`獲得道具「${itemName || rewards.itemId}」`);
                 }
+                
+                // Handle title addition correctly
                 if (rewards.titleId) {
-                    userUpdate.titles = arrayUnion(rewards.titleId);
+                    const currentTitles = user.titles || [];
+                    if (!currentTitles.includes(rewards.titleId)) {
+                        userUpdate.titles = [...currentTitles, rewards.titleId]; // Append if not present
+                    }
                     changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
                 }
 
