@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RefreshCw, Trophy, Database, Wrench } from 'lucide-react';
+import { RefreshCw, Trophy, Database, Wrench, UserPlus } from 'lucide-react';
 import { getArchivedSeasons, getSeasonMvpDetails, ArchivedSeason } from '@/app/actions/get-archived-seasons';
 import { FACTIONS } from '@/lib/game-data';
 import {
@@ -43,9 +43,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { resetSeason } from '@/app/actions/reset-season';
 import { updateMaintenanceStatus } from '@/app/actions/update-maintenance-status';
+import { updateRegistrationStatus } from '@/app/actions/update-registration-status';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import type { MaintenanceStatus } from '@/lib/types';
+import type { MaintenanceStatus, RegistrationStatus } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
@@ -107,21 +108,31 @@ function ConflictManagement({ onActionComplete }: { onActionComplete: () => void
   )
 }
 
-function DatabaseManagement() {
+function SystemSettingsManagement() {
     const { toast } = useToast();
     const firestore = useFirestore();
+    
     const maintenanceDocRef = useMemoFirebase(() => doc(firestore, 'globals', 'maintenance'), [firestore]);
-    const { data: maintenanceStatus, isLoading } = useDoc<MaintenanceStatus>(maintenanceDocRef);
-    const [isSaving, setIsSaving] = useState(false);
+    const { data: maintenanceStatus, isLoading: isMaintenanceLoading } = useDoc<MaintenanceStatus>(maintenanceDocRef);
+    
+    const registrationDocRef = useMemoFirebase(() => doc(firestore, 'globals', 'registration'), [firestore]);
+    const { data: registrationStatus, isLoading: isRegistrationLoading } = useDoc<RegistrationStatus>(registrationDocRef);
+    
+    const [isSaving, setIsSaving] = useState<Record<string, boolean>>({});
 
-    const handleMaintenanceToggle = async (enabled: boolean) => {
-        setIsSaving(true);
+    const handleStatusToggle = async (type: 'maintenance' | 'registration', enabled: boolean) => {
+        setIsSaving(prev => ({ ...prev, [type]: true }));
         try {
-            const result = await updateMaintenanceStatus(enabled);
+            let result;
+            if (type === 'maintenance') {
+                 result = await updateMaintenanceStatus(enabled);
+            } else {
+                 result = await updateRegistrationStatus(enabled);
+            }
             if (result.error) throw new Error(result.error);
             toast({
                 title: '成功',
-                description: `維護模式已${enabled ? '開啟' : '關閉'}。`,
+                description: `${type === 'maintenance' ? '維護模式' : '註冊功能'}已${enabled ? '開啟' : '關閉'}。`,
             });
         } catch (error: any) {
             toast({
@@ -130,30 +141,49 @@ function DatabaseManagement() {
                 description: error.message,
             });
         } finally {
-            setIsSaving(false);
+            setIsSaving(prev => ({ ...prev, [type]: false }));
         }
     };
     
     return (
         <Card>
             <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5" /> 伺服器維修模式</CardTitle>
-                <CardDescription>開啟後，所有非管理員玩家將看到維修頁面，無法存取遊戲內容。</CardDescription>
+                <CardTitle className="flex items-center gap-2"><Database className="h-5 w-5" /> 伺服器與系統設定</CardTitle>
+                <CardDescription>管理伺服器維護模式與新玩家註冊功能。</CardDescription>
             </CardHeader>
-            <CardContent>
-                {isLoading ? (
+            <CardContent className="space-y-6">
+                 {isMaintenanceLoading ? (
                     <Skeleton className="h-10 w-48" />
                 ) : (
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-4 p-4 border rounded-lg">
+                        <Wrench className="h-6 w-6 text-muted-foreground" />
+                        <div className="flex-1">
+                             <Label htmlFor="maintenance-mode" className="font-semibold">維修模式</Label>
+                             <p className="text-xs text-muted-foreground">開啟後，所有非管理員玩家將看到維修頁面。</p>
+                        </div>
                         <Switch
                             id="maintenance-mode"
                             checked={maintenanceStatus?.isMaintenance || false}
-                            onCheckedChange={handleMaintenanceToggle}
-                            disabled={isSaving}
+                            onCheckedChange={(checked) => handleStatusToggle('maintenance', checked)}
+                            disabled={isSaving['maintenance']}
                         />
-                        <Label htmlFor="maintenance-mode" className={maintenanceStatus?.isMaintenance ? 'text-destructive' : 'text-green-500'}>
-                            {isSaving ? '更新中...' : maintenanceStatus?.isMaintenance ? '維修模式已開啟' : '維修模式已關閉'}
-                        </Label>
+                    </div>
+                )}
+                 {isRegistrationLoading ? (
+                    <Skeleton className="h-10 w-48" />
+                ) : (
+                    <div className="flex items-center space-x-4 p-4 border rounded-lg">
+                        <UserPlus className="h-6 w-6 text-muted-foreground" />
+                        <div className="flex-1">
+                             <Label htmlFor="registration-mode" className="font-semibold">註冊功能</Label>
+                             <p className="text-xs text-muted-foreground">關閉後，登入頁面將隱藏註冊表單。</p>
+                        </div>
+                        <Switch
+                            id="registration-mode"
+                            checked={registrationStatus?.isOpen ?? true}
+                            onCheckedChange={(checked) => handleStatusToggle('registration', checked)}
+                            disabled={isSaving['registration']}
+                        />
                     </div>
                 )}
             </CardContent>
@@ -247,7 +277,7 @@ export default function HistoryPage() {
         <Tabs defaultValue="history">
             <TabsList className="grid grid-cols-2">
                 <TabsTrigger value="history">歷史賽季</TabsTrigger>
-                <TabsTrigger value="database">資料庫與維護</TabsTrigger>
+                <TabsTrigger value="database">資料庫與系統</TabsTrigger>
             </TabsList>
             <TabsContent value="history" className="mt-4">
                 <Card>
@@ -327,7 +357,7 @@ export default function HistoryPage() {
             </TabsContent>
             <TabsContent value="database" className="mt-4 space-y-6">
                 <ConflictManagement onActionComplete={fetchData} />
-                <DatabaseManagement />
+                <SystemSettingsManagement />
             </TabsContent>
         </Tabs>
     </div>

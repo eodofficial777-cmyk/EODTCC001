@@ -143,6 +143,11 @@ export interface MaintenanceStatus {
   isMaintenance: boolean;
 }
 
+export interface RegistrationStatus {
+  isOpen: boolean;
+}
+
+
 export interface Monster {
     monsterId: string;
     name: string;

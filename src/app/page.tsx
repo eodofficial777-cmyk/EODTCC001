@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -37,7 +38,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { useAuth, useFirestore } from '@/firebase';
+import { useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -46,6 +47,8 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { RACES, FACTIONS } from '@/lib/game-data';
+import type { RegistrationStatus } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const registerSchema = z.object({
   account: z.string().min(1, '登入帳號為必填'),
@@ -83,6 +86,10 @@ export default function AuthPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const router = useRouter();
+
+  const registrationStatusRef = useMemoFirebase(() => doc(firestore, 'globals', 'registration'), [firestore]);
+  const { data: registrationStatus, isLoading: isRegistrationLoading } = useDoc<RegistrationStatus>(registrationStatusRef);
+  const isRegistrationOpen = registrationStatus?.isOpen ?? true; // Default to open if not set
 
   const registerForm = useForm<z.infer<typeof registerSchema>>({
     resolver: zodResolver(registerSchema),
@@ -207,7 +214,7 @@ export default function AuthPage() {
           <Tabs defaultValue="login">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">登入</TabsTrigger>
-              <TabsTrigger value="register">註冊</TabsTrigger>
+              <TabsTrigger value="register" disabled={!isRegistrationOpen || isRegistrationLoading}>註冊</TabsTrigger>
             </TabsList>
             <TabsContent value="login">
               <CardHeader className="p-2 pt-4 text-center">
@@ -268,6 +275,20 @@ export default function AuthPage() {
               </Form>
             </TabsContent>
             <TabsContent value="register">
+              {isRegistrationLoading ? (
+                  <div className="p-2 pt-4 space-y-4">
+                      <Skeleton className="h-8 w-1/2 mx-auto" />
+                      <Skeleton className="h-4 w-3/4 mx-auto" />
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                  </div>
+              ) : !isRegistrationOpen ? (
+                <div className="text-center p-8">
+                  <h3 className="text-lg font-semibold">註冊暫未開放</h3>
+                  <p className="text-muted-foreground mt-2 text-sm">敬請期待下次報名，感謝您的關注！</p>
+                </div>
+              ) : (
+              <>
               <CardHeader className="p-2 pt-4 text-center">
                 <CardTitle className="text-2xl font-headline">註冊</CardTitle>
                 <CardDescription>建立您的新角色帳戶</CardDescription>
@@ -418,6 +439,8 @@ export default function AuthPage() {
                   </div>
                 </form>
               </Form>
+              </>
+            )}
             </TabsContent>
           </Tabs>
         </CardContent>

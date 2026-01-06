@@ -464,6 +464,14 @@
         "description": "Global maintenance status of the application.",
         "properties": { "isMaintenance": { "type": "boolean" } },
         "required": ["isMaintenance"]
+    },
+    "RegistrationStatus": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "RegistrationStatus",
+        "type": "object",
+        "description": "Global registration status of the application.",
+        "properties": { "isOpen": { "type": "boolean" } },
+        "required": ["isOpen"]
     }
   },
   "auth": {
@@ -484,9 +492,8 @@
       { "path": "/combatEncounters/{combatEncounterId}/combatLogs/{combatLogId}", "definition": { "schema": { "$ref": "#/entities/CombatLog" } } },
       { "path": "/titles/{titleId}", "definition": { "schema": { "$ref": "#/entities/Title" } } },
       { "path": "/skills/{skillId}", "definition": { "schema": { "$ref": "#/entities/Skill" } } },
-      { "path": "/globals/maintenance", "definition": { "schema": { "$ref": "#/entities/Maintenance" } } }
+      { "path": "/globals/maintenance", "definition": { "schema": { "$ref": "#/entities/Maintenance" } } },
+      { "path": "/globals/registration", "definition": { "schema": { "$ref": "#/entities/RegistrationStatus" } } }
     ]
   }
 }
-
-    
