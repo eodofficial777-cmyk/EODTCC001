@@ -1,3 +1,4 @@
+
 'use client';
 
 import Image from 'next/image';
@@ -57,6 +58,7 @@ const itemTypeTranslations: { [key in Item['itemTypeId']]: string } = {
   equipment: '裝備',
   consumable: '戰鬥道具',
   special: '特殊道具',
+  stat_boost: '能力提升',
 };
 
 const ItemCard = ({ item, userData, onBuy, isBuying }: { item: Item, userData: any, onBuy: (item: Item) => void, isBuying: boolean }) => {
@@ -182,8 +184,8 @@ export default function StorePage() {
   const renderContent = (filteredItems: Item[]) => {
     if (isLoading) {
       return (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="grid grid-cols-2 gap-6 lg:grid-cols-3">
+          {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
               <CardHeader>
                 <Skeleton className="aspect-square w-full mb-4"/>
@@ -211,7 +213,7 @@ export default function StorePage() {
     }
     
     return (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-6 lg:grid-cols-3">
             {userData && filteredItems.map((item) => (
                 <ItemCard 
                     key={item.id}
@@ -228,13 +230,15 @@ export default function StorePage() {
   const equipmentItems = items?.filter(item => item.itemTypeId === 'equipment') || [];
   const consumableItems = items?.filter(item => item.itemTypeId === 'consumable') || [];
   const specialItems = items?.filter(item => item.itemTypeId === 'special') || [];
+  const statBoostItems = items?.filter(item => item.itemTypeId === 'stat_boost') || [];
 
   return (
     <Tabs defaultValue="equipment" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="equipment">{itemTypeTranslations.equipment}</TabsTrigger>
             <TabsTrigger value="consumable">{itemTypeTranslations.consumable}</TabsTrigger>
             <TabsTrigger value="special">{itemTypeTranslations.special}</TabsTrigger>
+            <TabsTrigger value="stat_boost">{itemTypeTranslations.stat_boost}</TabsTrigger>
         </TabsList>
         <TabsContent value="equipment" className="mt-6">
             {renderContent(equipmentItems)}
@@ -244,6 +248,9 @@ export default function StorePage() {
         </TabsContent>
         <TabsContent value="special" className="mt-6">
             {renderContent(specialItems)}
+        </TabsContent>
+         <TabsContent value="stat_boost" className="mt-6">
+            {renderContent(statBoostItems)}
         </TabsContent>
     </Tabs>
   );
