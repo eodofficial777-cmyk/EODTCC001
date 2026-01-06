@@ -13,6 +13,8 @@ import {
   getDoc,
   updateDoc,
   increment,
+  DocumentReference,
+  Transaction,
 } from 'firebase/firestore';
 import { initializeApp, getApps, App } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
@@ -70,21 +72,16 @@ interface AwardPayload {
 }
 
 
-async function awardSingleUser(transaction: any, userId: string, reward: RewardPayload, logMessage: string) {
+async function awardSingleUser(
+    transaction: Transaction, 
+    userId: string, 
+    reward: RewardPayload, 
+    logMessage: string,
+    // Pass pre-fetched names to avoid reads inside transaction
+    dataNames: { itemName: string, titleName: string }
+) {
     const userRef = doc(db, 'users', userId);
     
-    let itemName = '';
-    if (reward.itemId) {
-        const itemSnap = await transaction.get(doc(db, 'items', reward.itemId));
-        if (itemSnap.exists()) itemName = (itemSnap.data() as Item).name;
-    }
-    
-    let titleName = '';
-    if (reward.titleId) {
-        const titleSnap = await transaction.get(doc(db, 'titles', reward.titleId));
-        if (titleSnap.exists()) titleName = (titleSnap.data() as Title).name;
-    }
-
     const userUpdate: { [key: string]: any } = {};
     const changeLog: string[] = [];
 
@@ -99,11 +96,11 @@ async function awardSingleUser(transaction: any, userId: string, reward: RewardP
     }
     if (reward.itemId) {
         userUpdate.items = arrayUnion(reward.itemId);
-        changeLog.push(`獲得道具「${itemName || reward.itemId}」`);
+        changeLog.push(`獲得道具「${dataNames.itemName || reward.itemId}」`);
     }
     if (reward.titleId) {
         userUpdate.titles = arrayUnion(reward.titleId);
-        changeLog.push(`獲得稱號「${titleName || reward.titleId}」`);
+        changeLog.push(`獲得稱號「${dataNames.titleName || reward.titleId}」`);
     }
     
     if (Object.keys(userUpdate).length > 0) {
@@ -184,6 +181,17 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
         return { success: true, damageStats };
     }
 
+    // --- Pre-fetch all necessary data BEFORE the transaction ---
+    const allRewardPayloads = [thresholdReward, topYeluPlayerReward, topAssociationPlayerReward, topWandererPlayerReward];
+    const uniqueTitleIds = [...new Set(allRewardPayloads.map(r => r.titleId).filter(Boolean))] as string[];
+    const uniqueItemIds = [...new Set(allRewardPayloads.map(r => r.itemId).filter(Boolean))] as string[];
+    
+    const titleDocs = uniqueTitleIds.length > 0 ? await Promise.all(uniqueTitleIds.map(id => getDoc(doc(db, 'titles', id)))) : [];
+    const itemDocs = uniqueItemIds.length > 0 ? await Promise.all(uniqueItemIds.map(id => getDoc(doc(db, 'items', id)))) : [];
+
+    const titleNames = new Map(titleDocs.map(d => [d.id, (d.data() as Title)?.name || '']));
+    const itemNames = new Map(itemDocs.map(d => [d.id, (d.data() as Item)?.name || '']));
+
     let messages: string[] = [];
 
     await runTransaction(db, async (transaction) => {
@@ -195,14 +203,12 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
             const userIdsToAward = Array.from(damageByUser.entries())
                 .filter(([_, totalDamage]) => totalDamage >= thresholdReward.damageThreshold)
                 .map(([userId, _]) => userId);
-
+            
+            const titleName = titleNames.get(thresholdReward.titleId) || '未知稱號';
             if (userIdsToAward.length > 0) {
-                 const titleSnap = await transaction.get(doc(db, 'titles', thresholdReward.titleId));
-                 if (!titleSnap.exists()) throw new Error(`找不到傷害閾值獎勵的稱號 ID: ${thresholdReward.titleId}`);
-                 const titleName = (titleSnap.data() as Title).name;
-                
                 for (const userId of userIdsToAward) {
                     const userRef = doc(db, 'users', userId);
+                    // Read must be done before write, but we can do it conditionally.
                     const userSnap = await transaction.get(userRef);
                     if (userSnap.exists()) {
                          transaction.update(userRef, { titles: arrayUnion(thresholdReward.titleId) });
@@ -232,22 +238,32 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
         const topAssociationPlayer = associationPlayers.length > 0 ? associationPlayers[0] : undefined;
         const topWandererPlayer = wandererPlayers.length > 0 ? wandererPlayers[0] : undefined;
 
-
         if (topYeluPlayerReward.enabled && topYeluPlayer) {
-            await awardSingleUser(transaction, topYeluPlayer.userId, topYeluPlayerReward, `作為夜鷺陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`);
+            const dataNames = {
+                itemName: itemNames.get(topYeluPlayerReward.itemId || '') || '',
+                titleName: titleNames.get(topYeluPlayerReward.titleId || '') || ''
+            };
+            await awardSingleUser(transaction, topYeluPlayer.userId, topYeluPlayerReward, `作為夜鷺陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`, dataNames);
             messages.push(`已為夜鷺陣營傷害冠軍 ${topYeluPlayer.roleName} (傷害: ${topYeluPlayer.totalDamage}) 發放獎勵。`);
         }
         
         if (topAssociationPlayerReward.enabled && topAssociationPlayer) {
-            await awardSingleUser(transaction, topAssociationPlayer.userId, topAssociationPlayerReward, `作為協會陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`);
+            const dataNames = {
+                itemName: itemNames.get(topAssociationPlayerReward.itemId || '') || '',
+                titleName: titleNames.get(topAssociationPlayerReward.titleId || '') || ''
+            };
+            await awardSingleUser(transaction, topAssociationPlayer.userId, topAssociationPlayerReward, `作為協會陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`, dataNames);
             messages.push(`已為協會陣營傷害冠軍 ${topAssociationPlayer.roleName} (傷害: ${topAssociationPlayer.totalDamage}) 發放獎勵。`);
         }
         
         if (topWandererPlayerReward.enabled && topWandererPlayer) {
-            await awardSingleUser(transaction, topWandererPlayer.userId, topWandererPlayerReward, `作為流浪者/其他陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`);
+            const dataNames = {
+                itemName: itemNames.get(topWandererPlayerReward.itemId || '') || '',
+                titleName: titleNames.get(topWandererPlayerReward.titleId || '') || ''
+            };
+            await awardSingleUser(transaction, topWandererPlayer.userId, topWandererPlayerReward, `作為流浪者/其他陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`, dataNames);
             messages.push(`已為流浪者/其他陣營傷害冠軍 ${topWandererPlayer.roleName} (傷害: ${topWandererPlayer.totalDamage}) 發放獎勵。`);
         }
-
     });
 
     return { success: true, message: messages.join('\n') || '沒有設定任何獎勵，或無人符合條件。' };
