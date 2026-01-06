@@ -190,39 +190,44 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                 if (!userSnap.exists()) return;
 
                 const user = userSnap.data() as User;
-                const userUpdate: { [key: string]: any } = {};
                 let changeLog = [];
 
+                // --- Step 1: Handle numeric increments ---
+                const numericUpdates: { [key: string]: any } = {};
                 if (rewards.honorPoints) {
-                    userUpdate.honorPoints = increment(rewards.honorPoints);
+                    numericUpdates.honorPoints = increment(rewards.honorPoints);
                     changeLog.push(`+${rewards.honorPoints} 榮譽點`);
                 }
                 if (rewards.currency) {
-                    userUpdate.currency = increment(rewards.currency);
-                    userUpdate.totalCurrencyEarned = increment(rewards.currency); // Also increment total
+                    numericUpdates.currency = increment(rewards.currency);
+                    numericUpdates.totalCurrencyEarned = increment(rewards.currency);
                     changeLog.push(`+${rewards.currency} 貨幣`);
                 }
+                if (Object.keys(numericUpdates).length > 0) {
+                    transaction.update(userRef, numericUpdates);
+                }
 
-                // Handle item stacking correctly
+                // --- Step 2: Handle array appends ---
+                const arrayUpdates: { [key: string]: any } = {};
+                let userItems = user.items || [];
+                let userTitles = user.titles || [];
+
                 if (rewards.itemId) {
-                    const currentItems = user.items || [];
-                    userUpdate.items = [...currentItems, rewards.itemId]; // Append, don't use arrayUnion
+                    userItems.push(rewards.itemId);
+                    arrayUpdates.items = userItems;
                     changeLog.push(`獲得道具「${itemName || rewards.itemId}」`);
                 }
-                
-                // Handle title addition correctly
-                if (rewards.titleId) {
-                    const currentTitles = user.titles || [];
-                    if (!currentTitles.includes(rewards.titleId)) {
-                        userUpdate.titles = [...currentTitles, rewards.titleId]; // Append if not present
-                    }
+                if (rewards.titleId && !userTitles.includes(rewards.titleId)) {
+                    userTitles.push(rewards.titleId);
+                    arrayUpdates.titles = userTitles;
                     changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
                 }
 
-                if (Object.keys(userUpdate).length > 0) {
-                    transaction.update(userRef, userUpdate);
+                if (Object.keys(arrayUpdates).length > 0) {
+                    transaction.update(userRef, arrayUpdates);
                 }
-
+                
+                // --- Step 3: Create Activity Log ---
                 const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
                 transaction.set(activityLogRef, {
                     id: activityLogRef.id,
