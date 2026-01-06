@@ -8,7 +8,6 @@ import {
   getDocs,
   doc,
   runTransaction,
-  arrayUnion,
   serverTimestamp,
   getDoc,
   updateDoc,
@@ -74,48 +73,55 @@ interface AwardPayload {
 
 async function awardSingleUser(
     transaction: Transaction, 
-    userId: string, 
+    userRef: DocumentReference,
     reward: RewardPayload, 
     logMessage: string,
-    // Pass pre-fetched names to avoid reads inside transaction
     dataNames: { itemName: string, titleName: string }
 ) {
-    const userRef = doc(db, 'users', userId);
-    
-    const userUpdate: { [key: string]: any } = {};
+    const userSnap = await transaction.get(userRef);
+    if (!userSnap.exists()) return;
+
+    const user = userSnap.data() as User;
+    const updates: { [key: string]: any } = {};
     const changeLog: string[] = [];
 
+    // --- Manual Calculation for all fields ---
     if (reward.honorPoints) {
-        userUpdate.honorPoints = increment(reward.honorPoints);
+        updates.honorPoints = (user.honorPoints || 0) + reward.honorPoints;
         changeLog.push(`+${reward.honorPoints} 榮譽點`);
     }
     if (reward.currency) {
-        userUpdate.currency = increment(reward.currency);
-        userUpdate.totalCurrencyEarned = increment(reward.currency);
+        updates.currency = (user.currency || 0) + reward.currency;
+        updates.totalCurrencyEarned = (user.totalCurrencyEarned || 0) + reward.currency;
         changeLog.push(`+${reward.currency} 貨幣`);
     }
     if (reward.itemId) {
-        userUpdate.items = arrayUnion(reward.itemId);
+        updates.items = [...(user.items || []), reward.itemId];
         changeLog.push(`獲得道具「${dataNames.itemName || reward.itemId}」`);
     }
     if (reward.titleId) {
-        userUpdate.titles = arrayUnion(reward.titleId);
+        const newTitles = [...(user.titles || [])];
+        if (!newTitles.includes(reward.titleId)) {
+            newTitles.push(reward.titleId);
+        }
+        updates.titles = newTitles;
         changeLog.push(`獲得稱號「${dataNames.titleName || reward.titleId}」`);
     }
     
-    if (Object.keys(userUpdate).length > 0) {
-        transaction.update(userRef, userUpdate);
+    if (Object.keys(updates).length > 0) {
+        transaction.update(userRef, updates);
     }
 
-    const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
+    const activityLogRef = doc(collection(db, `users/${user.id}/activityLogs`));
     transaction.set(activityLogRef, {
         id: activityLogRef.id,
-        userId: userId,
+        userId: user.id,
         timestamp: serverTimestamp(),
         description: logMessage,
         change: changeLog.join(', ') || '系統紀錄'
     });
 }
+
 
 function parseDamageFromLog(logData: string): number {
     const damageMatch = logData.match(/造成 (\d+) 點傷害/);
@@ -156,10 +162,8 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
         if (log.userId) {
             let damageDealt = 0;
             if (log.damage && typeof log.damage === 'number' && log.damage > 0) {
-                // New method: use the 'damage' field directly
                 damageDealt = log.damage;
             } else if (log.logData) {
-                // Fallback for old logs: parse from logData string
                 damageDealt = parseDamageFromLog(log.logData);
             }
 
@@ -181,7 +185,6 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
         return { success: true, damageStats };
     }
 
-    // --- Pre-fetch all necessary data BEFORE the transaction ---
     const allRewardPayloads = [thresholdReward, topYeluPlayerReward, topAssociationPlayerReward, topWandererPlayerReward];
     const uniqueTitleIds = [...new Set(allRewardPayloads.map(r => r.titleId).filter(Boolean))] as string[];
     const uniqueItemIds = [...new Set(allRewardPayloads.map(r => r.itemId).filter(Boolean))] as string[];
@@ -194,25 +197,37 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
 
     let messages: string[] = [];
 
-    await runTransaction(db, async (transaction) => {
-        // --- 3a. Process Threshold Reward ---
-        if (thresholdReward.enabled) {
-            if (!thresholdReward.titleId || thresholdReward.damageThreshold <= 0) {
-                throw new Error('傷害閾值獎勵設定不完整。');
-            }
-            const userIdsToAward = Array.from(damageByUser.entries())
-                .filter(([_, totalDamage]) => totalDamage >= thresholdReward.damageThreshold)
-                .map(([userId, _]) => userId);
-            
-            const titleName = titleNames.get(thresholdReward.titleId) || '未知稱號';
-            if (userIdsToAward.length > 0) {
-                for (const userId of userIdsToAward) {
-                    const userRef = doc(db, 'users', userId);
-                    // Read must be done before write, but we can do it conditionally.
-                    const userSnap = await transaction.get(userRef);
-                    if (userSnap.exists()) {
-                         transaction.update(userRef, { titles: arrayUnion(thresholdReward.titleId) });
+    const yeluPlayers = damageStats.filter(p => p.factionId === 'yelu');
+    const associationPlayers = damageStats.filter(p => p.factionId === 'association');
+    const wandererPlayers = damageStats.filter(p => p.factionId !== 'yelu' && p.factionId !== 'association');
 
+    const topYeluPlayer = yeluPlayers.length > 0 ? yeluPlayers[0] : undefined;
+    const topAssociationPlayer = associationPlayers.length > 0 ? associationPlayers[0] : undefined;
+    const topWandererPlayer = wandererPlayers.length > 0 ? wandererPlayers[0] : undefined;
+
+
+    // --- Process Threshold Reward in a separate transaction ---
+    if (thresholdReward.enabled && thresholdReward.titleId && thresholdReward.damageThreshold > 0) {
+        const userIdsToAward = Array.from(damageByUser.entries())
+            .filter(([_, totalDamage]) => totalDamage >= thresholdReward.damageThreshold)
+            .map(([userId, _]) => userId);
+        
+        const titleName = titleNames.get(thresholdReward.titleId) || '未知稱號';
+        if (userIdsToAward.length > 0) {
+            for (const userId of userIdsToAward) {
+                try {
+                    await runTransaction(db, async (transaction) => {
+                        const userRef = doc(db, 'users', userId);
+                        const userSnap = await transaction.get(userRef);
+                        if (!userSnap.exists()) return;
+
+                        const user = userSnap.data() as User;
+                        const newTitles = [...(user.titles || [])];
+                        if (!newTitles.includes(thresholdReward.titleId)) {
+                             newTitles.push(thresholdReward.titleId);
+                             transaction.update(userRef, { titles: newTitles });
+                        }
+                        
                         const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
                         transaction.set(activityLogRef, {
                             id: activityLogRef.id,
@@ -221,50 +236,42 @@ export async function awardBattleDamageRewards(payload: AwardPayload): Promise<{
                             description: `在戰役「${battleData.name}」中造成大量傷害，獲得了特殊成就。`,
                             change: `獲得稱號「${titleName}」`
                         });
-                    }
+                    });
+                } catch (e: any) {
+                     console.error(`Failed to award threshold title to ${userId}:`, e.message);
                 }
-                messages.push(`已為 ${userIdsToAward.length} 位傷害超過 ${thresholdReward.damageThreshold} 的玩家授予「${titleName}」稱號。`);
-            } else {
-                 messages.push(`沒有玩家達到 ${thresholdReward.damageThreshold} 的傷害閾值。`);
             }
+            messages.push(`已為 ${userIdsToAward.length} 位傷害超過 ${thresholdReward.damageThreshold} 的玩家授予「${titleName}」稱號。`);
+        } else {
+             messages.push(`沒有玩家達到 ${thresholdReward.damageThreshold} 的傷害閾值。`);
         }
+    }
 
-        // --- 3b. Process Top Player Rewards ---
-        const yeluPlayers = damageStats.filter(p => p.factionId === 'yelu');
-        const associationPlayers = damageStats.filter(p => p.factionId === 'association');
-        const wandererPlayers = damageStats.filter(p => p.factionId !== 'yelu' && p.factionId !== 'association');
+    // --- Process MVP Rewards in individual transactions ---
+    const mvpAwards = [
+      { condition: topYeluPlayerReward.enabled && topYeluPlayer, player: topYeluPlayer, reward: topYeluPlayerReward, label: `夜鷺陣營傷害冠軍` },
+      { condition: topAssociationPlayerReward.enabled && topAssociationPlayer, player: topAssociationPlayer, reward: topAssociationPlayerReward, label: `協會陣營傷害冠軍` },
+      { condition: topWandererPlayerReward.enabled && topWandererPlayer, player: topWandererPlayer, reward: topWandererPlayerReward, label: `流浪者傷害冠軍` },
+    ];
 
-        const topYeluPlayer = yeluPlayers.length > 0 ? yeluPlayers[0] : undefined;
-        const topAssociationPlayer = associationPlayers.length > 0 ? associationPlayers[0] : undefined;
-        const topWandererPlayer = wandererPlayers.length > 0 ? wandererPlayers[0] : undefined;
-
-        if (topYeluPlayerReward.enabled && topYeluPlayer) {
+    for (const award of mvpAwards) {
+      if (award.condition) {
+        try {
+          await runTransaction(db, async (transaction) => {
+            const userRef = doc(db, 'users', award.player!.userId);
             const dataNames = {
-                itemName: itemNames.get(topYeluPlayerReward.itemId || '') || '',
-                titleName: titleNames.get(topYeluPlayerReward.titleId || '') || ''
+              itemName: itemNames.get(award.reward.itemId || '') || '',
+              titleName: titleNames.get(award.reward.titleId || '') || ''
             };
-            await awardSingleUser(transaction, topYeluPlayer.userId, topYeluPlayerReward, `作為夜鷺陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`, dataNames);
-            messages.push(`已為夜鷺陣營傷害冠軍 ${topYeluPlayer.roleName} (傷害: ${topYeluPlayer.totalDamage}) 發放獎勵。`);
+            await awardSingleUser(transaction, userRef, award.reward, `作為${award.label}，在「${battleData.name}」中獲得獎勵。`, dataNames);
+          });
+          messages.push(`已為${award.label} ${award.player!.roleName} (傷害: ${award.player!.totalDamage}) 發放獎勵。`);
+        } catch (e: any) {
+          messages.push(`為${award.label} ${award.player!.roleName}發放獎勵時失敗: ${e.message}`);
+          console.error(`Failed to award MVP reward to ${award.player!.userId}:`, e.message);
         }
-        
-        if (topAssociationPlayerReward.enabled && topAssociationPlayer) {
-            const dataNames = {
-                itemName: itemNames.get(topAssociationPlayerReward.itemId || '') || '',
-                titleName: titleNames.get(topAssociationPlayerReward.titleId || '') || ''
-            };
-            await awardSingleUser(transaction, topAssociationPlayer.userId, topAssociationPlayerReward, `作為協會陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`, dataNames);
-            messages.push(`已為協會陣營傷害冠軍 ${topAssociationPlayer.roleName} (傷害: ${topAssociationPlayer.totalDamage}) 發放獎勵。`);
-        }
-        
-        if (topWandererPlayerReward.enabled && topWandererPlayer) {
-            const dataNames = {
-                itemName: itemNames.get(topWandererPlayerReward.itemId || '') || '',
-                titleName: titleNames.get(topWandererPlayerReward.titleId || '') || ''
-            };
-            await awardSingleUser(transaction, topWandererPlayer.userId, topWandererPlayerReward, `作為流浪者/其他陣營傷害冠軍，在「${battleData.name}」中獲得獎勵。`, dataNames);
-            messages.push(`已為流浪者/其他陣營傷害冠軍 ${topWandererPlayer.roleName} (傷害: ${topWandererPlayer.totalDamage}) 發放獎勵。`);
-        }
-    });
+      }
+    }
 
     return { success: true, message: messages.join('\n') || '沒有設定任何獎勵，或無人符合條件。' };
 

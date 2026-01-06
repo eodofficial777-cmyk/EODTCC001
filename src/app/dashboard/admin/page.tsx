@@ -2192,7 +2192,7 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
                 // Calculate MVPs
                 const yeluPlayers = stats.filter(p => p.factionId === 'yelu');
                 const associationPlayers = stats.filter(p => p.factionId === 'association');
-                const wandererPlayers = stats.filter(p => p.factionId !== 'yelu' && p.factionId !== 'association');
+                const wandererPlayers = stats.filter(p => p.factionId === 'wanderer');
 
                 setMvps({
                     yelu: yeluPlayers.length > 0 ? yeluPlayers[0] : null,
@@ -2329,7 +2329,7 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
                     {[
                         { id: 'yelu', label: '夜鷺', state: topYeluPlayerReward, setter: setTopYeluPlayerReward },
                         { id: 'association', label: '協會', state: topAssociationPlayerReward, setter: setTopAssociationPlayerReward },
-                        { id: 'wanderer', label: '流浪者/其他', state: topWandererPlayerReward, setter: setTopWandererPlayerReward },
+                        { id: 'wanderer', label: '流浪者', state: topWandererPlayerReward, setter: setTopWandererPlayerReward },
                     ].map(({ id, label, state, setter }) => {
                         const factionInfo = FACTIONS[id as keyof typeof FACTIONS];
                         return (
