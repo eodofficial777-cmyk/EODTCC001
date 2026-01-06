@@ -150,10 +150,8 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
     let finalUserIds: string[] = [];
 
     if (targetUserIds && targetUserIds.length > 0) {
-        // If specific users are targeted, we use them directly
         finalUserIds = targetUserIds;
     } else if (filters) {
-        // If filters are provided, we must fetch and filter
         const usersQuery = query(collection(db, 'users'), where('approved', '==', true));
         const usersSnapshot = await getDocs(usersQuery);
         finalUserIds = usersSnapshot.docs
@@ -190,7 +188,6 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                 const updates: { [key: string]: any } = {};
                 let changeLog = [];
 
-                // --- MANUALLY CALCULATE AND UPDATE ---
                 if (rewards.honorPoints) {
                     updates.honorPoints = (user.honorPoints || 0) + rewards.honorPoints;
                     changeLog.push(`+${rewards.honorPoints} 榮譽點`);
@@ -202,22 +199,18 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
                 }
 
                 if (rewards.itemId) {
-                    const newItems = [...(user.items || [])];
-                    newItems.push(rewards.itemId);
-                    updates.items = newItems; // *** THIS WAS THE MISSING LINE ***
+                    updates.items = [...(user.items || []), rewards.itemId];
                     changeLog.push(`獲得道具「${itemName || rewards.itemId}」`);
                 }
 
                 if (rewards.titleId) {
-                    const newTitles = [...(user.titles || [])];
-                    if (!newTitles.includes(rewards.titleId)) {
-                        newTitles.push(rewards.titleId);
+                    const currentTitles = user.titles || [];
+                    if (!currentTitles.includes(rewards.titleId)) {
+                        updates.titles = [...currentTitles, rewards.titleId];
                     }
-                    updates.titles = newTitles; // *** THIS WAS THE MISSING LINE ***
                     changeLog.push(`獲得稱號「${titleName || rewards.titleId}」`);
                 }
                 
-                // Perform a single update operation with all calculated changes.
                 if (Object.keys(updates).length > 0) {
                     transaction.update(userRef, updates);
                 }
@@ -234,7 +227,6 @@ export async function distributeRewards(payload: DistributionPayload): Promise<{
             processedCount++;
         } catch (e) {
             console.error(`Failed to process reward for user ${userId}:`, e);
-            // Decide if you want to stop the whole process or just log and continue
         }
     }
     
