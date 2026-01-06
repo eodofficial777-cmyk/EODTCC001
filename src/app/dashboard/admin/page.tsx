@@ -338,7 +338,7 @@ function AccountApproval() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.values(FACTIONS).map((f) => (
+                        {Object.values(FACTIONS).filter(f => f.id !== 'common').map((f) => (
                           <SelectItem key={f.id} value={f.id}>
                             {f.name}
                           </SelectItem>
@@ -2150,6 +2150,7 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
     const [isOpen, setIsOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [damageStats, setDamageStats] = useState<any[] | null>(null);
+    const [mvps, setMvps] = useState<{ yelu?: any, association?: any, wanderer?: any } | null>(null);
 
     const [thresholdReward, setThresholdReward] = useState({ enabled: true, damageThreshold: 1000, titleId: ''});
     const [topYeluPlayerReward, setTopYeluPlayerReward] = useState({ enabled: false, titleId: '', itemId: '', honorPoints: 0, currency: 0 });
@@ -2160,6 +2161,7 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
     const handlePreviewDamage = async () => {
         setIsProcessing(true);
         setDamageStats(null);
+        setMvps(null);
         try {
             const result = await awardBattleDamageRewards({ 
                 battleId, 
@@ -2170,9 +2172,23 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
                 topWandererPlayerReward: { enabled: false },
             });
             if (result.error) throw new Error(result.error);
-            setDamageStats(result.damageStats || []);
-            if (!result.damageStats || result.damageStats.length === 0) {
+            
+            const stats = result.damageStats || [];
+            setDamageStats(stats);
+            
+            if (stats.length === 0) {
                  toast({ variant: 'default', title: '無傷害紀錄', description: '此戰場沒有玩家造成傷害的紀錄。' });
+            } else {
+                // Calculate MVPs
+                const yeluPlayers = stats.filter(p => p.factionId === 'yelu');
+                const associationPlayers = stats.filter(p => p.factionId === 'association');
+                const wandererPlayers = stats.filter(p => p.factionId !== 'yelu' && p.factionId !== 'association');
+
+                setMvps({
+                    yelu: yeluPlayers.length > 0 ? yeluPlayers[0] : null,
+                    association: associationPlayers.length > 0 ? associationPlayers[0] : null,
+                    wanderer: wandererPlayers.length > 0 ? wandererPlayers[0] : null,
+                });
             }
         } catch (error: any) {
             toast({ variant: 'destructive', title: '預覽失敗', description: error.message });
@@ -2218,7 +2234,34 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
                         <Button variant="secondary" onClick={handlePreviewDamage} disabled={isProcessing} className="w-full">
                            <BarChart className="h-4 w-4 mr-2"/> {isProcessing && damageStats === null ? '讀取中...' : '預覽傷害統計'}
                         </Button>
-                        {damageStats && (
+
+                        {mvps && (
+                            <div className="border rounded-lg p-4">
+                                <h4 className="font-semibold mb-2 text-center">陣營 MVP 預覽</h4>
+                                <div className="grid grid-cols-3 gap-2 text-center">
+                                    {[
+                                        { factionId: 'yelu', label: '夜鷺', mvp: mvps.yelu },
+                                        { factionId: 'association', label: '協會', mvp: mvps.association },
+                                        { factionId: 'wanderer', label: '流浪者', mvp: mvps.wanderer },
+                                    ].map(({ factionId, label, mvp }) => {
+                                        const factionInfo = FACTIONS[factionId as keyof typeof FACTIONS];
+                                        return (
+                                            <div key={factionId} className="flex flex-col items-center p-2 rounded-md border">
+                                                <h5 className="font-semibold text-sm" style={{color: factionInfo?.color}}>{label} MVP</h5>
+                                                {mvp ? (
+                                                    <>
+                                                        <p className="font-mono text-base truncate" title={mvp.roleName}>{mvp.roleName}</p>
+                                                        <p className="text-xs text-muted-foreground">{mvp.totalDamage.toLocaleString()} 傷害</p>
+                                                    </>
+                                                ) : <p className="text-xs text-muted-foreground mt-2">無</p>}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {damageStats && damageStats.length > 0 && (
                             <div className="border rounded-md max-h-48 overflow-y-auto">
                                 <Table>
                                     <TableHeader>
@@ -2781,4 +2824,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
