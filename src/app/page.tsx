@@ -38,17 +38,21 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useAuth, useFirestore, useDoc, useMemoFirebase, useStorage } from '@/firebase';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { RACES, FACTIONS } from '@/lib/game-data';
 import type { RegistrationStatus } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+
+const urlSchema = z.string().url('請輸入有效的網址');
+const fileSchema = z.custom<File>((val) => val instanceof File, '請選擇一個檔案').optional();
 
 const registerSchema = z.object({
   account: z.string().min(1, '登入帳號為必填'),
@@ -60,20 +64,27 @@ const registerSchema = z.object({
     .string()
     .url('請輸入有效的網址')
     .startsWith('https://www.plurk.com/', '噗浪帳號必須以 https://www.plurk.com/ 開頭'),
-  characterSheet: z
-    .string()
-    .url('請輸入有效的網址')
-    .startsWith(
-      'https://images.plurk.com/',
-      '角色卡必須以 https://images.plurk.com/ 開頭'
-    ),
-  avatar: z
-    .string()
-    .url('請輸入有效的網址')
-    .startsWith(
-      'https://images.plurk.com/',
-      '大頭貼必須以 https://images.plurk.com/ 開頭'
-    ),
+  
+  avatarType: z.enum(['url', 'upload']),
+  avatarUrl: z.string().optional(),
+  avatarFile: fileSchema,
+
+  characterSheetType: z.enum(['url', 'upload']),
+  characterSheetUrl: z.string().optional(),
+  characterSheetFile: fileSchema,
+}).superRefine((data, ctx) => {
+    if (data.avatarType === 'url' && (!data.avatarUrl || !urlSchema.safeParse(data.avatarUrl).success)) {
+        ctx.addIssue({ code: 'custom', message: '請輸入有效的大頭貼網址', path: ['avatarUrl'] });
+    }
+    if (data.avatarType === 'upload' && !data.avatarFile) {
+        ctx.addIssue({ code: 'custom', message: '請選擇一個大頭貼檔案', path: ['avatarFile'] });
+    }
+    if (data.characterSheetType === 'url' && (!data.characterSheetUrl || !urlSchema.safeParse(data.characterSheetUrl).success)) {
+        ctx.addIssue({ code: 'custom', message: '請輸入有效的角色卡網址', path: ['characterSheetUrl'] });
+    }
+    if (data.characterSheetType === 'upload' && !data.characterSheetFile) {
+        ctx.addIssue({ code: 'custom', message: '請選擇一個角色卡檔案', path: ['characterSheetFile'] });
+    }
 });
 
 const loginSchema = z.object({
@@ -84,6 +95,7 @@ const loginSchema = z.object({
 export default function AuthPage() {
   const auth = useAuth();
   const firestore = useFirestore();
+  const storage = useStorage();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -98,8 +110,10 @@ export default function AuthPage() {
       characterName: '',
       password: '',
       plurkAccount: 'https://www.plurk.com/',
-      characterSheet: 'https://images.plurk.com/',
-      avatar: 'https://images.plurk.com/',
+      avatarType: 'url',
+      avatarUrl: 'https://images.plurk.com/',
+      characterSheetType: 'url',
+      characterSheetUrl: 'https://images.plurk.com/',
     },
   });
 
@@ -110,6 +124,13 @@ export default function AuthPage() {
       password: '',
     },
   });
+
+  const uploadFile = async (file: File, path: string): Promise<string> => {
+    if (!storage) throw new Error("Storage service not available.");
+    const fileRef = ref(storage, path);
+    await uploadBytes(fileRef, file);
+    return await getDownloadURL(fileRef);
+  };
 
   const onRegisterSubmit = async (values: z.infer<typeof registerSchema>) => {
     const email = `${values.account}@eodtcc.com`;
@@ -132,12 +153,26 @@ export default function AuthPage() {
       );
       const user = userCredential.user;
 
+      let avatarUrl = '';
+      if (values.avatarType === 'upload' && values.avatarFile) {
+        avatarUrl = await uploadFile(values.avatarFile, `users/${user.uid}/avatar`);
+      } else {
+        avatarUrl = values.avatarUrl!;
+      }
+
+      let characterSheetUrl = '';
+      if (values.characterSheetType === 'upload' && values.characterSheetFile) {
+        characterSheetUrl = await uploadFile(values.characterSheetFile, `users/${user.uid}/character_sheet`);
+      } else {
+        characterSheetUrl = values.characterSheetUrl!;
+      }
+
       await setDoc(doc(firestore, 'users', user.uid), {
         id: user.uid,
         roleName: values.characterName,
         plurkInfo: values.plurkAccount,
-        characterSheetUrl: values.characterSheet,
-        avatarUrl: values.avatar,
+        characterSheetUrl: characterSheetUrl,
+        avatarUrl: avatarUrl,
         factionId: values.faction,
         raceId: values.race,
         registrationDate: serverTimestamp(),
@@ -404,32 +439,71 @@ export default function AuthPage() {
                       </FormItem>
                     )}
                   />
+                  
                   <FormField
                     control={registerForm.control}
-                    name="characterSheet"
+                    name="avatarType"
                     render={({ field }) => (
-                      <FormItem className="grid gap-2">
-                        <FormLabel>角色卡</FormLabel>
-                        <FormControl>
-                          <Input placeholder="https://images.plurk.com/..." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={registerForm.control}
-                    name="avatar"
-                    render={({ field }) => (
-                      <FormItem className="grid gap-2">
+                      <FormItem>
                         <FormLabel>大頭貼</FormLabel>
-                        <FormControl>
-                          <Input placeholder="https://images.plurk.com/..." {...field} />
-                        </FormControl>
-                        <FormMessage />
+                        <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="url">噗浪圖床網址</TabsTrigger>
+                            <TabsTrigger value="upload">上傳檔案</TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="url" className="mt-2">
+                             <FormField
+                                control={registerForm.control}
+                                name="avatarUrl"
+                                render={({ field }) => (
+                                  <FormItem><FormControl><Input placeholder="https://images.plurk.com/..." {...field}/></FormControl><FormMessage /></FormItem>
+                                )}/>
+                          </TabsContent>
+                          <TabsContent value="upload" className="mt-2">
+                             <FormField
+                                control={registerForm.control}
+                                name="avatarFile"
+                                render={({ field: { onChange, ...rest } }) => (
+                                  <FormItem><FormControl><Input type="file" accept="image/*" onChange={(e) => onChange(e.target.files?.[0])} {...rest} /></FormControl><FormMessage /></FormItem>
+                                )} />
+                          </TabsContent>
+                        </Tabs>
                       </FormItem>
                     )}
                   />
+
+                   <FormField
+                    control={registerForm.control}
+                    name="characterSheetType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>角色卡</FormLabel>
+                        <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="url">噗浪圖床網址</TabsTrigger>
+                            <TabsTrigger value="upload">上傳檔案</TabsTrigger>
+                          </TabsList>
+                           <TabsContent value="url" className="mt-2">
+                             <FormField
+                                control={registerForm.control}
+                                name="characterSheetUrl"
+                                render={({ field }) => (
+                                  <FormItem><FormControl><Input placeholder="https://images.plurk.com/..." {...field}/></FormControl><FormMessage /></FormItem>
+                                )}/>
+                          </TabsContent>
+                           <TabsContent value="upload" className="mt-2">
+                             <FormField
+                                control={registerForm.control}
+                                name="characterSheetFile"
+                                render={({ field: { onChange, ...rest } }) => (
+                                  <FormItem><FormControl><Input type="file" accept="image/*" onChange={(e) => onChange(e.target.files?.[0])} {...rest} /></FormControl><FormMessage /></FormItem>
+                                )} />
+                          </TabsContent>
+                        </Tabs>
+                      </FormItem>
+                    )}
+                  />
+
 
                   <Button type="submit" className="w-full" disabled={registerForm.formState.isSubmitting}>
                     {registerForm.formState.isSubmitting ? '建立中...' : '建立帳戶'}

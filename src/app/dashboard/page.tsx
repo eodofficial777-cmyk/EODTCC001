@@ -15,8 +15,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Shield, Gem, ScrollText, Package, Check, Hammer } from 'lucide-react';
-import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection } from '@/firebase';
+import { useDoc, useFirestore, useUser, useMemoFirebase, useCollection, useStorage } from '@/firebase';
 import { doc, collection, query, orderBy, limit, runTransaction } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { FACTIONS, RACES } from '@/lib/game-data';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Item, AttributeEffect, TriggeredEffect, Title } from '@/lib/types';
@@ -44,6 +45,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -159,40 +161,73 @@ function ChangeTitleDialog({ user, userData, allTitles, onTitleChanged }: { user
     );
 }
 
+const urlSchema = z.string().url('請輸入有效的網址');
+const fileSchema = z.custom<File>((val) => val instanceof File, '請選擇一個檔案').optional();
+
 const profileSchema = z.object({
-  avatarUrl: z
-    .string()
-    .url('請輸入有效的網址')
-    .startsWith(
-      'https://images.plurk.com/',
-      '大頭貼必須以 https://images.plurk.com/ 開頭'
-    ),
-  characterSheetUrl: z
-    .string()
-    .url('請輸入有效的網址')
-    .startsWith(
-        'https://images.plurk.com/',
-        '角色卡必須以 https://images.plurk.com/ 開頭'
-    ),
+  avatarType: z.enum(['url', 'upload']),
+  avatarUrl: z.string().optional(),
+  avatarFile: fileSchema,
+  characterSheetType: z.enum(['url', 'upload']),
+  characterSheetUrl: z.string().optional(),
+  characterSheetFile: fileSchema,
+}).superRefine((data, ctx) => {
+  if (data.avatarType === 'url' && !urlSchema.safeParse(data.avatarUrl).success) {
+    ctx.addIssue({ code: 'custom', message: '請輸入有效的大頭貼網址', path: ['avatarUrl'] });
+  }
+  if (data.avatarType === 'upload' && !data.avatarFile) {
+    ctx.addIssue({ code: 'custom', message: '請選擇一個大頭貼檔案', path: ['avatarFile'] });
+  }
+  if (data.characterSheetType === 'url' && !urlSchema.safeParse(data.characterSheetUrl).success) {
+    ctx.addIssue({ code: 'custom', message: '請輸入有效的角色卡網址', path: ['characterSheetUrl'] });
+  }
+  if (data.characterSheetType === 'upload' && !data.characterSheetFile) {
+    ctx.addIssue({ code: 'custom', message: '請選擇一個角色卡檔案', path: ['characterSheetFile'] });
+  }
 });
+
 
 function EditProfileDialog({ user, userData, onProfileChanged }: { user: any, userData: any, onProfileChanged: () => void }) {
   const { toast } = useToast();
+  const storage = useStorage();
   const [isOpen, setIsOpen] = useState(false);
   
   const form = useForm<z.infer<typeof profileSchema>>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
+      avatarType: 'url',
       avatarUrl: userData?.avatarUrl || '',
+      characterSheetType: 'url',
       characterSheetUrl: userData?.characterSheetUrl || '',
     },
   });
 
+  const uploadFile = async (file: File, path: string): Promise<string> => {
+    if (!storage) throw new Error("Storage service not available.");
+    const fileRef = ref(storage, path);
+    await uploadBytes(fileRef, file);
+    return await getDownloadURL(fileRef);
+  };
+
   const onSubmit = async (values: z.infer<typeof profileSchema>) => {
     try {
+      let finalAvatarUrl = userData.avatarUrl;
+      if (values.avatarType === 'upload' && values.avatarFile) {
+        finalAvatarUrl = await uploadFile(values.avatarFile, `users/${user.uid}/avatar`);
+      } else if (values.avatarType === 'url') {
+        finalAvatarUrl = values.avatarUrl;
+      }
+
+      let finalSheetUrl = userData.characterSheetUrl;
+      if (values.characterSheetType === 'upload' && values.characterSheetFile) {
+        finalSheetUrl = await uploadFile(values.characterSheetFile, `users/${user.uid}/character_sheet`);
+      } else if (values.characterSheetType === 'url') {
+        finalSheetUrl = values.characterSheetUrl;
+      }
+
       const result = await updateUser(user.uid, { 
-          avatarUrl: values.avatarUrl,
-          characterSheetUrl: values.characterSheetUrl
+          avatarUrl: finalAvatarUrl,
+          characterSheetUrl: finalSheetUrl
        }, false);
       if (result.error) throw new Error(result.error);
       toast({ title: '成功', description: '您的個人資料已更新！' });
@@ -211,38 +246,90 @@ function EditProfileDialog({ user, userData, onProfileChanged }: { user: any, us
       <DialogContent>
         <DialogHeader>
           <DialogTitle>編輯個人資料</DialogTitle>
-          <DialogDescription>
-            請輸入新的噗浪圖床 (images.plurk.com) 網址。
-          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            
             <FormField
               control={form.control}
-              name="avatarUrl"
+              name="avatarType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>大頭貼網址</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://images.plurk.com/..." {...field} />
-                  </FormControl>
-                  <FormMessage />
+                  <FormLabel>大頭貼來源</FormLabel>
+                  <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="url">噗浪圖床網址</TabsTrigger>
+                      <TabsTrigger value="upload">上傳檔案</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="url">
+                       <FormField
+                          control={form.control}
+                          name="avatarUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl><Input placeholder="https://images.plurk.com/..." {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                    </TabsContent>
+                    <TabsContent value="upload">
+                       <FormField
+                          control={form.control}
+                          name="avatarFile"
+                          render={({ field: { onChange, value, ...rest } }) => (
+                            <FormItem>
+                              <FormControl><Input type="file" accept="image/*" onChange={e => onChange(e.target.files?.[0])} {...rest} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                    </TabsContent>
+                  </Tabs>
                 </FormItem>
               )}
             />
+
             <FormField
               control={form.control}
-              name="characterSheetUrl"
+              name="characterSheetType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>角色卡網址</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://images.plurk.com/..." {...field} />
-                  </FormControl>
-                  <FormMessage />
+                  <FormLabel>角色卡來源</FormLabel>
+                  <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="url">噗浪圖床網址</TabsTrigger>
+                      <TabsTrigger value="upload">上傳檔案</TabsTrigger>
+                    </TabsList>
+                     <TabsContent value="url">
+                       <FormField
+                          control={form.control}
+                          name="characterSheetUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl><Input placeholder="https://images.plurk.com/..." {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                    </TabsContent>
+                     <TabsContent value="upload">
+                       <FormField
+                          control={form.control}
+                          name="characterSheetFile"
+                          render={({ field: { onChange, value, ...rest } }) => (
+                            <FormItem>
+                              <FormControl><Input type="file" accept="image/*" onChange={e => onChange(e.target.files?.[0])} {...rest} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                    </TabsContent>
+                  </Tabs>
                 </FormItem>
               )}
             />
+
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="secondary">取消</Button>

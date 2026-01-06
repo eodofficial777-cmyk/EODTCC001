@@ -1,0 +1,19 @@
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow public read access to all files by default.
+    // This is useful for user-uploaded content like avatars that need to be public.
+    match /{allPaths=**} {
+      allow read;
+    }
+
+    // Restrict writes to specific user folders.
+    // A user can only write to their own folder, identified by their UID.
+    match /users/{userId}/{allPaths=**} {
+      // Only the authenticated user matching the {userId} can write to this path.
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
