@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -148,7 +149,7 @@ export default function RosterPage() {
 
   const factionTabs = [
     { id: 'all', name: '全體' },
-    ...Object.values(FACTIONS)
+    ...Object.values(FACTIONS).filter(f => f.id !== 'common')
   ];
   
   const pageIsLoading = isLoading || areTitlesLoading;
@@ -203,7 +204,7 @@ export default function RosterPage() {
             <TabsContent value="all" className="mt-6">
               <CharacterGrid users={allUsers || []} titlesById={titlesById} />
             </TabsContent>
-            {Object.values(FACTIONS).map((faction) => (
+            {Object.values(FACTIONS).filter(f => f.id !== 'common').map((faction) => (
               <TabsContent key={faction.id} value={faction.id} className="mt-6">
                 <CharacterGrid users={rosterData?.[faction.id]} titlesById={titlesById} />
               </TabsContent>
