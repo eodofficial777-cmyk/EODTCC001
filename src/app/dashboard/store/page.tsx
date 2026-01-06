@@ -15,13 +15,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Gem, Users } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
-import { collection, query, where, doc, or } from 'firebase/firestore';
+import { collection, query, where, doc } from 'firebase/firestore';
 import type { Item, AttributeEffect, TriggeredEffect } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RACES } from '@/lib/game-data';
 import { useToast } from '@/hooks/use-toast';
 import { buyItem } from '@/app/actions/buy-item';
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 
@@ -140,37 +140,51 @@ export default function StorePage() {
   
   const userFactionId = userData?.factionId;
 
-  const itemsQuery = useMemoFirebase(() => {
-    if (!firestore || !userFactionId) {
+  // Query for faction-specific items
+  const factionItemsQuery = useMemoFirebase(() => {
+    if (!firestore || !userFactionId || userFactionId === 'wanderer') {
       return null;
     }
-    
-    let q;
-    // Yelu/Association see their own items + universal (wanderer) items
-    if (userFactionId === 'yelu' || userFactionId === 'association') {
-        q = query(
-            collection(firestore, 'items'),
-            where('isPublished', '==', true),
-            or(
-              where('factionId', '==', userFactionId),
-              where('factionId', '==', 'wanderer')
-            )
-        );
-    } 
-    // Wanderers see all non-faction specific items
-    else {
-        q = query(
-            collection(firestore, 'items'),
-            where('isPublished', '==', true),
-            where('factionId', 'not-in', ['yelu', 'association'])
-        );
-    }
-    
-    return q;
+    return query(
+        collection(firestore, 'items'),
+        where('isPublished', '==', true),
+        where('factionId', '==', userFactionId)
+    );
   }, [firestore, userFactionId]);
 
+  // Query for universal (wanderer) items
+  const universalItemsQuery = useMemoFirebase(() => {
+    if (!firestore) {
+      return null;
+    }
+    return query(
+        collection(firestore, 'items'),
+        where('isPublished', '==', true),
+        where('factionId', '==', 'wanderer')
+    );
+  }, [firestore]);
 
-  const { data: items, isLoading: areItemsLoading } = useCollection<Item>(itemsQuery);
+  const { data: factionItems, isLoading: areFactionItemsLoading } = useCollection<Item>(factionItemsQuery);
+  const { data: universalItems, isLoading: areUniversalItemsLoading } = useCollection<Item>(universalItemsQuery);
+
+  const [items, setItems] = useState<Item[]>([]);
+
+  useEffect(() => {
+      const combinedItems = new Map<string, Item>();
+      
+      // Add faction items if user is not a wanderer
+      if (userFactionId !== 'wanderer' && factionItems) {
+          factionItems.forEach(item => combinedItems.set(item.id, item));
+      }
+
+      // Always add universal items
+      if (universalItems) {
+          universalItems.forEach(item => combinedItems.set(item.id, item));
+      }
+      
+      setItems(Array.from(combinedItems.values()));
+  }, [factionItems, universalItems, userFactionId]);
+
 
   const handleBuy = async (item: Item) => {
     if (!user || !userData) {
@@ -193,12 +207,12 @@ export default function StorePage() {
     }
   }
 
-  const isLoading = isUserLoading || isUserDataLoading || areItemsLoading;
+  const isLoading = isUserLoading || isUserDataLoading || areFactionItemsLoading || areUniversalItemsLoading;
 
   const renderContent = (filteredItems: Item[]) => {
     if (isLoading) {
       return (
-        <div className="grid grid-cols-2 gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
               <CardHeader>
@@ -227,7 +241,7 @@ export default function StorePage() {
     }
     
     return (
-        <div className="grid grid-cols-2 gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {userData && filteredItems.map((item) => (
                 <ItemCard 
                     key={item.id}
