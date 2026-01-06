@@ -60,8 +60,8 @@ export async function buyItem(payload: BuyItemPayload): Promise<{ success: boole
         throw new Error('您的種族不符合購買此道具的條件。');
       }
       
-      // 3. Check faction requirement - 'wanderer' items are universal
-      if (item.factionId !== 'wanderer' && user.factionId !== item.factionId) {
+      // 3. Check faction requirement - 'common' items are universal
+      if (item.factionId !== 'common' && user.factionId !== item.factionId) {
          throw new Error('您的陣營無法購買此道具。');
       }
 

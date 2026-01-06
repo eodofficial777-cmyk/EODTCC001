@@ -40,6 +40,11 @@ export const FACTIONS: { [key: string]: Faction } = {
     name: '流浪者',
     color: 'hsl(47.9 95.8% 53.1%)', // Yellow
   },
+  common: {
+    id: 'common',
+    name: '通用',
+    color: 'hsl(var(--muted-foreground))',
+  }
 };
 
 export const TASK_TYPES = {

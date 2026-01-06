@@ -837,7 +837,7 @@ function ItemEditor({
             <SelectTrigger id="item-faction"><SelectValue placeholder="選擇陣營" /></SelectTrigger>
             <SelectContent>
               {Object.entries(FACTIONS).map(([id, faction]) => (
-                 <SelectItem key={id} value={id}>{faction.name}{id === 'wanderer' ? ' (通用)' : ''}</SelectItem>
+                 <SelectItem key={id} value={id}>{faction.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -1020,9 +1020,9 @@ function StoreManagement() {
             </div>
             
             <Tabs value={activeFactionTab} onValueChange={setActiveFactionTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                     {Object.values(FACTIONS).map(f => (
-                        <TabsTrigger key={f.id} value={f.id}>{f.name}{f.id === 'wanderer' ? ' (通用)' : ''}</TabsTrigger>
+                        <TabsTrigger key={f.id} value={f.id}>{f.name}</TabsTrigger>
                     ))}
                 </TabsList>
             </Tabs>
@@ -1545,7 +1545,7 @@ function SkillManagement() {
             
             <Tabs value={activeFactionTab} onValueChange={handleFactionTabChange}>
                 <TabsList className="grid w-full grid-cols-3">
-                     {Object.values(FACTIONS).map(tab => (
+                     {Object.values(FACTIONS).filter(f => f.id !== 'common').map(tab => (
                         <TabsTrigger key={tab.id} value={tab.id}>{tab.name}</TabsTrigger>
                     ))}
                 </TabsList>
@@ -2786,4 +2786,3 @@ export default function AdminPage() {
     </div>
   );
 }
-

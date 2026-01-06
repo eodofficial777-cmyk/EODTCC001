@@ -140,9 +140,8 @@ export default function StorePage() {
   
   const userFactionId = userData?.factionId;
 
-  // Query for faction-specific items
   const factionItemsQuery = useMemoFirebase(() => {
-    if (!firestore || !userFactionId || userFactionId === 'wanderer') {
+    if (!firestore || !userFactionId) {
       return null;
     }
     return query(
@@ -152,38 +151,35 @@ export default function StorePage() {
     );
   }, [firestore, userFactionId]);
 
-  // Query for universal (wanderer) items
-  const universalItemsQuery = useMemoFirebase(() => {
+  const commonItemsQuery = useMemoFirebase(() => {
     if (!firestore) {
       return null;
     }
     return query(
         collection(firestore, 'items'),
         where('isPublished', '==', true),
-        where('factionId', '==', 'wanderer')
+        where('factionId', '==', 'common')
     );
   }, [firestore]);
 
   const { data: factionItems, isLoading: areFactionItemsLoading } = useCollection<Item>(factionItemsQuery);
-  const { data: universalItems, isLoading: areUniversalItemsLoading } = useCollection<Item>(universalItemsQuery);
+  const { data: commonItems, isLoading: areCommonItemsLoading } = useCollection<Item>(commonItemsQuery);
 
   const [items, setItems] = useState<Item[]>([]);
 
   useEffect(() => {
       const combinedItems = new Map<string, Item>();
       
-      // Add faction items if user is not a wanderer
-      if (userFactionId !== 'wanderer' && factionItems) {
+      if (factionItems) {
           factionItems.forEach(item => combinedItems.set(item.id, item));
       }
 
-      // Always add universal items
-      if (universalItems) {
-          universalItems.forEach(item => combinedItems.set(item.id, item));
+      if (commonItems) {
+          commonItems.forEach(item => combinedItems.set(item.id, item));
       }
       
       setItems(Array.from(combinedItems.values()));
-  }, [factionItems, universalItems, userFactionId]);
+  }, [factionItems, commonItems]);
 
 
   const handleBuy = async (item: Item) => {
@@ -207,12 +203,12 @@ export default function StorePage() {
     }
   }
 
-  const isLoading = isUserLoading || isUserDataLoading || areFactionItemsLoading || areUniversalItemsLoading;
+  const isLoading = isUserLoading || isUserDataLoading || areFactionItemsLoading || areCommonItemsLoading;
 
   const renderContent = (filteredItems: Item[]) => {
     if (isLoading) {
       return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
               <CardHeader>
@@ -241,7 +237,7 @@ export default function StorePage() {
     }
     
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {userData && filteredItems.map((item) => (
                 <ItemCard 
                     key={item.id}
