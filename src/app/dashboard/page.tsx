@@ -525,6 +525,7 @@ export default function DashboardPage() {
                     {processedInventory.map(({ id, count, data }) => {
                        if (!data) return null;
                        const itemTypeInfo = data.itemTypeId ? itemTypeTranslations[data.itemTypeId] : { name: '道具', color: 'bg-gray-500' };
+                       const isUsable = data.itemTypeId === 'stat_boost' || (data.itemTypeId === 'special' && data.isUsable === true);
                        return (
                           <Tooltip key={id}>
                             <TooltipTrigger asChild>
@@ -534,7 +535,7 @@ export default function DashboardPage() {
                                   <span>{data.name}</span>
                                   <span className="font-mono text-muted-foreground">x{count}</span>
                                 </div>
-                                {data.itemTypeId === 'stat_boost' && (
+                                {isUsable && (
                                    <Button size="sm" onClick={() => handleUseItem(id)} disabled={isUsingItem === id}>
                                      {isUsingItem === id ? '使用中...' : '使用'}
                                    </Button>

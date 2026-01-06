@@ -1,4 +1,5 @@
 
+
 export interface User {
   id: string;
   roleName: string;
@@ -83,6 +84,7 @@ export interface Item {
     factionId: string;
     raceId: string;
     isPublished: boolean;
+    isUsable?: boolean; // New field for special items
 }
 
 export interface CraftRecipe {

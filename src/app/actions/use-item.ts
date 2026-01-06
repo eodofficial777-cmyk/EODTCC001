@@ -58,8 +58,10 @@ export async function useItem(payload: UseItemPayload): Promise<{ success: boole
         throw new Error(`您的背包中沒有「${item.name}」。`);
       }
       
-      // 2. Check if item is a stat boost item
-      if (item.itemTypeId !== 'stat_boost') {
+      // 2. Check if item is usable
+      const isStatBoost = item.itemTypeId === 'stat_boost';
+      const isUsableSpecial = item.itemTypeId === 'special' && item.isUsable === true;
+      if (!isStatBoost && !isUsableSpecial) {
         throw new Error(`「${item.name}」無法在此處使用。`);
       }
       
@@ -67,20 +69,22 @@ export async function useItem(payload: UseItemPayload): Promise<{ success: boole
       const userUpdate: { [key: string]: any } = {};
       let logChanges: string[] = [];
 
-      item.effects.forEach(effect => {
-        if ('attribute' in effect && (effect as AttributeEffect).operator === '+') {
-            const attrEffect = effect as AttributeEffect;
-            const key = `attributes.${attrEffect.attribute}`;
-            const value = Number(attrEffect.value);
-            if (!isNaN(value)) {
-                 userUpdate[key] = increment(value);
-                 logChanges.push(`${attrEffect.attribute.toUpperCase()} +${value}`);
+      if (isStatBoost) {
+        item.effects.forEach(effect => {
+            if ('attribute' in effect && (effect as AttributeEffect).operator === '+') {
+                const attrEffect = effect as AttributeEffect;
+                const key = `attributes.${attrEffect.attribute}`;
+                const value = Number(attrEffect.value);
+                if (!isNaN(value)) {
+                    userUpdate[key] = increment(value);
+                    logChanges.push(`${attrEffect.attribute.toUpperCase()} +${value}`);
+                }
             }
+        });
+        
+        if (Object.keys(userUpdate).length === 0) {
+            throw new Error(`「${item.name}」沒有可用的永久提升效果。`);
         }
-      });
-      
-      if (Object.keys(userUpdate).length === 0) {
-        throw new Error(`「${item.name}」沒有可用的永久提升效果。`);
       }
 
       // Remove one instance of the item from the user's inventory
@@ -92,15 +96,18 @@ export async function useItem(payload: UseItemPayload): Promise<{ success: boole
 
       // Create activity log
       const activityLogRef = doc(collection(db, `users/${userId}/activityLogs`));
+      const description = `使用了道具「${item.name}」`;
+      const change = logChanges.length > 0 ? logChanges.join(', ') : '消耗 1 個';
+
       transaction.set(activityLogRef, {
         id: activityLogRef.id,
         userId: userId,
         timestamp: serverTimestamp(),
-        description: `使用了道具「${item.name}」`,
-        change: logChanges.join(', '),
+        description: description,
+        change: change,
       });
       
-      return `成功使用「${item.name}」，${logChanges.join(', ')}。`;
+      return logChanges.length > 0 ? `成功使用「${item.name}」，${logChanges.join(', ')}。` : `成功使用「${item.name}」。`;
     });
 
     return { success: true, message: resultMessage };

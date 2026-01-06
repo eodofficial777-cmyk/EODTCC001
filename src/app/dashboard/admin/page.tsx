@@ -754,6 +754,8 @@ function ItemEditor({
   const isEquipment = editedItem.itemTypeId === 'equipment';
   const isConsumable = editedItem.itemTypeId === 'consumable';
   const isStatBoost = editedItem.itemTypeId === 'stat_boost';
+  const isSpecial = editedItem.itemTypeId === 'special';
+
 
   const handleEffectChange = (index: number, field: keyof AttributeEffect, value: any) => {
     setEditedItem(prev => {
@@ -857,10 +859,12 @@ function ItemEditor({
 
         {/* Effects Editor */}
         <div className="md:col-span-2 space-y-4">
-            <div className="flex justify-between items-center">
-                <Label>效果</Label>
-                 <Button size="sm" variant="outline" onClick={addEffect}><Plus className="mr-2 h-4 w-4"/>新增效果</Button>
-            </div>
+            {!isSpecial && (
+                 <div className="flex justify-between items-center">
+                    <Label>效果</Label>
+                    <Button size="sm" variant="outline" onClick={addEffect}><Plus className="mr-2 h-4 w-4"/>新增效果</Button>
+                </div>
+            )}
 
             {(editedItem.effects || []).map((effect, index) => (
                 <div key={index} className="p-3 border rounded-md bg-background/50 space-y-4 relative">
@@ -913,7 +917,12 @@ function ItemEditor({
                     )}
                 </div>
             ))}
-            { editedItem.itemTypeId === 'special' && <p className="text-sm text-muted-foreground">特殊道具無效果，主要用於合成。</p>}
+            { isSpecial && 
+                <div className="flex items-center space-x-2">
+                    <Checkbox id="item-usable" checked={editedItem.isUsable} onCheckedChange={checked => setEditedItem({...editedItem, isUsable: !!checked})}/>
+                    <Label htmlFor="item-usable" className="text-sm font-medium">可於背包中使用 (消耗性)</Label>
+                </div>
+            }
         </div>
 
         <div className="md:col-span-2 flex items-center space-x-2">

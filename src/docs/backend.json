@@ -228,6 +228,7 @@
         "price": { "type": "number", "description": "The price of the item." },
         "factionId": { "type": "string", "description": "Reference to the Faction that this item belongs to." },
         "raceId": { "type": "string", "description": "Race restriction for the item. Can be 'all' for no restriction." },
+        "isUsable": { "type": "boolean", "description": "If true, this special item can be 'used' from the inventory." },
         "effects": {
             "type": "array",
             "description": "Structured description of the item's effects.",
