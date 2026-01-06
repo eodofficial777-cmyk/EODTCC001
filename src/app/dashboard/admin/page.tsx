@@ -338,7 +338,7 @@ function AccountApproval() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.values(FACTIONS).filter(f => f.id !== 'common').map((f) => (
+                        {Object.values(FACTIONS).map((f) => (
                           <SelectItem key={f.id} value={f.id}>
                             {f.name}
                           </SelectItem>
@@ -838,7 +838,7 @@ function ItemEditor({
           <Select value={editedItem.factionId} onValueChange={(value) => setEditedItem({ ...editedItem, factionId: value })}>
             <SelectTrigger id="item-faction"><SelectValue placeholder="選擇陣營" /></SelectTrigger>
             <SelectContent>
-              {Object.entries(FACTIONS).map(([id, faction]) => (
+              {Object.entries(FACTIONS).concat([['common', {id: 'common', name: '通用', color: ''}]]).map(([id, faction]) => (
                  <SelectItem key={id} value={id}>{faction.name}</SelectItem>
               ))}
             </SelectContent>
@@ -1033,6 +1033,7 @@ function StoreManagement() {
                     {Object.values(FACTIONS).map(f => (
                         <TabsTrigger key={f.id} value={f.id}>{f.name}</TabsTrigger>
                     ))}
+                     <TabsTrigger value="common">通用</TabsTrigger>
                 </TabsList>
             </Tabs>
 
@@ -1554,7 +1555,7 @@ function SkillManagement() {
             
             <Tabs value={activeFactionTab} onValueChange={handleFactionTabChange}>
                 <TabsList className="grid w-full grid-cols-3">
-                     {Object.values(FACTIONS).filter(f => f.id !== 'common').map(tab => (
+                     {Object.values(FACTIONS).map(tab => (
                         <TabsTrigger key={tab.id} value={tab.id}>{tab.name}</TabsTrigger>
                     ))}
                 </TabsList>
@@ -1969,7 +1970,7 @@ function RewardDistribution() {
                                 <SelectTrigger><SelectValue placeholder="所有陣營" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">所有陣營</SelectItem>
-                                    {Object.values(FACTIONS).filter(f => f.id !== 'common').map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                                    {Object.values(FACTIONS).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                              <Select onValueChange={v => setFilters(f => ({ ...f, raceId: v === 'all' ? undefined : v }))} value={filters.raceId || 'all'}>

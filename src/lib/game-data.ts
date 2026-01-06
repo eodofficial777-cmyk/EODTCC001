@@ -24,6 +24,7 @@ export const RACES = {
   },
 };
 
+// This list is used for UI selections where players can choose a faction.
 export const FACTIONS: { [key: string]: Faction } = {
   yelu: {
     id: 'yelu',
@@ -40,11 +41,6 @@ export const FACTIONS: { [key: string]: Faction } = {
     name: '流浪者',
     color: 'hsl(47.9 95.8% 53.1%)', // Yellow
   },
-  common: {
-    id: 'common',
-    name: '通用',
-    color: 'hsl(var(--muted-foreground))',
-  }
 };
 
 export const TASK_TYPES = {
