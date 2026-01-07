@@ -106,6 +106,10 @@ export async function performAttack(payload: PerformAttackPayload): Promise<Perf
           activeBuffs: [],
           skillCooldowns: {},
         };
+      } else {
+        // Ensure all optional fields exist
+        playerParticipantData.activeBuffs = playerParticipantData.activeBuffs || [];
+        playerParticipantData.skillCooldowns = playerParticipantData.skillCooldowns || {};
       }
 
 

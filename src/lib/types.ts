@@ -1,5 +1,4 @@
 
-
 export interface User {
   id: string;
   roleName: string;
@@ -208,6 +207,17 @@ export interface CombatLog {
   type: 'player_attack' | 'monster_attack' | 'skill_used' | 'item_used' | 'system';
   itemId?: string;
   damage?: number;
+}
+
+export interface AdminNotification {
+    id: string;
+    type: 'special_item_used';
+    userId: string;
+    userName: string;
+    itemId: string;
+    itemName: string;
+    timestamp: any; // Firestore.Timestamp
+    read: boolean;
 }
 
 // Add this type to fix the error

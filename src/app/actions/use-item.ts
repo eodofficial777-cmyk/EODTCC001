@@ -106,6 +106,21 @@ export async function useItem(payload: UseItemPayload): Promise<{ success: boole
         description: description,
         change: change,
       });
+
+      // If it's a usable special item, create an admin notification
+      if (isUsableSpecial) {
+        const adminNotificationRef = doc(collection(db, 'admin-notifications'));
+        transaction.set(adminNotificationRef, {
+            id: adminNotificationRef.id,
+            type: 'special_item_used',
+            userId: user.id,
+            userName: user.roleName,
+            itemId: item.id,
+            itemName: item.name,
+            timestamp: serverTimestamp(),
+            read: false
+        });
+      }
       
       return logChanges.length > 0 ? `成功使用「${item.name}」，${logChanges.join(', ')}。` : `成功使用「${item.name}」。`;
     });

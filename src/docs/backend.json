@@ -473,6 +473,23 @@
         "description": "Global registration status of the application.",
         "properties": { "isOpen": { "type": "boolean" } },
         "required": ["isOpen"]
+    },
+    "AdminNotification": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "AdminNotification",
+        "type": "object",
+        "description": "A notification for administrators.",
+        "properties": {
+            "id": { "type": "string" },
+            "type": { "type": "string", "enum": ["special_item_used"] },
+            "userId": { "type": "string" },
+            "userName": { "type": "string" },
+            "itemId": { "type": "string" },
+            "itemName": { "type": "string" },
+            "timestamp": { "type": "string", "format": "date-time" },
+            "read": { "type": "boolean", "default": false }
+        },
+        "required": ["id", "type", "userId", "userName", "itemId", "itemName", "timestamp", "read"]
     }
   },
   "auth": {
@@ -494,7 +511,8 @@
       { "path": "/titles/{titleId}", "definition": { "schema": { "$ref": "#/entities/Title" } } },
       { "path": "/skills/{skillId}", "definition": { "schema": { "$ref": "#/entities/Skill" } } },
       { "path": "/globals/maintenance", "definition": { "schema": { "$ref": "#/entities/Maintenance" } } },
-      { "path": "/globals/registration", "definition": { "schema": { "$ref": "#/entities/RegistrationStatus" } } }
+      { "path": "/globals/registration", "definition": { "schema": { "$ref": "#/entities/RegistrationStatus" } } },
+      { "path": "/admin-notifications/{notificationId}", "definition": { "schema": { "$ref": "#/entities/AdminNotification" } } }
     ]
   }
 }

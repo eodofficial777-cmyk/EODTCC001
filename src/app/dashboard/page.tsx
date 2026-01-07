@@ -135,18 +135,28 @@ function ChangeTitleDialog({ user, userData, allTitles, onTitleChanged }: { user
                     <DialogTitle>更換顯示稱號</DialogTitle>
                 </DialogHeader>
                 <div className="py-4">
-                    <RadioGroup value={selectedTitle} onValueChange={setSelectedTitle}>
-                        {(userData.titles || []).map((titleId: string, index: number) => {
-                             const titleData = allTitles?.find((t: any) => t.id === titleId);
-                             const titleName = titleData?.name || titleId;
-                            return (
-                                <Label key={index} htmlFor={titleId} className="flex items-center justify-between rounded-md border p-3 hover:bg-accent has-[[data-state=checked]]:border-primary">
-                                    {titleName}
-                                    <RadioGroupItem value={titleId} id={titleId} />
-                                </Label>
-                            )
-                        })}
-                    </RadioGroup>
+                     <TooltipProvider>
+                        <RadioGroup value={selectedTitle} onValueChange={setSelectedTitle}>
+                            {(userData.titles || []).map((titleId: string, index: number) => {
+                                const titleData = allTitles?.find((t: any) => t.id === titleId);
+                                const titleName = titleData?.name || titleId;
+                                const titleDescription = titleData?.description || '沒有說明';
+                                return (
+                                     <Tooltip key={titleId} delayDuration={100}>
+                                        <TooltipTrigger asChild>
+                                             <Label htmlFor={titleId} className="flex items-center justify-between rounded-md border p-3 hover:bg-accent has-[[data-state=checked]]:border-primary">
+                                                {titleName}
+                                                <RadioGroupItem value={titleId} id={titleId} />
+                                            </Label>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="right">
+                                            <p>{titleDescription}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                )
+                            })}
+                        </RadioGroup>
+                     </TooltipProvider>
                 </div>
                  <DialogFooter>
                     <DialogClose asChild>
@@ -301,19 +311,19 @@ function EditProfileDialog({ user, userData, onProfileChanged }: { user: any, us
                       <TabsTrigger value="url">噗浪圖床網址</TabsTrigger>
                       <TabsTrigger value="upload">上傳檔案</TabsTrigger>
                     </TabsList>
-                     <TabsContent value="url">
+                     <TabsContent value="url" className="mt-2">
                        <FormField
                           control={form.control}
                           name="characterSheetUrl"
                           render={({ field }) => (
                             <FormItem>
-                              <FormControl><Input placeholder="https://images.plurk.com/..." {...field} /></FormControl>
+                              <FormControl><Input placeholder="https://images.plurk.com/..." {...field}/></FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                     </TabsContent>
-                     <TabsContent value="upload">
+                     <TabsContent value="upload" className="mt-2">
                        <FormField
                           control={form.control}
                           name="characterSheetFile"

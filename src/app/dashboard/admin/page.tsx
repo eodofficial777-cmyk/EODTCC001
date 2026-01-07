@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import {
@@ -38,11 +37,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FACTIONS, RACES } from '@/lib/game-data';
-import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History, Award, KeyRound, BarChart, Archive, RotateCcw } from 'lucide-react';
+import { RefreshCw, Trash2, Edit, Plus, X, Hammer, ArrowRight, WandSparkles, Check, ThumbsUp, ThumbsDown, PackagePlus, Wrench, History, Award, KeyRound, BarChart, Archive, RotateCcw, Bell } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus, Monster, CombatEncounter, CombatLog, EndOfBattleRewards } from '@/lib/types';
+import type { User, Task, TaskType, Item, AttributeEffect, TriggeredEffect, CraftRecipe, Skill, SkillEffect, SkillEffectType, Title, TitleTrigger, TitleTriggerType, MaintenanceStatus, Monster, CombatEncounter, CombatLog, EndOfBattleRewards, AdminNotification } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -82,7 +81,7 @@ import { distributeRewards, FilterCriteria } from '@/app/actions/distribute-rewa
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { updateMaintenanceStatus } from '@/app/actions/update-maintenance-status';
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
-import { doc, collection, query, orderBy, limit } from 'firebase/firestore';
+import { doc, collection, query, orderBy, limit, writeBatch, Timestamp } from 'firebase/firestore';
 import { createBattle, startBattle, endBattle, addMonsterToBattle } from '@/app/actions/manage-battle';
 import { getBattleLogs } from '@/app/actions/get-battle-logs';
 import { awardBattleDamageRewards } from '@/app/actions/award-battle-damage-rewards';
@@ -90,7 +89,8 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { resetUserPassword } from '@/app/actions/reset-user-password';
 import { archiveAndProcessBattleLogs } from '@/app/actions/archive-battle-logs';
-
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useStorage } from '@/firebase';
 
 function PasswordResetDialog({ user, isOpen, onOpenChange }: { user: User, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
     const { toast } = useToast();
@@ -735,7 +735,12 @@ function ItemEditor({
   onCancel: () => void;
   isSaving: boolean;
 }) {
+  const { toast } = useToast();
+  const storage = useStorage();
   const [editedItem, setEditedItem] = useState<Partial<Item>>(item);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageSource, setImageSource] = useState<'url' | 'upload'>('url');
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     if (!editedItem.effects) {
@@ -743,12 +748,30 @@ function ItemEditor({
     }
   }, [editedItem.effects]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editedItem.name || !editedItem.id) {
-      alert('ID 和名稱為必填項目');
+      toast({variant: 'destructive', title: '錯誤', description: 'ID 和名稱為必填項目'});
       return;
     }
-    onSave(editedItem);
+
+    let finalItemData = { ...editedItem };
+
+    if (imageSource === 'upload' && imageFile) {
+        setIsUploading(true);
+        try {
+            const filePath = `items/${finalItemData.id}/${imageFile.name}`;
+            const fileRef = ref(storage, filePath);
+            await uploadBytes(fileRef, imageFile);
+            finalItemData.imageUrl = await getDownloadURL(fileRef);
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: '圖片上傳失敗', description: error.message });
+            setIsUploading(false);
+            return;
+        }
+        setIsUploading(false);
+    }
+    
+    onSave(finalItemData);
   };
   
   const isEquipment = editedItem.itemTypeId === 'equipment';
@@ -808,10 +831,31 @@ function ItemEditor({
           <Label htmlFor="item-name">名稱</Label>
           <Input id="item-name" value={editedItem.name || ''} onChange={e => setEditedItem({ ...editedItem, name: e.target.value })} placeholder="例如：回復藥水" />
         </div>
+        
         <div className="md:col-span-2 space-y-2">
-            <Label htmlFor="item-imageUrl">圖片網址</Label>
-            <Input id="item-imageUrl" value={editedItem.imageUrl || ''} onChange={e => setEditedItem({...editedItem, imageUrl: e.target.value })} placeholder="https://images.plurk.com/..."/>
+            <Label htmlFor="item-imageUrl">圖片</Label>
+             <Tabs value={imageSource} onValueChange={(v) => setImageSource(v as any)} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="url">噗浪圖床網址</TabsTrigger>
+                <TabsTrigger value="upload">上傳檔案</TabsTrigger>
+              </TabsList>
+              <TabsContent value="url" className="mt-2">
+                 <Input 
+                    value={editedItem.imageUrl || ''} 
+                    onChange={e => setEditedItem({...editedItem, imageUrl: e.target.value })}
+                    placeholder="https://images.plurk.com/..."
+                  />
+              </TabsContent>
+              <TabsContent value="upload" className="mt-2">
+                 <Input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={e => setImageFile(e.target.files?.[0] || null)}
+                  />
+              </TabsContent>
+            </Tabs>
         </div>
+
          <div className="md:col-span-2 space-y-2">
             <Label htmlFor="item-desc">描述</Label>
             <Input id="item-desc" value={editedItem.description || ''} onChange={e => setEditedItem({...editedItem, description: e.target.value })} placeholder="道具的說明文字"/>
@@ -838,8 +882,8 @@ function ItemEditor({
           <Select value={editedItem.factionId} onValueChange={(value) => setEditedItem({ ...editedItem, factionId: value })}>
             <SelectTrigger id="item-faction"><SelectValue placeholder="選擇陣營" /></SelectTrigger>
             <SelectContent>
-              {Object.entries(FACTIONS).concat([['common', {id: 'common', name: '通用', color: ''}]]).map(([id, faction]) => (
-                 <SelectItem key={id} value={id}>{faction.name}</SelectItem>
+              {[...Object.values(FACTIONS), {id: 'common', name: '通用'}].map((faction) => (
+                 <SelectItem key={faction.id} value={faction.id}>{faction.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -932,7 +976,9 @@ function ItemEditor({
       </CardContent>
       <CardFooter className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel}>取消</Button>
-        <Button onClick={handleSave} disabled={isSaving}>{isSaving ? "儲存中..." : "儲存"}</Button>
+        <Button onClick={handleSave} disabled={isSaving || isUploading}>
+            {isUploading ? "上傳中..." : isSaving ? "儲存中..." : "儲存"}
+        </Button>
       </CardFooter>
     </Card>
   );
@@ -2385,6 +2431,7 @@ function DamageRewardDialog({ battleId, battleName, allItems, allTitles, onAward
 
 function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh }: { allItems: Item[], allTitles: Title[], allCombatEncounters: CombatEncounter[], onRefresh: () => void }) {
     const { toast } = useToast();
+    const storage = useStorage();
     const [battleName, setBattleName] = useState('');
     const [yeluMonsters, setYeluMonsters] = useState<Partial<Monster>[]>([]);
     const [associationMonsters, setAssociationMonsters] = useState<Partial<Monster>[]>([]);
@@ -2392,17 +2439,24 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
     const [rewards, setRewards] = useState<EndOfBattleRewards>({ honorPoints: 0, currency: 0, logMessage: '' });
     const [isLoading, setIsLoading] = useState(false);
     
+    // State for the reinforcement form
     const [newMonster, setNewMonster] = useState<Partial<Omit<Monster, 'monsterId' | 'originalHp'>>>({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: '' });
+    const [newMonsterImageFile, setNewMonsterImageFile] = useState<File | null>(null);
+    const [newMonsterImageSource, setNewMonsterImageSource] = useState<'url' | 'upload'>('url');
     const [isAddingMonster, setIsAddingMonster] = useState(false);
+
+    // State for the last used monster specs
+    const [lastUsedMonsterSpecs, setLastUsedMonsterSpecs] = useState({ hp: 1000, atk: '10+1D6' });
+    
     const [isArchiving, setIsArchiving] = useState(false);
     
     const currentBattle = useMemo(() => allCombatEncounters?.[0] && allCombatEncounters[0].status !== 'closed' ? allCombatEncounters[0] : null, [allCombatEncounters]);
 
     const addMonster = (faction: 'yelu' | 'association' | 'common') => {
-        const newMonster: Partial<Monster> = { name: '', imageUrl: '', hp: 1000, atk: '10+1D6', factionId: faction };
-        if (faction === 'yelu') setYeluMonsters([...yeluMonsters, newMonster]);
-        else if (faction === 'association') setAssociationMonsters([...associationMonsters, newMonster]);
-        else setCommonMonsters([...commonMonsters, newMonster]);
+        const monsterTemplate: Partial<Monster> = { name: '', imageUrl: '', ...lastUsedMonsterSpecs, factionId: faction };
+        if (faction === 'yelu') setYeluMonsters([...yeluMonsters, monsterTemplate]);
+        else if (faction === 'association') setAssociationMonsters([...associationMonsters, monsterTemplate]);
+        else setCommonMonsters([...commonMonsters, monsterTemplate]);
     };
 
     const updateMonsterList = (setter: React.Dispatch<React.SetStateAction<Partial<Monster>[]>>, index: number, field: keyof Monster, value: any) => {
@@ -2422,17 +2476,25 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
             toast({ variant: 'destructive', title: '錯誤', description: '請為戰場命名。' });
             return;
         }
-        if (yeluMonsters.length === 0 && associationMonsters.length === 0 && commonMonsters.length === 0) {
+        const allMonsters = [...yeluMonsters, ...associationMonsters, ...commonMonsters];
+        if (allMonsters.length === 0) {
             toast({ variant: 'destructive', title: '錯誤', description: '請至少新增一隻災獸。' });
             return;
         }
         
         setIsLoading(true);
         try {
-            const allMonsters = [...yeluMonsters, ...associationMonsters, ...commonMonsters];
+            
             const result = await createBattle({ name: battleName, monsters: allMonsters as Omit<Monster, 'monsterId' | 'originalHp'>[], rewards });
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: `戰場「${battleName}」已開啟！準備時間 30 分鐘。` });
+            
+            // Save the last monster's specs
+            const lastMonster = allMonsters[allMonsters.length - 1];
+            if (lastMonster) {
+                setLastUsedMonsterSpecs({ hp: lastMonster.hp || 1000, atk: lastMonster.atk || '10+1D6' });
+            }
+
             setBattleName('');
             setYeluMonsters([]);
             setAssociationMonsters([]);
@@ -2482,11 +2544,33 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
             return;
         }
         setIsAddingMonster(true);
+
+        let finalMonsterData = { ...newMonster };
+
+         if (newMonsterImageSource === 'upload' && newMonsterImageFile) {
+            try {
+                const filePath = `monsters/${currentBattle.id}/${newMonsterImageFile.name}`;
+                const fileRef = ref(storage, filePath);
+                await uploadBytes(fileRef, newMonsterImageFile);
+                finalMonsterData.imageUrl = await getDownloadURL(fileRef);
+            } catch (error: any) {
+                toast({ variant: 'destructive', title: '圖片上傳失敗', description: error.message });
+                setIsAddingMonster(false);
+                return;
+            }
+        }
+        
         try {
-            const result = await addMonsterToBattle(currentBattle.id, newMonster as Omit<Monster, 'monsterId' | 'originalHp'>);
+            const result = await addMonsterToBattle(currentBattle.id, finalMonsterData as Omit<Monster, 'monsterId' | 'originalHp'>);
             if (result.error) throw new Error(result.error);
             toast({ title: '成功', description: `已將「${newMonster.name}」增援至戰場！` });
-            setNewMonster({ name: '', factionId: 'yelu', hp: 1000, atk: '10+1d6', imageUrl: '' });
+            
+            // Save specs for next time
+            setLastUsedMonsterSpecs({ hp: newMonster.hp || 1000, atk: newMonster.atk || '10+1D6' });
+
+            setNewMonster({ name: '', factionId: 'yelu', ...lastUsedMonsterSpecs, imageUrl: '' });
+            setNewMonsterImageFile(null);
+
             onRefresh();
         } catch (error: any) {
              toast({ variant: 'destructive', title: '增援失敗', description: error.message });
@@ -2582,7 +2666,21 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
                                 <DialogHeader><DialogTitle>新增災獸至目前戰場</DialogTitle></DialogHeader>
                                 <div className="space-y-4 py-4">
                                     <div className="space-y-2"><Label>災獸名稱</Label><Input value={newMonster.name} onChange={e => setNewMonster({...newMonster, name: e.target.value})}/></div>
-                                    <div className="space-y-2"><Label>圖片網址</Label><Input value={newMonster.imageUrl} onChange={e => setNewMonster({...newMonster, imageUrl: e.target.value})}/></div>
+                                    <div className="space-y-2">
+                                        <Label>圖片</Label>
+                                        <Tabs value={newMonsterImageSource} onValueChange={v => setNewMonsterImageSource(v as any)} className="w-full">
+                                          <TabsList className="grid w-full grid-cols-2">
+                                            <TabsTrigger value="url">網址</TabsTrigger>
+                                            <TabsTrigger value="upload">上傳</TabsTrigger>
+                                          </TabsList>
+                                          <TabsContent value="url" className="mt-2">
+                                            <Input value={newMonster.imageUrl} onChange={e => setNewMonster({...newMonster, imageUrl: e.target.value})}/>
+                                          </TabsContent>
+                                          <TabsContent value="upload" className="mt-2">
+                                            <Input type="file" accept="image/*" onChange={e => setNewMonsterImageFile(e.target.files?.[0] || null)} />
+                                          </TabsContent>
+                                        </Tabs>
+                                    </div>
                                     <div className="space-y-2"><Label>HP</Label><Input type="number" value={newMonster.hp} onChange={e => setNewMonster({...newMonster, hp: parseInt(e.target.value)})}/></div>
                                     <div className="space-y-2"><Label>ATK (格式: 20+1d10)</Label><Input value={newMonster.atk} onChange={e => setNewMonster({...newMonster, atk: e.target.value})}/></div>
                                     <div className="space-y-2"><Label>所屬陣營</Label>
@@ -2721,9 +2819,68 @@ function BattleManagement({ allItems, allTitles, allCombatEncounters, onRefresh 
     );
 }
 
+function AdminNotifications({ notifications, users, onMarkRead }: { notifications: AdminNotification[], users: User[], onMarkRead: (id: string) => Promise<void>}) {
+    const usersById = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
+    const [isMarking, setIsMarking] = useState<string | null>(null);
+    
+    const handleMarkRead = async (id: string) => {
+        setIsMarking(id);
+        await onMarkRead(id);
+        setIsMarking(null);
+    }
+    
+    const unreadNotifications = useMemo(() => notifications.filter(n => !n.read).sort((a,b) => b.timestamp.seconds - a.timestamp.seconds), [notifications]);
+
+    return (
+        <div>
+             <div className="flex justify-between items-center mb-4">
+              <div>
+                  <h3 className="text-lg font-semibold">系統通知</h3>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                      查看玩家的特殊道具使用紀錄。
+                  </p>
+              </div>
+            </div>
+             <Card>
+                <CardContent className="pt-6">
+                    {unreadNotifications.length === 0 ? (
+                        <div className="text-center py-16 text-muted-foreground">
+                            <Bell className="h-12 w-12 mx-auto mb-4"/>
+                            <p>沒有新的通知</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {unreadNotifications.map(n => (
+                                <Alert key={n.id}>
+                                    <Terminal className="h-4 w-4" />
+                                    <AlertTitle className="flex justify-between items-center">
+                                        <span>玩家使用特殊道具</span>
+                                        <Button size="sm" variant="ghost" onClick={() => handleMarkRead(n.id)} disabled={isMarking === n.id}>
+                                            {isMarking === n.id ? "..." : <Check className="h-4 w-4" />}
+                                        </Button>
+                                    </AlertTitle>
+                                    <AlertDescription>
+                                        玩家 <strong>{n.userName || usersById.get(n.userId)?.roleName || '未知'}</strong> 於 {new Date((n.timestamp as Timestamp).seconds * 1000).toLocaleString()} 使用了道具「<strong>{n.itemName}</strong>」。
+                                    </AlertDescription>
+                                </Alert>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+             </Card>
+        </div>
+    )
+}
+
+
 export default function AdminPage() {
   const [adminData, setAdminData] = useState<Awaited<ReturnType<typeof getAdminData>>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const firestore = useFirestore();
+
+  const notificationsQuery = useMemoFirebase(() => (firestore ? query(collection(firestore, 'admin-notifications'), orderBy('timestamp', 'desc'), limit(50)) : null), [firestore]);
+  const { data: notifications, mutate: mutateNotifications } = useCollection<AdminNotification>(notificationsQuery);
+
 
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
@@ -2735,6 +2892,15 @@ export default function AdminPage() {
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  const handleMarkNotificationRead = async (id: string) => {
+    if (!firestore) return;
+    const batch = writeBatch(firestore);
+    const notifRef = doc(firestore, 'admin-notifications', id);
+    batch.update(notifRef, { read: true });
+    await batch.commit();
+    mutateNotifications(); // Re-fetch notifications from cache/server
+  };
 
   if (isLoading) {
     return (
@@ -2766,6 +2932,7 @@ export default function AdminPage() {
   }
 
   const tabs = [
+    { value: 'notifications', label: '系統通知' },
     { value: 'accounts', label: '帳號審核' },
     { value: 'tasks', label: '任務中心' },
     { value: 'store', label: '商店道具' },
@@ -2787,14 +2954,17 @@ export default function AdminPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="accounts" className="w-full">
-            <TabsList className="flex flex-wrap h-auto sm:grid sm:h-auto sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9">
+          <Tabs defaultValue="notifications" className="w-full">
+            <TabsList className="flex flex-wrap h-auto sm:grid sm:h-auto sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10">
               {tabs.map(tab => (
                 <TabsTrigger key={tab.value} value={tab.value}>{tab.label}</TabsTrigger>
               ))}
             </TabsList>
 
             <div className="mt-4 p-4 border rounded-md min-h-[400px]">
+              <TabsContent value="notifications">
+                 <AdminNotifications notifications={notifications || []} users={adminData.users || []} onMarkRead={handleMarkNotificationRead} />
+              </TabsContent>
               <TabsContent value="accounts">
                 <AccountApproval />
               </TabsContent>

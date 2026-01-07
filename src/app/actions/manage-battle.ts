@@ -190,5 +190,3 @@ export async function addMonsterToBattle(battleId: string, monsterData: Omit<Mon
         return { success: false, error: error.message || '增加災獸失敗。' };
     }
 }
-
-    
