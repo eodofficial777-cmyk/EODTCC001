@@ -113,10 +113,10 @@ export async function useItem(payload: UseItemPayload): Promise<{ success: boole
         transaction.set(adminNotificationRef, {
             id: adminNotificationRef.id,
             type: 'special_item_used',
-            userId: user.id,
-            userName: user.roleName,
-            itemId: item.id,
-            itemName: item.name,
+            userId: userId, // Use payload userId for robustness
+            itemId: itemId, // Use payload itemId for robustness and correct spelling
+            userName: user.roleName || '未知玩家',
+            itemName: item.name || '未知道具',
             timestamp: serverTimestamp(),
             read: false
         });
